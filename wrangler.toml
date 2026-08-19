@@ -1,0 +1,6 @@
+name = "unit"
+compatibility_date = "2026-08-19"
+
+# Production source is intentionally not defined yet.
+# This repository is being connected to the existing Cloudflare Worker "unit"
+# without replacing the currently deployed production code.
