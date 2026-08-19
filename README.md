@@ -1,3 +1,5 @@
 # unit
 
-Initial repository for the Cloudflare Worker project `unit`.
+Cloudflare Worker project `unit`.
+
+Git-connected production source is tracked in this repository.
