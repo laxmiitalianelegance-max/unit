@@ -1,5 +1,5 @@
 name = "unit"
-main = "src/worker.js"
+main = "src/router.js"
 compatibility_date = "2026-08-19"
 keep_vars = true
 
