@@ -12,18 +12,14 @@ const MANIFEST = {
   theme_color: "#05070c",
   prefer_related_applications: false,
   icons: [
-    { src: "/unit369-192.png?v=3699", sizes: "192x192", type: "image/png", purpose: "any" },
-    { src: "/unit369-512.png?v=3699", sizes: "512x512", type: "image/png", purpose: "any" }
+    { src: "/unit369-192.png?v=3700", sizes: "192x192", type: "image/png", purpose: "any" },
+    { src: "/unit369-512.png?v=3700", sizes: "512x512", type: "image/png", purpose: "any" }
   ]
 };
 
 const SW = `
-self.addEventListener('install', event => {
-  self.skipWaiting();
-});
-self.addEventListener('activate', event => {
-  event.waitUntil(self.clients.claim());
-});
+self.addEventListener('install', event => { self.skipWaiting(); });
+self.addEventListener('activate', event => { event.waitUntil(self.clients.claim()); });
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
   event.respondWith(fetch(event.request).catch(() => caches.match(event.request)));
@@ -51,17 +47,17 @@ function serviceWorkerResponse() {
   });
 }
 
-async function pngIconResponse(request, env, ctx, sourcePath) {
+async function assetIconResponse(request, env, path) {
+  if (!env.ASSETS) return new Response("ASSETS binding missing", { status: 500 });
   const u = new URL(request.url);
-  u.pathname = sourcePath;
+  u.pathname = path;
   u.search = "";
-  const source = await app.fetch(new Request(u.toString(), request), env, ctx);
+  const source = await env.ASSETS.fetch(new Request(u.toString(), request));
   if (!source.ok) return source;
   const headers = new Headers(source.headers);
   headers.set("content-type", "image/png");
   headers.set("cache-control", "public, max-age=31536000, immutable");
-  headers.delete("content-length");
-  return new Response(source.body, { status: source.status, statusText: source.statusText, headers });
+  return new Response(source.body, { status: 200, headers });
 }
 
 function patchHtml(html) {
@@ -71,17 +67,17 @@ function patchHtml(html) {
   html = html.replace(/<link[^>]+rel=["']apple-touch-icon["'][^>]*>/gi, "");
 
   const head = `
-<link rel="manifest" href="/manifest.webmanifest?v=3699">
+<link rel="manifest" href="/manifest.webmanifest?v=3700">
 <meta name="theme-color" content="#05070c">
 <meta name="application-name" content="Unit 369">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<link rel="icon" type="image/png" sizes="192x192" href="/unit369-192.png?v=3699">
-<link rel="apple-touch-icon" sizes="192x192" href="/unit369-192.png?v=3699">
+<link rel="icon" type="image/png" sizes="192x192" href="/unit369-192.png?v=3700">
+<link rel="apple-touch-icon" sizes="192x192" href="/unit369-192.png?v=3700">
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js?v=3699', { scope: '/' }).catch(console.error);
+    navigator.serviceWorker.register('/sw.js?v=3700', { scope: '/' }).catch(console.error);
   });
 }
 </script>`;
@@ -92,18 +88,10 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
-    if (url.pathname === "/manifest.webmanifest" || url.pathname === "/manifest.json") {
-      return manifestResponse();
-    }
-    if (url.pathname === "/sw.js") {
-      return serviceWorkerResponse();
-    }
-    if (url.pathname === "/unit369-192.png") {
-      return pngIconResponse(request, env, ctx, "/unit369-192.jpg");
-    }
-    if (url.pathname === "/unit369-512.png") {
-      return pngIconResponse(request, env, ctx, "/unit369-512.jpg");
-    }
+    if (url.pathname === "/manifest.webmanifest" || url.pathname === "/manifest.json") return manifestResponse();
+    if (url.pathname === "/sw.js") return serviceWorkerResponse();
+    if (url.pathname === "/unit369-192.png") return assetIconResponse(request, env, "/unit369-192.png");
+    if (url.pathname === "/unit369-512.png") return assetIconResponse(request, env, "/unit369-512.png");
 
     const response = await app.fetch(request, env, ctx);
     const type = response.headers.get("content-type") || "";
