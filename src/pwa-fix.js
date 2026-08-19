@@ -2,9 +2,9 @@ import app from "./icon-wrapper.js";
 
 const MANIFEST = {
   id: "/",
-  name: "Unit 369",
-  short_name: "Unit 369",
-  description: "Unit 369 AI tim i upravljanje proizvodima.",
+  name: "Unit369",
+  short_name: "Unit369",
+  description: "Unit369 AI tim i upravljanje proizvodima.",
   start_url: "/",
   scope: "/",
   display: "standalone",
@@ -12,8 +12,8 @@ const MANIFEST = {
   theme_color: "#05070c",
   prefer_related_applications: false,
   icons: [
-    { src: "/unit369-192.png?v=3700", sizes: "192x192", type: "image/png", purpose: "any" },
-    { src: "/unit369-512.png?v=3700", sizes: "512x512", type: "image/png", purpose: "any" }
+    { src: "/unit369-192.png?v=3701", sizes: "192x192", type: "image/png", purpose: "any" },
+    { src: "/unit369-512.png?v=3701", sizes: "512x512", type: "image/png", purpose: "any" }
   ]
 };
 
@@ -67,17 +67,18 @@ function patchHtml(html) {
   html = html.replace(/<link[^>]+rel=["']apple-touch-icon["'][^>]*>/gi, "");
 
   const head = `
-<link rel="manifest" href="/manifest.webmanifest?v=3700">
+<link rel="manifest" href="/manifest.webmanifest?v=3701">
 <meta name="theme-color" content="#05070c">
-<meta name="application-name" content="Unit 369">
+<meta name="application-name" content="Unit369">
+<meta name="apple-mobile-web-app-title" content="Unit369">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<link rel="icon" type="image/png" sizes="192x192" href="/unit369-192.png?v=3700">
-<link rel="apple-touch-icon" sizes="192x192" href="/unit369-192.png?v=3700">
+<link rel="icon" type="image/png" sizes="192x192" href="/unit369-192.png?v=3701">
+<link rel="apple-touch-icon" sizes="192x192" href="/unit369-192.png?v=3701">
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js?v=3700', { scope: '/' }).catch(console.error);
+    navigator.serviceWorker.register('/sw.js?v=3701', { scope: '/' }).catch(console.error);
   });
 }
 </script>`;
@@ -97,7 +98,8 @@ export default {
     const type = response.headers.get("content-type") || "";
 
     if (request.method === "GET" && (url.pathname === "/" || url.pathname === "/app") && type.includes("text/html")) {
-      const html = patchHtml(await response.text());
+      let html = patchHtml(await response.text());
+      html = html.replace(/<title>[^<]*<\/title>/i, "<title>Unit369</title>");
       const headers = new Headers(response.headers);
       headers.delete("content-length");
       headers.set("cache-control", "no-store, no-cache, must-revalidate");
