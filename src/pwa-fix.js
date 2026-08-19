@@ -8,15 +8,14 @@ const MANIFEST = {
   start_url: "/app",
   scope: "/",
   display: "standalone",
-  display_override: ["standalone", "minimal-ui"],
   orientation: "portrait",
   background_color: "#05070c",
   theme_color: "#05070c",
   prefer_related_applications: false,
   icons: [
-    { src: "/unit369-192.jpg?v=3697", sizes: "192x192", type: "image/jpeg", purpose: "any" },
-    { src: "/unit369-512.jpg?v=3697", sizes: "512x512", type: "image/jpeg", purpose: "any" },
-    { src: "/unit369-512.jpg?v=3697", sizes: "512x512", type: "image/jpeg", purpose: "maskable" }
+    { src: "/unit369-192.png?v=3698", sizes: "192x192", type: "image/png", purpose: "any" },
+    { src: "/unit369-512.png?v=3698", sizes: "512x512", type: "image/png", purpose: "any" },
+    { src: "/unit369-512.png?v=3698", sizes: "512x512", type: "image/png", purpose: "maskable" }
   ]
 };
 
@@ -48,20 +47,36 @@ function serviceWorkerResponse() {
   });
 }
 
+async function pngIconResponse(request, env, ctx, sourcePath) {
+  const u = new URL(request.url);
+  u.pathname = sourcePath;
+  u.search = "";
+  const source = await app.fetch(new Request(u.toString(), request), env, ctx);
+  if (!source.ok) return source;
+  const headers = new Headers(source.headers);
+  headers.set("content-type", "image/png");
+  headers.set("cache-control", "public, max-age=31536000, immutable");
+  headers.delete("content-length");
+  return new Response(source.body, { status: source.status, statusText: source.statusText, headers });
+}
+
 function patchHtml(html) {
   html = html.replace(/<link[^>]+rel=["']manifest["'][^>]*>/gi, "");
   html = html.replace(/<meta[^>]+name=["']theme-color["'][^>]*>/gi, "");
+  html = html.replace(/<link[^>]+rel=["']icon["'][^>]*>/gi, "");
+  html = html.replace(/<link[^>]+rel=["']apple-touch-icon["'][^>]*>/gi, "");
+
   const head = `
-<link rel="manifest" href="/manifest.webmanifest?v=3697">
+<link rel="manifest" href="/manifest.webmanifest?v=3698">
 <meta name="theme-color" content="#05070c">
 <meta name="application-name" content="Unit 369">
 <meta name="mobile-web-app-capable" content="yes">
-<link rel="icon" href="/unit369-192.jpg?v=3697">
-<link rel="apple-touch-icon" href="/unit369-192.jpg?v=3697">
+<link rel="icon" type="image/png" sizes="192x192" href="/unit369-192.png?v=3698">
+<link rel="apple-touch-icon" sizes="192x192" href="/unit369-192.png?v=3698">
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js?v=3697', { scope: '/' }).catch(console.error);
+    navigator.serviceWorker.register('/sw.js?v=3698', { scope: '/' }).catch(console.error);
   });
 }
 </script>`;
@@ -77,6 +92,12 @@ export default {
     }
     if (url.pathname === "/sw.js") {
       return serviceWorkerResponse();
+    }
+    if (url.pathname === "/unit369-192.png") {
+      return pngIconResponse(request, env, ctx, "/unit369-192.jpg");
+    }
+    if (url.pathname === "/unit369-512.png") {
+      return pngIconResponse(request, env, ctx, "/unit369-512.jpg");
     }
 
     const response = await app.fetch(request, env, ctx);
