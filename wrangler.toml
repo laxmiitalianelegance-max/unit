@@ -1,5 +1,5 @@
 name = "unit"
-main = "src/theme.js"
+main = "src/icon-wrapper.js"
 compatibility_date = "2026-08-19"
 keep_vars = true
 
