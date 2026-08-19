@@ -1,17 +1,5 @@
 import app from "./theme.js";
 
-const ICON_B64 = "UklGRv6L...";
-
-function iconResponse(){
-  const bin=atob(ICON_B64); const bytes=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);
-  return new Response(bytes,{headers:{"content-type":"image/webp","cache-control":"public, max-age=3600"}});
-}
-
-export default {
-  async fetch(request, env, ctx){
-    const url=new URL(request.url);
-    if(url.pathname==="/icon-192.webp"||url.pathname==="/icon-512.webp"||url.pathname==="/icon.webp") return iconResponse();
-    if(url.pathname==="/manifest.json") return new Response(JSON.stringify({name:"Unit",short_name:"Unit",start_url:"/app",display:"standalone",background_color:"#05070c",theme_color:"#05070c",icons:[{src:"/icon-192.webp?v=369",sizes:"192x192",type:"image/webp",purpose:"any maskable"},{src:"/icon-512.webp?v=369",sizes:"512x512",type:"image/webp",purpose:"any maskable"}]}),{headers:{"content-type":"application/manifest+json; charset=utf-8","cache-control":"no-cache"}});
-    return app.fetch(request,env,ctx);
-  }
-};
+const ICON=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><defs><radialGradient id="b"><stop stop-color="#10254a"/><stop offset="1" stop-color="#020611"/></radialGradient><linearGradient id="m" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#f7fbff"/><stop offset=".35" stop-color="#9aa9c2"/><stop offset="1" stop-color="#273b61"/></linearGradient><filter id="g"><feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><rect x="18" y="18" width="476" height="476" rx="86" fill="url(#b)" stroke="#168cff" stroke-width="7" filter="url(#g)"/><path d="M155 151v139c0 93 48 151 101 151s101-58 101-151V151" fill="none" stroke="#168cff" stroke-width="70" stroke-linecap="round" filter="url(#g)"/><path d="M155 151v139c0 93 48 151 101 151s101-58 101-151V151" fill="none" stroke="url(#m)" stroke-width="55" stroke-linecap="round"/><path d="M256 87 L116 355 L396 355 Z" fill="none" stroke="#168cff" stroke-width="3" opacity=".9" filter="url(#g)"/><g font-family="Arial,sans-serif" font-weight="700" font-size="46" text-anchor="middle" fill="#fff"><g filter="url(#g)"><circle cx="256" cy="78" r="37" fill="#07101f" stroke="#33b5ff" stroke-width="4"/><text x="256" y="94">9</text><circle cx="105" cy="369" r="37" fill="#07101f" stroke="#33b5ff" stroke-width="4"/><text x="105" y="385">6</text><circle cx="407" cy="369" r="37" fill="#07101f" stroke="#33b5ff" stroke-width="4"/><text x="407" y="385">3</text></g></g></svg>`;
+function iconResponse(){return new Response(ICON,{headers:{"content-type":"image/svg+xml; charset=utf-8","cache-control":"public, max-age=3600"}})}
+export default {async fetch(request,env,ctx){const url=new URL(request.url);if(url.pathname==="/unit-icon.svg")return iconResponse();if(url.pathname==="/manifest.json")return new Response(JSON.stringify({name:"Unit",short_name:"Unit",start_url:"/app",display:"standalone",background_color:"#05070c",theme_color:"#05070c",icons:[{src:"/unit-icon.svg?v=3692",sizes:"any",type:"image/svg+xml",purpose:"any maskable"}]}),{headers:{"content-type":"application/manifest+json; charset=utf-8","cache-control":"no-cache"}});return app.fetch(request,env,ctx)}};
