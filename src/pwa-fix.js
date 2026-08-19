@@ -1,27 +1,29 @@
 import app from "./icon-wrapper.js";
 
 const MANIFEST = {
-  id: "/unit-369",
+  id: "/",
   name: "Unit 369",
   short_name: "Unit 369",
   description: "Unit 369 AI tim i upravljanje proizvodima.",
-  start_url: "/app",
+  start_url: "/",
   scope: "/",
   display: "standalone",
-  orientation: "portrait",
   background_color: "#05070c",
   theme_color: "#05070c",
   prefer_related_applications: false,
   icons: [
-    { src: "/unit369-192.png?v=3698", sizes: "192x192", type: "image/png", purpose: "any" },
-    { src: "/unit369-512.png?v=3698", sizes: "512x512", type: "image/png", purpose: "any" },
-    { src: "/unit369-512.png?v=3698", sizes: "512x512", type: "image/png", purpose: "maskable" }
+    { src: "/unit369-192.png?v=3699", sizes: "192x192", type: "image/png", purpose: "any" },
+    { src: "/unit369-512.png?v=3699", sizes: "512x512", type: "image/png", purpose: "any" }
   ]
 };
 
 const SW = `
-self.addEventListener('install', event => { self.skipWaiting(); });
-self.addEventListener('activate', event => { event.waitUntil(self.clients.claim()); });
+self.addEventListener('install', event => {
+  self.skipWaiting();
+});
+self.addEventListener('activate', event => {
+  event.waitUntil(self.clients.claim());
+});
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
   event.respondWith(fetch(event.request).catch(() => caches.match(event.request)));
@@ -30,6 +32,7 @@ self.addEventListener('fetch', event => {
 
 function manifestResponse() {
   return new Response(JSON.stringify(MANIFEST), {
+    status: 200,
     headers: {
       "content-type": "application/manifest+json; charset=utf-8",
       "cache-control": "no-store, no-cache, must-revalidate"
@@ -39,6 +42,7 @@ function manifestResponse() {
 
 function serviceWorkerResponse() {
   return new Response(SW, {
+    status: 200,
     headers: {
       "content-type": "application/javascript; charset=utf-8",
       "cache-control": "no-store, no-cache, must-revalidate",
@@ -67,16 +71,17 @@ function patchHtml(html) {
   html = html.replace(/<link[^>]+rel=["']apple-touch-icon["'][^>]*>/gi, "");
 
   const head = `
-<link rel="manifest" href="/manifest.webmanifest?v=3698">
+<link rel="manifest" href="/manifest.webmanifest?v=3699">
 <meta name="theme-color" content="#05070c">
 <meta name="application-name" content="Unit 369">
 <meta name="mobile-web-app-capable" content="yes">
-<link rel="icon" type="image/png" sizes="192x192" href="/unit369-192.png?v=3698">
-<link rel="apple-touch-icon" sizes="192x192" href="/unit369-192.png?v=3698">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="icon" type="image/png" sizes="192x192" href="/unit369-192.png?v=3699">
+<link rel="apple-touch-icon" sizes="192x192" href="/unit369-192.png?v=3699">
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js?v=3698', { scope: '/' }).catch(console.error);
+    navigator.serviceWorker.register('/sw.js?v=3699', { scope: '/' }).catch(console.error);
   });
 }
 </script>`;
