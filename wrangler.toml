@@ -1,5 +1,5 @@
 name = "unit"
-main = "src/pwa-fix.js"
+main = "src/unit369.js"
 compatibility_date = "2026-08-19"
 keep_vars = true
 
