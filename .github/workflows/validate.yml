@@ -7,13 +7,14 @@ on:
     branches: [main]
 
 jobs:
-  syntax:
+  validate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+
       - name: Check active JavaScript syntax
         run: |
           set -e
@@ -33,3 +34,28 @@ jobs:
             echo "Checking $f"
             node --check "$f"
           done
+
+      - name: Check generated browser clients
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          targets = [
+              ('src/ai-team-safe.js', 'CLIENT'),
+              ('src/product-workflow-safe.js', 'CLIENT'),
+          ]
+          for path, name in targets:
+              text = Path(path).read_text()
+              pat = rf"const\s+{name}\s*=\s*String\.raw`([\s\S]*?)`;"
+              m = re.search(pat, text)
+              if not m:
+                  raise SystemExit(f'Could not extract {name} from {path}')
+              out = Path('/tmp') / (Path(path).stem + '-client.js')
+              out.write_text(m.group(1))
+              print(out)
+          PY
+          node --check /tmp/ai-team-safe-client.js
+          node --check /tmp/product-workflow-safe-client.js
+
+      - name: Wrangler dry-run build
+        run: npx --yes wrangler@4 deploy --dry-run --outdir .wrangler-dist
