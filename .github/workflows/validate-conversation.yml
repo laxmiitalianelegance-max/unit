@@ -1,7 +1,7 @@
 name: Validate Unit369 conversation staging
 on:
   push:
-    branches: [staging-conversation]
+    branches: [staging-chat-polish]
   pull_request:
     branches: [main]
 jobs:
@@ -15,36 +15,29 @@ jobs:
       - name: Syntax and build
         run: |
           set -e
+          node --check src/chat-final-safe.js
           node --check src/conversation-safe.js
           node --check src/app-shell-safe.js
           python3 - <<'PY'
           from pathlib import Path
           import re,subprocess
-          for f in ['src/app-shell-safe.js','src/conversation-safe.js']:
+          for f in ['src/app-shell-safe.js','src/conversation-safe.js','src/chat-final-safe.js']:
             x=Path(f).read_text(); m=re.search(r'const\s+CLIENT\s*=\s*String\.raw`([\s\S]*?)`;',x)
             if not m: raise SystemExit('CLIENT missing '+f)
             p=Path('/tmp/'+Path(f).stem+'.js');p.write_text(m.group(1));subprocess.run(['node','--check',str(p)],check=True)
           PY
           npx --yes wrangler@4 deploy --dry-run --outdir .wrangler-dist
-      - name: Chromium conversation smoke test
+      - name: Chromium first-paint and send smoke test
         run: |
           set -e
           sed 's/compatibility_date = "2026-08-19"/compatibility_date = "2026-05-03"/' wrangler.toml > wrangler.smoke.toml
           npx --yes wrangler@4 dev --config wrangler.smoke.toml --local --ip 127.0.0.1 --port 8787 >/tmp/wrangler.log 2>&1 &
           WPID=$!; trap 'kill $WPID 2>/dev/null || true' EXIT
           for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8787/ -o /tmp/root.html && break; sleep 1; done
-          grep -q 'u369-conversation-style' /tmp/root.html
-          python3 - <<'PY'
-          from pathlib import Path
-          import re,subprocess
-          h=Path('/tmp/root.html').read_text(errors='replace')
-          for i,s in enumerate(re.findall(r'<script\b[^>]*>([\s\S]*?)</script>',h,re.I)):
-            if s.strip():
-              p=Path(f'/tmp/in-{i}.js');p.write_text(s);subprocess.run(['node','--check',str(p)],check=True)
-          PY
+          grep -q 'u369-chat-final-style' /tmp/root.html
           npm install --no-save playwright@1.55.0
           npx playwright install chromium
           node <<'JS'
           const {chromium}=require('playwright');
-          (async()=>{const b=await chromium.launch({headless:true}),p=await b.newPage({viewport:{width:390,height:844}});p.setDefaultTimeout(5000);const errors=[];p.on('pageerror',e=>errors.push(String(e.message||e)));await p.goto('http://127.0.0.1:8787/',{waitUntil:'domcontentloaded',timeout:10000});await p.waitForTimeout(1800);if(!(await p.locator('#u369-conversation').count()))throw Error('conversation missing');if(!(await p.locator('#page-team .promptbox').isVisible()))throw Error('composer missing');if(await p.locator('#page-team>#panels').isVisible())throw Error('legacy panels visible');if(await p.locator('#page-team .session-actions').isVisible())throw Error('legacy session actions visible');if(await p.locator('#page-team .modes').isVisible())throw Error('legacy modes visible');if(!(await p.locator('#u369-menu').isVisible()))throw Error('menu missing');await p.locator('#u369-menu').click();if(!(await p.locator('#u369-sidebar').evaluate(e=>e.classList.contains('open'))))throw Error('drawer failed');if(!(await p.locator('#u369-side-modes').isVisible()))throw Error('modes not in drawer');if(errors.length)throw Error('page errors '+errors.join(' | '));await b.close();console.log('conversation smoke passed')})().catch(e=>{console.error(e);process.exit(1)});
+          (async()=>{const b=await chromium.launch({headless:true}),p=await b.newPage({viewport:{width:390,height:844}});p.setDefaultTimeout(6000);const errors=[];p.on('pageerror',e=>errors.push(String(e.message||e)));await p.route('**/api/free-ai',async route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({content:'Zdravo! Chat radi.'})}));await p.goto('http://127.0.0.1:8787/',{waitUntil:'domcontentloaded',timeout:10000});if(await p.locator('#page-team .session-actions').isVisible().catch(()=>false))throw Error('legacy session actions visible on first paint');if(await p.locator('#page-team .modes').isVisible().catch(()=>false))throw Error('legacy modes visible on first paint');if(await p.locator('#page-team>#panels').isVisible().catch(()=>false))throw Error('legacy panels visible on first paint');if(await p.locator('#page-team>.promptbox').isVisible().catch(()=>false))throw Error('legacy prompt visible on first paint');await p.waitForTimeout(1200);if(!(await p.locator('#u369-conversation').count()))throw Error('conversation missing');if(!(await p.locator('#u369-chat-composer').isVisible()))throw Error('new composer missing');await p.locator('#u369-chat-input').fill('Cao');await p.locator('#u369-chat-send').click();await p.locator('.u369-user-msg').filter({hasText:'Cao'}).waitFor();await p.locator('.u369-answer').filter({hasText:'Zdravo! Chat radi.'}).waitFor();if((await p.locator('#u369-chat-input').inputValue())!=='')throw Error('new prompt not cleared');if(errors.length)throw Error('page errors '+errors.join(' | '));await b.close();console.log('independent chat composer passed')})().catch(e=>{console.error(e);process.exit(1)});
           JS

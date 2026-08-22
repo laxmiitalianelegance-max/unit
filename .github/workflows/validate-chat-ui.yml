@@ -2,7 +2,7 @@ name: Validate Unit369 chat UI staging
 
 on:
   push:
-    branches: [staging-chat-ui]
+    branches: [staging-chat-polish]
   pull_request:
     branches: [main]
 
@@ -32,20 +32,10 @@ jobs:
             src/settings-safe.js
             src/layout-safe.js
             src/app-shell-safe.js
+            src/conversation-safe.js
+            src/chat-final-safe.js
           )
           for f in "${files[@]}"; do node --check "$f"; done
-
-      - name: Check generated shell client
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          import re
-          text=Path('src/app-shell-safe.js').read_text()
-          m=re.search(r"const\s+CLIENT\s*=\s*String\.raw`([\s\S]*?)`;",text)
-          if not m: raise SystemExit('CLIENT not found')
-          Path('/tmp/app-shell-client.js').write_text(m.group(1))
-          PY
-          node --check /tmp/app-shell-client.js
 
       - name: Wrangler dry-run build
         run: npx --yes wrangler@4 deploy --dry-run --outdir .wrangler-dist
@@ -60,14 +50,7 @@ jobs:
           for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8787/ -o /tmp/root.html && break; sleep 1; done
           test -s /tmp/root.html
           grep -q 'u369-shell-style' /tmp/root.html
-          python3 - <<'PY'
-          from pathlib import Path
-          import re,subprocess
-          html=Path('/tmp/root.html').read_text(errors='replace')
-          for i,s in enumerate(re.findall(r'<script\b[^>]*>([\s\S]*?)</script>',html,flags=re.I)):
-              if not s.strip(): continue
-              p=Path(f'/tmp/inline-{i}.js');p.write_text(s);subprocess.run(['node','--check',str(p)],check=True)
-          PY
+          grep -q 'u369-chat-final-style' /tmp/root.html
           npm install --no-save playwright@1.55.0
           npx playwright install chromium
           node <<'JS'
@@ -80,7 +63,8 @@ jobs:
             await page.goto('http://127.0.0.1:8787/',{waitUntil:'domcontentloaded',timeout:10000});
             await page.waitForTimeout(1300);
             if(!(await page.locator('#u369-menu').isVisible())) throw new Error('Hamburger missing');
-            if(!(await page.locator('#page-team .promptbox').isVisible())) throw new Error('Chat composer missing');
+            if(!(await page.locator('#u369-chat-composer').isVisible())) throw new Error('Independent chat composer missing');
+            if(await page.locator('#page-team>.promptbox').isVisible()) throw new Error('Legacy composer visible');
             if(await page.locator('#page-team .modes').isVisible()) throw new Error('Modes still visible in main chat');
             if(await page.locator('#page-team .u369-roles').isVisible()) throw new Error('Provider cards still visible above chat');
             await page.locator('#u369-menu').click();

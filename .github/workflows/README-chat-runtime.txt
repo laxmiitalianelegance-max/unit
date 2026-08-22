@@ -1,0 +1,1 @@
+Validates direct chat send flow and prevents legacy dashboard flash before production.

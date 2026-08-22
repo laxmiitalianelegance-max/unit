@@ -1,0 +1,1 @@
+Chat runtime staging validation: first-paint legacy suppression and direct send flow.
