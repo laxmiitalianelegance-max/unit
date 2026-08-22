@@ -1,5 +1,5 @@
 name = "unit"
-main = "src/settings-safe.js"
+main = "src/layout-safe.js"
 compatibility_date = "2026-08-19"
 keep_vars = true
 
