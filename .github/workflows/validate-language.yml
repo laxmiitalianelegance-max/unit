@@ -16,15 +16,17 @@ jobs:
         run: |
           set -e
           node --check src/chat-language-safe.js
+          node --check src/i18n-coordinator-safe.js
           python3 - <<'PY'
           from pathlib import Path
           import re,subprocess
-          x=Path('src/chat-language-safe.js').read_text();m=re.search(r'const\s+CLIENT\s*=\s*String\.raw`([\s\S]*?)`;',x)
-          if not m: raise SystemExit('CLIENT missing')
-          p=Path('/tmp/chat-language-client.js');p.write_text(m.group(1));subprocess.run(['node','--check',str(p)],check=True)
+          for f in ['src/chat-language-safe.js','src/i18n-coordinator-safe.js']:
+            x=Path(f).read_text();m=re.search(r'const\s+CLIENT\s*=\s*String\.raw`([\s\S]*?)`;',x)
+            if not m: raise SystemExit('CLIENT missing '+f)
+            p=Path('/tmp/'+Path(f).stem+'.js');p.write_text(m.group(1));subprocess.run(['node','--check',str(p)],check=True)
           PY
           npx --yes wrangler@4 deploy --dry-run --outdir .wrangler-dist
-      - name: Browser language injection test
+      - name: Browser full-language test
         run: |
           set -e
           sed 's/compatibility_date = "2026-08-19"/compatibility_date = "2026-05-03"/' wrangler.toml > wrangler.smoke.toml
@@ -35,5 +37,14 @@ jobs:
           npx playwright install chromium
           node <<'JS'
           const {chromium}=require('playwright');
-          (async()=>{const b=await chromium.launch({headless:true}),p=await b.newPage({viewport:{width:390,height:844}});let seen='';await p.addInitScript(()=>localStorage.setItem('u369-lang-all-v4','sr'));await p.route('**/api/free-ai',async route=>{const req=route.request();const body=JSON.parse(req.postData()||'{}');seen=body.messages&&body.messages[0]&&body.messages[0].content||'';await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({content:'Ćao! Dobro sam, hvala. Kako si ti?'})})});await p.goto('http://127.0.0.1:8787/',{waitUntil:'domcontentloaded'});await p.waitForTimeout(900);await p.locator('#u369-chat-input').fill('Kako si?');await p.locator('#u369-chat-send').click();await p.locator('.u369-answer').filter({hasText:'Ćao! Dobro sam'}).waitFor();if(!/standard Serbian/i.test(seen)||!/Ekavian/i.test(seen)||!/Bok/.test(seen))throw Error('Serbian system instruction missing');await b.close();console.log('Serbian language behavior passed')})().catch(e=>{console.error(e);process.exit(1)});
+          (async()=>{const b=await chromium.launch({headless:true}),p=await b.newPage({viewport:{width:390,height:844}});let seen='';await p.addInitScript(()=>localStorage.setItem('u369-lang-all-v4','sr'));
+          await p.route('**/api/ui-i18n',async route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({d:{chat:'Ćaskanje',products:'Proizvodi',settings:'Podešavanja',newChat:'Novi razgovor',workspace:'Radni prostor',aiMode:'AI režim',providers:'Provajderi',chatHistory:'Istorija razgovora',messageUnit369:'Poruka za Unit369',copy:'Kopiraj',thinking:'Razmišljam…',integrations:'Integracije',refresh:'Osveži',connected:'Povezano',notConnected:'Nije povezano',application:'Aplikacija',applicationLanguage:'Jezik aplikacije'}})}));
+          await p.route('**/api/free-ai',async route=>{const body=JSON.parse(route.request().postData()||'{}');seen=body.messages&&body.messages[0]&&body.messages[0].content||'';await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({content:'Ćao! Dobro sam, hvala.'})})});
+          await p.goto('http://127.0.0.1:8787/',{waitUntil:'domcontentloaded'});await p.waitForTimeout(1700);
+          if((await p.locator('#u369-work-title').textContent())!=='Ćaskanje')throw Error('topbar not translated');
+          await p.locator('#u369-menu').click();if(!(await p.locator('#u369-sidebar').getByText('Novi razgovor').count()))throw Error('drawer not translated');
+          await p.locator('#u369-menu').click().catch(()=>{});await p.locator('#u369-chat-input').fill('Kako si?');await p.locator('#u369-chat-send').click();await p.locator('.u369-answer').filter({hasText:'Ćao! Dobro sam'}).waitFor();
+          if(!/standard Serbian/i.test(seen)||!/Ekavian/i.test(seen)||!/Bok/.test(seen))throw Error('Serbian AI instruction missing');
+          await p.evaluate(()=>localStorage.setItem('u369-lang-all-v4','fr'));await p.waitForTimeout(1100);if((await p.locator('html').getAttribute('lang'))!=='fr')throw Error('language switch not applied');
+          await b.close();console.log('Full application language behavior passed')})().catch(e=>{console.error(e);process.exit(1)});
           JS
