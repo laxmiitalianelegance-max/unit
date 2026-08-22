@@ -1,0 +1,41 @@
+name: Validate Unit369 language behavior
+on:
+  push:
+    branches: [staging-serbian-language]
+  pull_request:
+    branches: [main]
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 20}
+      - name: Syntax and build
+        run: |
+          set -e
+          node --check src/chat-language-safe.js
+          node --check src/i18n-coordinator-safe.js
+          npx --yes wrangler@4 deploy --dry-run --outdir .wrangler-dist
+      - name: Browser full-language test
+        run: |
+          set -e
+          sed 's/compatibility_date = "2026-08-19"/compatibility_date = "2026-05-03"/' wrangler.toml > wrangler.smoke.toml
+          npx --yes wrangler@4 dev --config wrangler.smoke.toml --local --ip 127.0.0.1 --port 8787 >/tmp/wrangler.log 2>&1 &
+          WPID=$!; trap 'kill $WPID 2>/dev/null || true' EXIT
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8787/ -o /tmp/root.html && break; sleep 1; done
+          python3 - <<'PY'
+          from pathlib import Path
+          import re,subprocess
+          h=Path('/tmp/root.html').read_text(errors='replace')
+          for i,s in enumerate(re.findall(r'<script\b[^>]*>([\s\S]*?)</script>',h,re.I)):
+            if s.strip():
+              p=Path(f'/tmp/inline-{i}.js');p.write_text(s);subprocess.run(['node','--check',str(p)],check=True)
+          PY
+          npm install --no-save playwright@1.55.0
+          npx playwright install chromium
+          node <<'JS'
+          const {chromium}=require('playwright');
+          (async()=>{const b=await chromium.launch({headless:true}),p=await b.newPage({viewport:{width:390,height:844}});p.setDefaultTimeout(6000);let seen='';await p.addInitScript(()=>localStorage.setItem('u369-lang-all-v4','sr'));await p.route('**/api/ui-i18n',async route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({d:{chat:'Ćaskanje',products:'Proizvodi',settings:'Podešavanja',newChat:'Novi razgovor',workspace:'Radni prostor',aiMode:'AI režim',providers:'Provajderi',chatHistory:'Istorija razgovora',messageUnit369:'Poruka za Unit369',copy:'Kopiraj',thinking:'Razmišljam…',integrations:'Integracije',refresh:'Osveži',connected:'Povezano',notConnected:'Nije povezano',application:'Aplikacija',applicationLanguage:'Jezik aplikacije'}})}));await p.route('**/api/free-ai',async route=>{const body=JSON.parse(route.request().postData()||'{}');seen=body.messages&&body.messages[0]&&body.messages[0].content||'';await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({content:'Ćao! Dobro sam, hvala.'})})});await p.goto('http://127.0.0.1:8787/',{waitUntil:'domcontentloaded'});await p.waitForTimeout(1700);if((await p.locator('#u369-work-title').textContent())!=='Ćaskanje')throw Error('topbar not translated');await p.locator('#u369-menu').click();if(!(await p.locator('#u369-sidebar').getByText('Novi razgovor').count()))throw Error('drawer not translated');await p.locator('#u369-drawer-shade').click({position:{x:380,y:420}});await p.locator('#u369-chat-input').fill('Kako si?');await p.locator('#u369-chat-send').click();await p.locator('.u369-answer').filter({hasText:'Ćao! Dobro sam'}).waitFor();if(!/standard Serbian/i.test(seen)||!/Ekavian/i.test(seen)||!/Bok/.test(seen))throw Error('Serbian AI instruction missing');await p.evaluate(()=>localStorage.setItem('u369-lang-all-v4','fr'));await p.waitForTimeout(1100);if((await p.locator('html').getAttribute('lang'))!=='fr')throw Error('language switch not applied');await b.close();console.log('Full application language behavior passed')})().catch(e=>{console.error(e);process.exit(1)});
+          JS

@@ -1,5 +1,5 @@
 name = "unit"
-main = "src/chat-final-safe.js"
+main = "src/i18n-coordinator-safe.js"
 compatibility_date = "2026-08-19"
 keep_vars = true
 
