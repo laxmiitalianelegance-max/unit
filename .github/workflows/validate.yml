@@ -144,11 +144,13 @@ jobs:
             await page.waitForTimeout(150);
             if (!(await page.locator('#page-settings').evaluate(el => el.classList.contains('active')))) throw new Error('Settings navigation failed');
 
-            await page.evaluate(() => document.documentElement.setAttribute('lang','ar'));
-            await page.waitForTimeout(150);
+            const lang = page.locator('#u369-lang-all-s');
+            if (!(await lang.count())) throw new Error('World language selector missing');
+            await lang.selectOption('ar');
+            await page.waitForTimeout(650);
             if (await page.evaluate(() => document.documentElement.dir) !== 'rtl') throw new Error('RTL layout adaptation failed');
-            await page.evaluate(() => document.documentElement.setAttribute('lang','en'));
-            await page.waitForTimeout(150);
+            await lang.selectOption('en');
+            await page.waitForTimeout(350);
             if (await page.evaluate(() => document.documentElement.dir) !== 'ltr') throw new Error('LTR layout adaptation failed');
 
             if (errors.length) throw new Error('Browser page errors: ' + errors.join(' | '));
