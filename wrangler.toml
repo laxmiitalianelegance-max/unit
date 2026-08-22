@@ -1,5 +1,5 @@
 name = "unit"
-main = "src/unit369.js"
+main = "src/localized.js"
 compatibility_date = "2026-08-19"
 keep_vars = true
 
