@@ -1,13 +1,13 @@
-name: Validate Unit369 conversation staging
+name: Validate Unit369 conversation
 on:
   push:
-    branches: [staging-chat-polish]
+    branches: [staging-deep-audit]
   pull_request:
     branches: [main]
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 6
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -15,29 +15,41 @@ jobs:
       - name: Syntax and build
         run: |
           set -e
-          node --check src/chat-final-safe.js
-          node --check src/conversation-safe.js
-          node --check src/app-shell-safe.js
+          files=(src/worker.js src/router.js src/theme.js src/enhancements.js src/unit369.js src/ai-team-safe.js src/product-workflow-safe.js src/settings-safe.js src/layout-safe.js src/app-shell-safe.js src/conversation-safe.js src/i18n-coordinator-safe.js)
+          for f in "${files[@]}"; do node --check "$f"; done
           python3 - <<'PY'
           from pathlib import Path
           import re,subprocess
-          for f in ['src/app-shell-safe.js','src/conversation-safe.js','src/chat-final-safe.js']:
-            x=Path(f).read_text(); m=re.search(r'const\s+CLIENT\s*=\s*String\.raw`([\s\S]*?)`;',x)
+          for f in ['src/product-workflow-safe.js','src/settings-safe.js','src/layout-safe.js','src/app-shell-safe.js','src/conversation-safe.js']:
+            x=Path(f).read_text();m=re.search(r'const\s+CLIENT\s*=\s*String\.raw`([\s\S]*?)`;',x)
             if not m: raise SystemExit('CLIENT missing '+f)
             p=Path('/tmp/'+Path(f).stem+'.js');p.write_text(m.group(1));subprocess.run(['node','--check',str(p)],check=True)
           PY
           npx --yes wrangler@4 deploy --dry-run --outdir .wrangler-dist
-      - name: Chromium first-paint and send smoke test
+      - name: Chromium send refresh and duplicate-owner test
         run: |
           set -e
           sed 's/compatibility_date = "2026-08-19"/compatibility_date = "2026-05-03"/' wrangler.toml > wrangler.smoke.toml
           npx --yes wrangler@4 dev --config wrangler.smoke.toml --local --ip 127.0.0.1 --port 8787 >/tmp/wrangler.log 2>&1 &
           WPID=$!; trap 'kill $WPID 2>/dev/null || true' EXIT
           for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8787/ -o /tmp/root.html && break; sleep 1; done
-          grep -q 'u369-chat-final-style' /tmp/root.html
+          test -s /tmp/root.html
+          ! grep -q 'id="openaiKey"' /tmp/root.html
+          ! grep -q 'id="grokKey"' /tmp/root.html
+          ! grep -q 'id="sendBtn"' /tmp/root.html
+          ! grep -q 'id="prompt"' /tmp/root.html
+          ! grep -q 'id="panels"' /tmp/root.html
+          python3 - <<'PY'
+          from pathlib import Path
+          import re,subprocess
+          h=Path('/tmp/root.html').read_text(errors='replace')
+          for i,s in enumerate(re.findall(r'<script\b[^>]*>([\s\S]*?)</script>',h,re.I)):
+            if s.strip():
+              p=Path(f'/tmp/inline-{i}.js');p.write_text(s);subprocess.run(['node','--check',str(p)],check=True)
+          PY
           npm install --no-save playwright@1.55.0
           npx playwright install chromium
           node <<'JS'
           const {chromium}=require('playwright');
-          (async()=>{const b=await chromium.launch({headless:true}),p=await b.newPage({viewport:{width:390,height:844}});p.setDefaultTimeout(6000);const errors=[];p.on('pageerror',e=>errors.push(String(e.message||e)));await p.route('**/api/free-ai',async route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({content:'Zdravo! Chat radi.'})}));await p.goto('http://127.0.0.1:8787/',{waitUntil:'domcontentloaded',timeout:10000});if(await p.locator('#page-team .session-actions').isVisible().catch(()=>false))throw Error('legacy session actions visible on first paint');if(await p.locator('#page-team .modes').isVisible().catch(()=>false))throw Error('legacy modes visible on first paint');if(await p.locator('#page-team>#panels').isVisible().catch(()=>false))throw Error('legacy panels visible on first paint');if(await p.locator('#page-team>.promptbox').isVisible().catch(()=>false))throw Error('legacy prompt visible on first paint');await p.waitForTimeout(1200);if(!(await p.locator('#u369-conversation').count()))throw Error('conversation missing');if(!(await p.locator('#u369-chat-composer').isVisible()))throw Error('new composer missing');await p.locator('#u369-chat-input').fill('Cao');await p.locator('#u369-chat-send').click();await p.locator('.u369-user-msg').filter({hasText:'Cao'}).waitFor();await p.locator('.u369-answer').filter({hasText:'Zdravo! Chat radi.'}).waitFor();if((await p.locator('#u369-chat-input').inputValue())!=='')throw Error('new prompt not cleared');if(errors.length)throw Error('page errors '+errors.join(' | '));await b.close();console.log('independent chat composer passed')})().catch(e=>{console.error(e);process.exit(1)});
+          (async()=>{const b=await chromium.launch({headless:true}),p=await b.newPage({viewport:{width:390,height:844}});p.setDefaultTimeout(7000);const errors=[];let freeCalls=0;p.on('pageerror',e=>errors.push(String(e.message||e)));await p.route('**/api/status',r=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({version:'test',integrations:{claude:false,openai:false,grok:false,workersAi:true,shopify:false}})}));await p.route('**/api/free-ai',async r=>{freeCalls++;await r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({content:'Stabilan odgovor.'})})});await p.goto('http://127.0.0.1:8787/',{waitUntil:'domcontentloaded'});await p.waitForTimeout(700);if(await p.locator('#u369-sidebar').count()!==1)throw Error('sidebar count');if(await p.locator('#u369-chat-composer').count()!==1)throw Error('composer count');if(await p.locator('#sendBtn,#prompt,#panels,#openaiKey,#grokKey').count())throw Error('legacy DOM present');await p.locator('#u369-chat-input').fill('Test poruka');await p.locator('#u369-chat-send').click();await p.locator('.u369-user-msg').filter({hasText:'Test poruka'}).waitFor();await p.locator('.u369-answer').filter({hasText:'Stabilan odgovor.'}).waitFor();if(freeCalls!==1)throw Error('expected exactly one Workers AI request, got '+freeCalls);await p.reload({waitUntil:'domcontentloaded'});await p.waitForTimeout(500);if(await p.locator('#u369-sidebar').count()!==1||await p.locator('#u369-chat-composer').count()!==1)throw Error('UI duplicated after refresh');await p.locator('.u369-user-msg').filter({hasText:'Test poruka'}).waitFor();await p.locator('.u369-answer').filter({hasText:'Stabilan odgovor.'}).waitFor();if(errors.length)throw Error('page errors: '+errors.join(' | '));await b.close();console.log('single-owner conversation passed')})().catch(e=>{console.error(e);process.exit(1)});
           JS
