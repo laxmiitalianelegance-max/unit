@@ -1,5 +1,5 @@
 name = "unit"
-main = "src/chat-runtime-safe.js"
+main = "src/chat-final-safe.js"
 compatibility_date = "2026-08-19"
 keep_vars = true
 
