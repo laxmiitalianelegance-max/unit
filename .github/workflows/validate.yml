@@ -28,6 +28,7 @@ jobs:
             src/world-safe.js
             src/ai-team-safe.js
             src/product-workflow-safe.js
+            src/settings-safe.js
           )
           for f in "${files[@]}"; do
             test -f "$f"
@@ -43,6 +44,7 @@ jobs:
           targets = [
               ('src/ai-team-safe.js', 'CLIENT'),
               ('src/product-workflow-safe.js', 'CLIENT'),
+              ('src/settings-safe.js', 'CLIENT'),
           ]
           for path, name in targets:
               text = Path(path).read_text()
@@ -56,6 +58,7 @@ jobs:
           PY
           node --check /tmp/ai-team-safe-client.js
           node --check /tmp/product-workflow-safe-client.js
+          node --check /tmp/settings-safe-client.js
 
       - name: Wrangler dry-run build
         run: npx --yes wrangler@4 deploy --dry-run --outdir .wrangler-dist
