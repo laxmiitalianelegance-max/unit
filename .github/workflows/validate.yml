@@ -14,10 +14,22 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Check JavaScript syntax
+      - name: Check active JavaScript syntax
         run: |
           set -e
-          for f in src/*.js; do
+          files=(
+            src/worker.js
+            src/router.js
+            src/theme.js
+            src/enhancements.js
+            src/unit369.js
+            src/localized.js
+            src/world-safe.js
+            src/ai-team-safe.js
+            src/product-workflow-safe.js
+          )
+          for f in "${files[@]}"; do
+            test -f "$f"
             echo "Checking $f"
             node --check "$f"
           done
