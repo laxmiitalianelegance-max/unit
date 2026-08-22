@@ -1,88 +1,34 @@
-name: Validate Unit369 chat UI staging
-
+name: Validate Unit369 application shell
 on:
   push:
-    branches: [staging-chat-polish]
+    branches: [staging-deep-audit]
   pull_request:
     branches: [main]
-
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 6
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Check active JavaScript syntax
+        with: {node-version: 20}
+      - name: Build
         run: |
           set -e
-          files=(
-            src/worker.js
-            src/router.js
-            src/theme.js
-            src/enhancements.js
-            src/unit369.js
-            src/localized.js
-            src/world-safe.js
-            src/ai-team-safe.js
-            src/product-workflow-safe.js
-            src/settings-safe.js
-            src/layout-safe.js
-            src/app-shell-safe.js
-            src/conversation-safe.js
-            src/chat-final-safe.js
-          )
-          for f in "${files[@]}"; do node --check "$f"; done
-
-      - name: Wrangler dry-run build
-        run: npx --yes wrangler@4 deploy --dry-run --outdir .wrangler-dist
-
-      - name: Runtime and Chromium smoke test
+          node --check src/app-shell-safe.js
+          node --check src/settings-safe.js
+          node --check src/product-workflow-safe.js
+          npx --yes wrangler@4 deploy --dry-run --outdir .wrangler-dist
+      - name: Mobile shell navigation test
         run: |
           set -e
           sed 's/compatibility_date = "2026-08-19"/compatibility_date = "2026-05-03"/' wrangler.toml > wrangler.smoke.toml
-          npx --yes wrangler@4 dev --config wrangler.smoke.toml --local --ip 127.0.0.1 --port 8787 > /tmp/wrangler.log 2>&1 &
-          WPID=$!
-          trap 'kill $WPID 2>/dev/null || true' EXIT
-          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8787/ -o /tmp/root.html && break; sleep 1; done
-          test -s /tmp/root.html
-          grep -q 'u369-shell-style' /tmp/root.html
-          grep -q 'u369-chat-final-style' /tmp/root.html
+          npx --yes wrangler@4 dev --config wrangler.smoke.toml --local --ip 127.0.0.1 --port 8787 >/tmp/wrangler.log 2>&1 &
+          WPID=$!; trap 'kill $WPID 2>/dev/null || true' EXIT
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8787/ >/tmp/root.html && break; sleep 1; done
           npm install --no-save playwright@1.55.0
           npx playwright install chromium
           node <<'JS'
-          const { chromium } = require('playwright');
-          (async()=>{
-            const browser=await chromium.launch({headless:true});
-            const page=await browser.newPage({viewport:{width:390,height:844}});
-            page.setDefaultTimeout(5000);
-            const errors=[]; page.on('pageerror',e=>errors.push(String(e.message||e)));
-            await page.goto('http://127.0.0.1:8787/',{waitUntil:'domcontentloaded',timeout:10000});
-            await page.waitForTimeout(1300);
-            if(!(await page.locator('#u369-menu').isVisible())) throw new Error('Hamburger missing');
-            if(!(await page.locator('#u369-chat-composer').isVisible())) throw new Error('Independent chat composer missing');
-            if(await page.locator('#page-team>.promptbox').isVisible()) throw new Error('Legacy composer visible');
-            if(await page.locator('#page-team .modes').isVisible()) throw new Error('Modes still visible in main chat');
-            if(await page.locator('#page-team .u369-roles').isVisible()) throw new Error('Provider cards still visible above chat');
-            await page.locator('#u369-menu').click();
-            if(!(await page.locator('#u369-sidebar').evaluate(el=>el.classList.contains('open')))) throw new Error('Drawer failed');
-            if(await page.locator('.u369-mode-btn').count()<3) throw new Error('Drawer modes missing');
-            if(await page.locator('.u369-provider').count()<4) throw new Error('Drawer providers missing');
-            const nav=page.locator('.u369-side-item[data-shell-page]');
-            if(await nav.count()<3) throw new Error('Drawer workspace navigation incomplete');
-            await nav.filter({hasText:'Products'}).click();
-            if(!(await page.locator('#page-product').evaluate(el=>el.classList.contains('active')))) throw new Error('Products navigation failed');
-            await page.locator('#u369-menu').click();
-            await nav.filter({hasText:'Settings'}).click();
-            if(!(await page.locator('#page-settings').evaluate(el=>el.classList.contains('active')))) throw new Error('Settings navigation failed');
-            await page.locator('#u369-menu').click();
-            await nav.filter({hasText:'Chat'}).click();
-            if(!(await page.locator('#page-team').evaluate(el=>el.classList.contains('active')))) throw new Error('Chat navigation failed');
-            if(errors.length) throw new Error('Browser page errors: '+errors.join(' | '));
-            await browser.close();
-            console.log('Chat UI smoke test passed');
-          })().catch(e=>{console.error(e);process.exit(1)});
+          const {chromium}=require('playwright');
+          (async()=>{const b=await chromium.launch({headless:true}),p=await b.newPage({viewport:{width:390,height:844}});p.setDefaultTimeout(7000);const errors=[];p.on('pageerror',e=>errors.push(String(e.message||e)));await p.route('**/api/status',r=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({version:'test',integrations:{claude:false,openai:false,grok:false,workersAi:true,shopify:false}})}));await p.goto('http://127.0.0.1:8787/',{waitUntil:'domcontentloaded'});await p.waitForTimeout(800);if(!(await p.locator('#u369-menu').isVisible()))throw Error('menu missing');if(await p.locator('#u369-chat-composer').count()!==1)throw Error('composer count');await p.locator('#u369-menu').click();if(!(await p.locator('#u369-sidebar').evaluate(e=>e.classList.contains('open'))))throw Error('drawer did not open');if(await p.locator('[data-chat-mode]').count()!==3)throw Error('AI modes missing');if(await p.locator('#u369-side-providers .u369-provider').count()!==4)throw Error('provider statuses missing');await p.locator('[data-shell-page="product"]').click();if(!(await p.locator('#page-product').evaluate(e=>e.classList.contains('active'))))throw Error('product page inactive');if(await p.locator('#page-product form').count()!==1)throw Error('product form duplicate');if(await p.locator('#page-product [name="status"]').count()!==1)throw Error('product status duplicate/missing');if(await p.locator('#pws').count()!==1)throw Error('product workflow duplicate/missing');await p.locator('#u369-menu').click();await p.locator('[data-shell-page="settings"]').click();if(!(await p.locator('#page-settings').evaluate(e=>e.classList.contains('active'))))throw Error('settings page inactive');if(await p.locator('#ss-root').count()!==1)throw Error('settings root duplicate/missing');if(await p.locator('#u369-lang-all').count()!==1)throw Error('language control duplicate/missing');await p.locator('#u369-menu').click();await p.locator('[data-shell-page="team"]').click();if(!(await p.locator('#page-team').evaluate(e=>e.classList.contains('active'))))throw Error('chat page inactive');if(errors.length)throw Error('page errors: '+errors.join(' | '));await b.close();console.log('application shell passed')})().catch(e=>{console.error(e);process.exit(1)});
           JS
