@@ -1,5 +1,5 @@
 name = "unit"
-main = "src/layout-safe.js"
+main = "src/ai-team-safe.js"
 compatibility_date = "2026-08-19"
 keep_vars = true
 
