@@ -9,6 +9,7 @@ on:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -97,10 +98,11 @@ jobs:
           (async()=>{
             const browser=await chromium.launch({headless:true});
             const page=await browser.newPage({viewport:{width:390,height:844}});
+            page.setDefaultTimeout(5000);
             const errors=[];
             page.on('pageerror',e=>errors.push(String(e.message||e)));
-            await page.goto('http://127.0.0.1:8787/',{waitUntil:'domcontentloaded'});
-            await page.waitForTimeout(1400);
+            await page.goto('http://127.0.0.1:8787/',{waitUntil:'domcontentloaded',timeout:10000});
+            await page.waitForTimeout(1200);
             if(!(await page.locator('#u369-shell-root').count())) throw new Error('Shell missing');
             if(!(await page.locator('#u369-sidebar').count())) throw new Error('Sidebar missing');
             if(!(await page.locator('#u369-content').count())) throw new Error('Workspace missing');
@@ -108,20 +110,16 @@ jobs:
             const menu=page.locator('#u369-menu');
             if(!(await menu.isVisible())) throw new Error('Mobile menu missing');
             await menu.click();
-            await page.waitForTimeout(100);
             if(!(await page.locator('#u369-sidebar').evaluate(el=>el.classList.contains('open')))) throw new Error('Drawer did not open');
             const items=page.locator('.u369-side-item[data-shell-page]');
             if(await items.count()<3) throw new Error('Shell navigation incomplete');
             await items.filter({hasText:'Products'}).click();
-            await page.waitForTimeout(160);
             if(!(await page.locator('#page-product').evaluate(el=>el.classList.contains('active')))) throw new Error('Products shell navigation failed');
             await menu.click();
             await items.filter({hasText:'Settings'}).click();
-            await page.waitForTimeout(160);
             if(!(await page.locator('#page-settings').evaluate(el=>el.classList.contains('active')))) throw new Error('Settings shell navigation failed');
             await menu.click();
             await items.filter({hasText:'AI Team'}).click();
-            await page.waitForTimeout(160);
             if(!(await page.locator('#page-team').evaluate(el=>el.classList.contains('active')))) throw new Error('AI Team shell navigation failed');
             if(!(await page.locator('#page-team .promptbox').count())) throw new Error('AI composer missing');
             const lang=page.locator('#u369-lang-all-s');
