@@ -1,0 +1,160 @@
+name: Validate Unit369 layout staging
+
+on:
+  push:
+    branches: [staging-layout]
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Check active JavaScript syntax
+        run: |
+          set -e
+          files=(
+            src/worker.js
+            src/router.js
+            src/theme.js
+            src/enhancements.js
+            src/unit369.js
+            src/localized.js
+            src/world-safe.js
+            src/ai-team-safe.js
+            src/product-workflow-safe.js
+            src/settings-safe.js
+            src/layout-safe.js
+          )
+          for f in "${files[@]}"; do
+            test -f "$f"
+            echo "Checking $f"
+            node --check "$f"
+          done
+
+      - name: Check generated browser clients
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          targets = [
+              ('src/ai-team-safe.js', 'CLIENT'),
+              ('src/product-workflow-safe.js', 'CLIENT'),
+              ('src/settings-safe.js', 'CLIENT'),
+              ('src/layout-safe.js', 'CLIENT'),
+          ]
+          for path, name in targets:
+              text = Path(path).read_text()
+              pat = rf"const\s+{name}\s*=\s*String\.raw`([\s\S]*?)`;"
+              m = re.search(pat, text)
+              if not m:
+                  raise SystemExit(f'Could not extract {name} from {path}')
+              out = Path('/tmp') / (Path(path).stem + '-client.js')
+              out.write_text(m.group(1))
+          PY
+          node --check /tmp/ai-team-safe-client.js
+          node --check /tmp/product-workflow-safe-client.js
+          node --check /tmp/settings-safe-client.js
+          node --check /tmp/layout-safe-client.js
+
+      - name: Wrangler dry-run build
+        run: npx --yes wrangler@4 deploy --dry-run --outdir .wrangler-dist
+
+      - name: Runtime and browser smoke test
+        run: |
+          set -e
+          sed 's/compatibility_date = "2026-08-19"/compatibility_date = "2026-05-03"/' wrangler.toml > wrangler.smoke.toml
+          npx --yes wrangler@4 dev --config wrangler.smoke.toml --local --ip 127.0.0.1 --port 8787 > /tmp/wrangler.log 2>&1 &
+          WPID=$!
+          trap 'kill $WPID 2>/dev/null || true' EXIT
+          ok=0
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8787/ -o /tmp/root.html; then
+              ok=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ok" != "1" ]; then
+            cat /tmp/wrangler.log
+            exit 1
+          fi
+
+          grep -q 'Unit369' /tmp/root.html
+          grep -q 'u369-ai-safe-style' /tmp/root.html
+          grep -q 'u369-product-safe-style' /tmp/root.html
+          grep -q 'u369-settings-safe-style' /tmp/root.html
+          grep -q 'u369-layout-safe-style' /tmp/root.html
+
+          curl -fsS http://127.0.0.1:8787/ai-team-safe-client.js -o /tmp/runtime-ai.js
+          curl -fsS http://127.0.0.1:8787/product-safe.js -o /tmp/runtime-product.js
+          curl -fsS http://127.0.0.1:8787/world-safe.js -o /tmp/runtime-world.js
+          node --check /tmp/runtime-ai.js
+          node --check /tmp/runtime-product.js
+          node --check /tmp/runtime-world.js
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import re, subprocess
+          html = Path('/tmp/root.html').read_text(errors='replace')
+          scripts = re.findall(r'<script\b[^>]*>([\s\S]*?)</script>', html, flags=re.I)
+          checked = 0
+          for i, script in enumerate(scripts):
+              if not script.strip():
+                  continue
+              path = Path(f'/tmp/inline-{i}.js')
+              path.write_text(script)
+              subprocess.run(['node','--check',str(path)], check=True)
+              checked += 1
+          if checked == 0:
+              raise SystemExit('No inline scripts found')
+          print(f'Checked {checked} inline scripts')
+          PY
+
+          npm install --no-save playwright@1.55.0
+          npx playwright install chromium
+          node <<'JS'
+          const { chromium } = require('playwright');
+          (async () => {
+            const browser = await chromium.launch({headless:true});
+            const page = await browser.newPage({viewport:{width:390,height:844}});
+            const errors = [];
+            page.on('pageerror', e => errors.push(String(e.message || e)));
+            await page.goto('http://127.0.0.1:8787/', {waitUntil:'domcontentloaded'});
+            await page.waitForTimeout(1200);
+
+            const title = await page.locator('header h1').textContent();
+            if ((title || '').trim() !== 'Unit369') throw new Error('Header title is not Unit369');
+            if (await page.locator('.eyebrow').count()) throw new Error('Legacy eyebrow branding is still present');
+            if (!(await page.locator('#u369-roles').count())) throw new Error('AI Team UI missing');
+            if (!(await page.locator('#pws').count())) throw new Error('Products workflow UI missing');
+            if (!(await page.locator('#ss-root').count())) throw new Error('Settings UI missing');
+
+            const nav = page.locator('nav.bottomnav .navitem');
+            if (await nav.count() < 3) throw new Error('Bottom navigation incomplete');
+            await nav.nth(1).click();
+            await page.waitForTimeout(150);
+            if (!(await page.locator('#page-product').evaluate(el => el.classList.contains('active')))) throw new Error('Products navigation failed');
+            await nav.nth(2).click();
+            await page.waitForTimeout(150);
+            if (!(await page.locator('#page-settings').evaluate(el => el.classList.contains('active')))) throw new Error('Settings navigation failed');
+
+            const lang = page.locator('#u369-lang-all-s');
+            if (!(await lang.count())) throw new Error('World language selector missing');
+            await lang.selectOption('ar');
+            await page.waitForTimeout(650);
+            if (await page.evaluate(() => document.documentElement.dir) !== 'rtl') throw new Error('RTL layout adaptation failed');
+            await lang.selectOption('en');
+            await page.waitForTimeout(350);
+            if (await page.evaluate(() => document.documentElement.dir) !== 'ltr') throw new Error('LTR layout adaptation failed');
+
+            if (errors.length) throw new Error('Browser page errors: ' + errors.join(' | '));
+            await browser.close();
+            console.log('Browser smoke test passed');
+          })().catch(err => { console.error(err); process.exit(1); });
+          JS
