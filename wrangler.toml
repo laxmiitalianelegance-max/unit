@@ -1,5 +1,5 @@
 name = "unit"
-main = "src/app-shell-safe.js"
+main = "src/conversation-safe.js"
 compatibility_date = "2026-08-19"
 keep_vars = true
 
