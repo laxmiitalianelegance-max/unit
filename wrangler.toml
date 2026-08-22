@@ -1,5 +1,5 @@
 name = "unit"
-main = "src/settings-control.js"
+main = "src/production-polish.js"
 compatibility_date = "2026-08-19"
 keep_vars = true
 
