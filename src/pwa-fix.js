@@ -1,5 +1,8 @@
 import app from "./icon-wrapper.js";
 
+const ICON_192_URL = "https://cdn.shopify.com/s/files/1/1026/5047/8921/files/unit369-192-exact.jpg?v=1787373429";
+const ICON_512_URL = "https://cdn.shopify.com/s/files/1/1026/5047/8921/files/unit369-512-exact.jpg?v=1787373438";
+
 const MANIFEST = {
   id: "/",
   name: "Unit369",
@@ -12,8 +15,8 @@ const MANIFEST = {
   theme_color: "#05070c",
   prefer_related_applications: false,
   icons: [
-    { src: "/unit369-192.png?v=3701", sizes: "192x192", type: "image/png", purpose: "any" },
-    { src: "/unit369-512.png?v=3701", sizes: "512x512", type: "image/png", purpose: "any" }
+    { src: "/unit369-192.jpg?v=3702", sizes: "192x192", type: "image/jpeg", purpose: "any" },
+    { src: "/unit369-512.jpg?v=3702", sizes: "512x512", type: "image/jpeg", purpose: "any" }
   ]
 };
 
@@ -47,16 +50,15 @@ function serviceWorkerResponse() {
   });
 }
 
-async function assetIconResponse(request, env, path) {
-  if (!env.ASSETS) return new Response("ASSETS binding missing", { status: 500 });
-  const u = new URL(request.url);
-  u.pathname = path;
-  u.search = "";
-  const source = await env.ASSETS.fetch(new Request(u.toString(), request));
-  if (!source.ok) return source;
+async function exactIconResponse(sourceUrl) {
+  const source = await fetch(sourceUrl, {
+    cf: { cacheEverything: true, cacheTtl: 31536000 }
+  });
+  if (!source.ok) return new Response("Icon unavailable", { status: 502 });
   const headers = new Headers(source.headers);
-  headers.set("content-type", "image/png");
+  headers.set("content-type", "image/jpeg");
   headers.set("cache-control", "public, max-age=31536000, immutable");
+  headers.delete("set-cookie");
   return new Response(source.body, { status: 200, headers });
 }
 
@@ -67,18 +69,18 @@ function patchHtml(html) {
   html = html.replace(/<link[^>]+rel=["']apple-touch-icon["'][^>]*>/gi, "");
 
   const head = `
-<link rel="manifest" href="/manifest.webmanifest?v=3701">
+<link rel="manifest" href="/manifest.webmanifest?v=3702">
 <meta name="theme-color" content="#05070c">
 <meta name="application-name" content="Unit369">
 <meta name="apple-mobile-web-app-title" content="Unit369">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<link rel="icon" type="image/png" sizes="192x192" href="/unit369-192.png?v=3701">
-<link rel="apple-touch-icon" sizes="192x192" href="/unit369-192.png?v=3701">
+<link rel="icon" type="image/jpeg" sizes="192x192" href="/unit369-192.jpg?v=3702">
+<link rel="apple-touch-icon" sizes="192x192" href="/unit369-192.jpg?v=3702">
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js?v=3701', { scope: '/' }).catch(console.error);
+    navigator.serviceWorker.register('/sw.js?v=3702', { scope: '/' }).catch(console.error);
   });
 }
 </script>`;
@@ -91,8 +93,8 @@ export default {
 
     if (url.pathname === "/manifest.webmanifest" || url.pathname === "/manifest.json") return manifestResponse();
     if (url.pathname === "/sw.js") return serviceWorkerResponse();
-    if (url.pathname === "/unit369-192.png") return assetIconResponse(request, env, "/unit369-192.png");
-    if (url.pathname === "/unit369-512.png") return assetIconResponse(request, env, "/unit369-512.png");
+    if (url.pathname === "/unit369-192.jpg") return exactIconResponse(ICON_192_URL);
+    if (url.pathname === "/unit369-512.jpg") return exactIconResponse(ICON_512_URL);
 
     const response = await app.fetch(request, env, ctx);
     const type = response.headers.get("content-type") || "";
