@@ -6,6 +6,10 @@ on:
         description: Type DEPLOY to confirm production deployment
         required: true
         default: ""
+  push:
+    branches: [main]
+    paths:
+      - '.github/release/production-now'
 permissions:
   contents: read
 concurrency:
@@ -13,7 +17,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   deploy:
-    if: github.ref == 'refs/heads/main' && inputs.confirm == 'DEPLOY'
+    if: github.ref == 'refs/heads/main' && ((github.event_name == 'workflow_dispatch' && inputs.confirm == 'DEPLOY') || github.event_name == 'push')
     runs-on: ubuntu-latest
     timeout-minutes: 12
     environment: production
