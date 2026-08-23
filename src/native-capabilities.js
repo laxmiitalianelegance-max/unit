@@ -1,6 +1,7 @@
 import { resolveAccount } from './accounts.js';
 import { handleNativeWork } from './native-work.js';
 import { handleNativeBuild } from './native-build.js';
+import { handleNativeAutomation } from './native-automation.js';
 
 export const NATIVE_CAPABILITIES = Object.freeze({
   intelligence:{name:'Intelligence',version:1,operations:['chat','research','plan','critique','verify','knowledge.search'],native:true},
@@ -8,7 +9,7 @@ export const NATIVE_CAPABILITIES = Object.freeze({
   build:{name:'Build',version:2,operations:['workspace.create','workspace.read','workspace.list','workspace.update','workspace.delete','file.create','file.read','file.list','file.update','file.delete','tree.read','snapshot.create','snapshot.list','diff.read','test.plan'],native:true},
   work:{name:'Work',version:2,operations:['project.create','project.read','project.list','project.update','project.delete','task.create','task.read','task.list','task.update','task.delete','milestone.manage'],native:true},
   data:{name:'Data',version:1,operations:['collection.create','record.create','record.update','record.query','search'],native:true},
-  automate:{name:'Automate',version:1,operations:['workflow.create','workflow.run','schedule.define','approval.request'],native:true},
+  automate:{name:'Automate',version:2,operations:['workflow.create','workflow.read','workflow.list','workflow.update','workflow.delete','workflow.run','schedule.define','condition.evaluate','approval.request','approval.execute','execution.list'],native:true},
   business:{name:'Business',version:1,operations:['contact.manage','lead.manage','product.manage','order.manage','report.create'],native:true},
   communicate:{name:'Communicate',version:1,operations:['message.compose','thread.manage','notification.create'],native:true},
   files:{name:'Files',version:1,operations:['file.store','file.read','file.list','file.delete','file.search'],native:true},
@@ -27,7 +28,7 @@ export function planNativeIntent(text){
   if(/project|projekat|projekt/.test(q))add('work','project.create','Create or manage a native Unit369 project');
   if(/task|milestone|plan|zadat/.test(q))add('work','task.create','Track work natively in Unit369');
   if(/data|table|database|record|podac|tabel|baza/.test(q))add('data','collection.create','Use native Unit369 structured data');
-  if(/automat|workflow|schedule|trigger|raspored/.test(q))add('automate','workflow.create','Build a native Unit369 workflow');
+  if(/automat|workflow|schedule|trigger|condition|approval|raspored|okidač|okidac|uslov|odobren/.test(q))add('automate','workflow.create','Build and run a native Unit369 workflow');
   if(/customer|crm|lead|product|order|business|kupac|proizvod|porud/.test(q))add('business','product.manage','Use native Unit369 business capabilities');
   if(/message|notify|comment|poruk|obavest|obavijest/.test(q))add('communicate','message.compose','Use native Unit369 communication');
   if(/file|folder|upload|storage|fajl|datotek/.test(q))add('files','file.store','Use native Unit369 file storage');
@@ -55,6 +56,7 @@ export async function handleNativeCapabilities(request,env){
       try{body=await request.json()}catch{}
       return json({user_id:account.uid,...planNativeIntent(body.message)});
     }
+    if(/^\/api\/native\/automations(\/|$)/.test(url.pathname))return handleNativeAutomation(request,env,account);
     if(/^\/api\/native\/build(\/|$)/.test(url.pathname))return handleNativeBuild(request,env,account);
     if(/^\/api\/native\/projects(\/|$)/.test(url.pathname))return handleNativeWork(request,env,account);
     if(/^\/api\/native\/(files|data|documents|knowledge)(\/|$)/.test(url.pathname))return proxyNative(request,env,account,url);
