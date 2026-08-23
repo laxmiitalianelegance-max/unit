@@ -34,21 +34,32 @@ jobs:
       - name: Verify production deployment contract
         run: |
           set -euo pipefail
+          echo token_check > /tmp/deploy-stage
           test -n "$CLOUDFLARE_API_TOKEN" || { echo 'Missing CLOUDFLARE_API_TOKEN'; exit 1; }
+          echo config_check > /tmp/deploy-stage
           grep -q 'main = "src/unit369.js"' wrangler.toml
+          echo wrangler_whoami > /tmp/deploy-stage
           npx --yes wrangler@4 whoami
+          echo dry_run > /tmp/deploy-stage
           npx --yes wrangler@4 deploy --dry-run --outdir .wrangler-production-dry-run
+          echo preflight_ok > /tmp/deploy-stage
       - name: Deploy exact tested commit
-        run: npx --yes wrangler@4 deploy
+        run: |
+          set -euo pipefail
+          echo deploy_start > /tmp/deploy-stage
+          npx --yes wrangler@4 deploy
+          echo deploy_ok > /tmp/deploy-stage
       - name: Verify production health
         run: |
           set -euo pipefail
+          echo health_start > /tmp/deploy-stage
           BASE="${UNIT369_PRODUCTION_URL%/}"
           for i in $(seq 1 12); do
             code=$(curl -sS -o /tmp/release-health.json -w '%{http_code}' "$BASE/api/health/release" || true)
             if [ "$code" = "200" ]; then break; fi
             sleep 5
           done
+          echo health_response > /tmp/deploy-stage
           cat /tmp/release-health.json
           node <<'JS'
           const fs=require('fs');
@@ -59,11 +70,14 @@ jobs:
           if(h.auth_ready!==true)throw Error('Google OAuth is not configured in production.');
           console.log('Unit369 production health passed',h.version);
           JS
+          echo health_verified > /tmp/deploy-stage
       - name: Verify Google OAuth start route
         run: |
           set -euo pipefail
+          echo oauth_start > /tmp/deploy-stage
           BASE="${UNIT369_PRODUCTION_URL%/}"
           headers=$(curl -sS -D - -o /dev/null "$BASE/api/auth/google/start?return_to=/" )
+          echo oauth_headers > /tmp/deploy-stage
           echo "$headers" | grep -qE '^HTTP/.* 302'
           location=$(printf '%s\n' "$headers" | awk 'BEGIN{IGNORECASE=1}/^location:/{sub(/^[^:]*:[[:space:]]*/,""); sub(/\r$/,""); print; exit}')
           test -n "$location"
@@ -73,6 +87,7 @@ jobs:
           if(redirect!==expected)throw Error(`Google redirect mismatch: ${redirect} != ${expected}`);
           console.log('Google OAuth callback verified:',expected);
           JS
+          echo oauth_verified > /tmp/deploy-stage
       - name: Publish deployment receipt
         if: always()
         env:
@@ -80,6 +95,7 @@ jobs:
         run: |
           set -euo pipefail
           ORIGINAL_SHA="$GITHUB_SHA"
+          STAGE=$(cat /tmp/deploy-stage 2>/dev/null || echo not_started)
           HEALTH='null'
           if [ -s /tmp/release-health.json ]; then HEALTH=$(cat /tmp/release-health.json); fi
           git config user.name 'unit369-release-bot'
@@ -92,10 +108,10 @@ jobs:
             git rm -rf . >/dev/null 2>&1 || true
           fi
           mkdir -p deployment
-          node - "$ORIGINAL_SHA" "$DEPLOY_STATUS" "$UNIT369_PRODUCTION_URL" "$HEALTH" <<'JS' > deployment/latest.json
-          const [sha,status,url,rawHealth]=process.argv.slice(2);
+          node - "$ORIGINAL_SHA" "$DEPLOY_STATUS" "$STAGE" "$UNIT369_PRODUCTION_URL" "$HEALTH" <<'JS' > deployment/latest.json
+          const [sha,status,stage,url,rawHealth]=process.argv.slice(2);
           let health=null; try{health=JSON.parse(rawHealth)}catch{}
-          console.log(JSON.stringify({sha,status,url,health,recorded_at:new Date().toISOString()},null,2));
+          console.log(JSON.stringify({sha,status,stage,url,health,recorded_at:new Date().toISOString()},null,2));
           JS
           git add deployment/latest.json
           git commit -m "Record Unit369 production deployment $ORIGINAL_SHA" || true
