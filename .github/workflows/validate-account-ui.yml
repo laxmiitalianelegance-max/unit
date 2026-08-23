@@ -1,0 +1,58 @@
+name: Validate Unit369 account UI
+on:
+  push:
+    branches: [staging-account-ui]
+  pull_request:
+    branches: [main]
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 20}
+      - name: Static and build validation
+        run: |
+          set -e
+          node --check src/account-ui.js
+          node --check src/accounts.js
+          node --check src/unit369.js
+          npx --yes wrangler@4 deploy --dry-run --outdir .wrangler-dist
+      - name: Account UI and app regression
+        run: |
+          set -e
+          sed 's/compatibility_date = "2026-08-19"/compatibility_date = "2026-05-03"/' wrangler.toml > wrangler.smoke.toml
+          npx --yes wrangler@4 dev --config wrangler.smoke.toml --local --ip 127.0.0.1 --port 8787 --var APP_SECRET:test-app-secret-369 --var ENCRYPTION_KEY:0123456789abcdef0123456789abcdef >/tmp/wrangler.log 2>&1 &
+          WPID=$!; trap 'kill $WPID 2>/dev/null || true' EXIT
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8787/ -o /tmp/root.html && break; sleep 1; done
+          grep -q 'u369-account-style' /tmp/root.html
+          grep -q 'u369-account-client' /tmp/root.html
+          grep -q '/app-icon-192.jpg' /tmp/root.html
+          grep -q -- '--blue:#28a7ff' /tmp/root.html
+          npm install --no-save playwright@1.55.0
+          npx playwright install chromium
+          node <<'JS'
+          const {chromium}=require('playwright');
+          (async()=>{
+            const b=await chromium.launch({headless:true});
+            const p=await b.newPage({viewport:{width:390,height:844}});p.setDefaultTimeout(7000);const errors=[];p.on('pageerror',e=>errors.push(String(e.message||e)));
+            await p.route('**/api/status',r=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({version:'test',integrations:{claude:false,openai:false,grok:false,workersAi:true,shopify:false}})}));
+            await p.route('**/api/ui-i18n',r=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({d:{connected:'Povezano',notConnected:'Nije povezano'}})}));
+            await p.route('**/api/free-ai',r=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({content:'Test odgovor'})}));
+            await p.route('**/api/auth/me',r=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({authenticated:false,user:null,google_available:true})}));
+            await p.goto('http://127.0.0.1:8787/',{waitUntil:'domcontentloaded'});await p.waitForTimeout(700);
+            if(await p.locator('#u369-account-drawer').count()!==1)throw Error('drawer account missing');
+            if(!(await p.locator('#u369-account-drawer').getByText('Google').count()))throw Error('Google sign-in missing');
+            await p.locator('#u369-menu').click();await p.locator('[data-page="settings"]').click();
+            if(await p.locator('#u369-account-settings').count()!==1)throw Error('settings account missing');
+            await p.unroute('**/api/auth/me');
+            await p.route('**/api/auth/me',r=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({authenticated:true,user:{uid:'g_test',name:'Test User',email:'test@example.com',picture:''},google_available:true})}));
+            await p.reload({waitUntil:'domcontentloaded'});await p.waitForTimeout(700);
+            if(!(await p.getByText('Test User').count()))throw Error('account name missing');if(!(await p.getByText('test@example.com').count()))throw Error('account email missing');if(await p.locator('[data-u369-logout]').count()<1)throw Error('logout missing');
+            await p.locator('#u369-chat-input').fill('Test');await p.locator('#u369-chat-send').click();await p.locator('.u369-answer').filter({hasText:'Test odgovor'}).waitFor();
+            await p.locator('#u369-menu').click();await p.locator('[data-page="product"]').click();if(!(await p.locator('#page-product').evaluate(e=>e.classList.contains('active'))))throw Error('products regression');
+            await p.locator('#u369-menu').click();await p.locator('[data-page="tools"]').click();if(!(await p.locator('#page-tools').evaluate(e=>e.classList.contains('active'))))throw Error('tools regression');
+            if(errors.length)throw Error(errors.join(' | '));await b.close();console.log('account UI regression passed');
+          })().catch(e=>{console.error(e);process.exit(1)});
+          JS
