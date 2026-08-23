@@ -1,5 +1,5 @@
 const STYLE=`<style id="u369-native-bridge-style">
-.u369-side-section[data-i18n="aiMode"],.u369-side-modes,.u369-side-section[data-i18n="providers"],#u369-providers{display:none!important}
+.u369-side-section[data-i18n="aiMode"],.u369-side-modes,.u369-side-section[data-i18n="providers"],#u369-providers,[data-page="tools"],#page-tools{display:none!important}
 #page-settings .card:has([data-model]),#page-settings .card:has(#integration-grid){display:none!important}
 </style>`;
 
@@ -23,7 +23,7 @@ async function bridgedFetch(input,init){const p=pathOf(input),method=String(init
   if(p==='/api/free-ai'&&method==='POST'&&init&&typeof init.body==='string'){const q=userText(init.body),ctx=await nativeContext(q);if(ctx){try{const b=JSON.parse(init.body);if(Array.isArray(b.messages))b.messages=[...b.messages,{role:'system',content:'Unit369 native execution has already run for this user request. Base your reply on this real execution result. Do not claim actions that are not completed. Execution result: '+JSON.stringify(ctx)}];init={...init,body:JSON.stringify(b)}}catch{}}}
   return originalFetch(input,init)}
 window.fetch=bridgedFetch;
-function boot(){document.documentElement.dataset.u369Core='native'}
+function boot(){document.documentElement.dataset.u369Core='native';document.documentElement.dataset.u369ExternalConnections='optional'}
 document.readyState==='loading'?document.addEventListener('DOMContentLoaded',boot):boot();
 })();`;
 
