@@ -1,3 +1,3 @@
-release=unit369-production-hardening-v7
-attempt=4
-reason=diagnose-sanitized-external-ai-fallback-failure
+Deploy Unit369 production v8
+Source: cbaf9f9c285480971b3fd33172d2da0aaf75165f
+Requested: 2026-08-23T22:11:15.920Z
