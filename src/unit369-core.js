@@ -28,7 +28,7 @@ import {
   validateTranslation,
 } from "./ui-translations.js";
 
-export const APP_VERSION = "2026.08.23.6";
+export const APP_VERSION = "2026.08.23.7";
 const HEALTH_CACHE_KEY = `ai-health-${APP_VERSION}`;
 const TRANSLATION_CACHE_VERSION = "ui-v6";
 
