@@ -24,10 +24,9 @@ jobs:
           grep -q 'environment: production' .github/workflows/deploy-production.yml
           grep -q 'contents: write' .github/workflows/deploy-production.yml
           grep -q 'CLOUDFLARE_API_TOKEN' .github/workflows/deploy-production.yml
-          grep -q 'CLOUDFLARE_ACCOUNT_ID' .github/workflows/deploy-production.yml
-          grep -q 'api.cloudflare.com/client/v4/accounts' .github/workflows/deploy-production.yml
-          grep -q 'account_discovery' .github/workflows/deploy-production.yml
-          grep -q 'account_discovered' .github/workflows/deploy-production.yml
+          grep -q 'token_normalized' .github/workflows/deploy-production.yml
+          ! grep -q 'CLOUDFLARE_ACCOUNT_ID' .github/workflows/deploy-production.yml
+          ! grep -q 'api.cloudflare.com/client/v4/accounts' .github/workflows/deploy-production.yml
           ! grep -q 'wrangler@4 whoami' .github/workflows/deploy-production.yml
           grep -q 'https://unit.laxmiitalianelegance.workers.dev' .github/workflows/deploy-production.yml
           grep -q '/api/health/release' .github/workflows/deploy-production.yml
@@ -35,10 +34,11 @@ jobs:
           grep -q 'Publish deployment receipt' .github/workflows/deploy-production.yml
           grep -q 'deployment-receipts' .github/workflows/deploy-production.yml
           grep -q '/tmp/deploy-stage' .github/workflows/deploy-production.yml
+          grep -q 'dry_run' .github/workflows/deploy-production.yml
           grep -q 'deploy_start' .github/workflows/deploy-production.yml
           grep -q 'health_verified' .github/workflows/deploy-production.yml
           grep -q 'oauth_verified' .github/workflows/deploy-production.yml
           grep -q "npx --yes wrangler@4 deploy --dry-run" .github/workflows/deploy-production.yml
           grep -q "npx --yes wrangler@4 deploy" .github/workflows/deploy-production.yml
           npx --yes wrangler@4 deploy --dry-run --outdir .wrangler-deploy-contract
-          echo 'Unit369 Cloudflare account discovery deployment contract passed'
+          echo 'Unit369 normalized-token production deployment contract passed'
