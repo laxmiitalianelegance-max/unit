@@ -1,7 +1,8 @@
 {
-  "sha": "a568564a105017d7ba32eaec3c2abbc92b508195",
+  "sha": "36b19fb933827a1101cdbf27dc7ddf70a6325914",
   "status": "failure",
+  "stage": "wrangler_whoami",
   "url": "https://unit.laxmiitalianelegance.workers.dev",
   "health": null,
-  "recorded_at": "2026-08-23T18:37:11.135Z"
+  "recorded_at": "2026-08-23T19:14:08.081Z"
 }
