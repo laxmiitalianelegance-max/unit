@@ -1,0 +1,63 @@
+name: Validate Unit369 toolkit integration
+on:
+  push:
+    branches: [staging-toolkit]
+  pull_request:
+    branches: [main]
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 20}
+      - name: Static validation
+        run: |
+          set -e
+          node --check src/unit369.js
+          python3 - <<'PY'
+          from pathlib import Path
+          import json,re,subprocess
+          h=Path('src/app.html').read_text()
+          assert '/app-icon-192.jpg' in h
+          assert '--blue:#28a7ff' in h and '--bg:#05070c' in h
+          assert 'id="page-tools"' in h
+          assert h.count('id="page-tools"') == 1
+          assert 'openaiKey' not in h and 'grokKey' not in h and 'sendBtn' not in h
+          cat=json.loads(Path('src/toolkit/catalog.json').read_text())
+          assert len(cat['tools']) == 16
+          for i,s in enumerate(re.findall(r'<script\b[^>]*>([\s\S]*?)</script>',h,re.I)):
+            if s.strip():
+              p=Path(f'/tmp/in-{i}.js');p.write_text(s);subprocess.run(['node','--check',str(p)],check=True)
+          print('static toolkit validation passed')
+          PY
+          npx --yes wrangler@4 deploy --dry-run --outdir .wrangler-dist
+      - name: Mobile browser regression test
+        run: |
+          set -e
+          sed 's/compatibility_date = "2026-08-19"/compatibility_date = "2026-05-03"/' wrangler.toml > wrangler.smoke.toml
+          npx --yes wrangler@4 dev --config wrangler.smoke.toml --local --ip 127.0.0.1 --port 8787 >/tmp/wrangler.log 2>&1 &
+          WPID=$!; trap 'kill $WPID 2>/dev/null || true' EXIT
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8787/ -o /tmp/root.html && break; sleep 1; done
+          test -s /tmp/root.html
+          npm install --no-save playwright@1.55.0
+          npx playwright install chromium
+          node <<'JS'
+          const {chromium}=require('playwright');
+          (async()=>{
+            const b=await chromium.launch({headless:true}),p=await b.newPage({viewport:{width:390,height:844}});p.setDefaultTimeout(7000);const errors=[];let aiCalls=0;p.on('pageerror',e=>errors.push(String(e.message||e)));
+            await p.addInitScript(()=>localStorage.setItem('u369-lang-all-v4','sr'));
+            await p.route('**/api/status',r=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({version:'test',integrations:{claude:false,openai:false,grok:false,workersAi:true,shopify:true}})}));
+            await p.route('**/api/free-ai',r=>{aiCalls++;return r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({content:'Ćao, radi.'})})});
+            await p.route('**/api/ui-i18n',r=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({d:{chat:'Ćaskanje',products:'Proizvodi',settings:'Podešavanja',newChat:'Novi razgovor',workspace:'Radni prostor',aiMode:'AI režim',providers:'Provajderi',chatHistory:'Istorija razgovora',integrations:'Integracije',messageUnit369:'Poruka za Unit369',connected:'Povezano',notConnected:'Nije povezano'}})}));
+            await p.goto('http://127.0.0.1:8787/',{waitUntil:'domcontentloaded'});await p.waitForTimeout(800);
+            if(!(await p.locator('.u369-brand img').getAttribute('src')).includes('/app-icon-192.jpg'))throw Error('logo missing');
+            if(await p.locator('#u369-chat-input').count()!==1)throw Error('chat composer duplicate');
+            await p.locator('#u369-chat-input').fill('Test');await p.locator('#u369-chat-send').click();await p.locator('.u369-answer,.u369-assistant-msg').filter({hasText:'Ćao, radi.'}).waitFor();if(aiCalls!==1)throw Error('AI request duplicated: '+aiCalls);
+            await p.locator('#u369-menu').click();await p.locator('[data-page="tools"]').click();if(!(await p.locator('#page-tools').evaluate(e=>e.classList.contains('active'))))throw Error('integrations page inactive');if(await p.locator('.tool-card').count()!==16)throw Error('expected 16 toolkit cards');await p.locator('[data-tool="github"]').click();if(!(await p.locator('#toolkit-detail').evaluate(e=>e.classList.contains('open'))))throw Error('tool detail did not open');if(!(await p.locator('#toolkit-detail').textContent()).includes('api.github.com'))throw Error('GitHub config missing');
+            await p.locator('#u369-menu').click();await p.locator('[data-page="product"]').click();await p.locator('[name="title"][form="product-form"]').fill('Test proizvod');await p.locator('[name="price"][form="product-form"]').fill('100');await p.locator('[name="sizes"][form="product-form"]').fill('36,38');await p.locator('#product-review').click();if(!(await p.locator('#product-preview').evaluate(e=>e.classList.contains('open'))))throw Error('product review regression');
+            await p.locator('#u369-menu').click();await p.locator('[data-page="settings"]').click();if((await p.locator('#language-select').inputValue())!=='sr')throw Error('language state regression');if((await p.locator('#u369-title').textContent())!=='Podešavanja')throw Error('translated settings title missing');
+            if(errors.length)throw Error('page errors: '+errors.join(' | '));await b.close();console.log('toolkit integration passed');
+          })().catch(e=>{console.error(e);process.exit(1)});
+          JS
