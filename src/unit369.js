@@ -2,6 +2,7 @@ import core from "./unit369-core.js";
 import { handleOrchestrator, ToolStore } from "./orchestrator.js";
 import { handleAuth } from "./accounts.js";
 import { decorateAccountUi } from "./account-ui.js";
+import { decorateNativeBridge } from "./final-native-bridge.js";
 import { handleNativeCapabilities } from "./native-capabilities.js";
 import { NativeStore } from "./native-store.js";
 
@@ -23,7 +24,10 @@ export default {
       if (response) return response;
     }
     const response = await core.fetch(request, env, ctx);
-    if (request.method === "GET" && (url.pathname === "/" || url.pathname === "/app")) return decorateAccountUi(response);
+    if (request.method === "GET" && (url.pathname === "/" || url.pathname === "/app")) {
+      const withAccount = await decorateAccountUi(response);
+      return decorateNativeBridge(withAccount);
+    }
     return response;
   }
 };
