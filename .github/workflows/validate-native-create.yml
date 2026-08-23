@@ -1,0 +1,31 @@
+name: Validate Unit369 native create
+on:
+  push:
+    branches: [staging-native-create]
+  pull_request:
+    branches: [main]
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 20}
+      - name: Syntax and build
+        run: |
+          set -e
+          node --check src/native-create.js
+          node --check src/native-capabilities.js
+          npx --yes wrangler@4 deploy --dry-run --outdir .wrangler-dist
+      - name: Create Visual CRUD render and isolation
+        run: |
+          set -e
+          sed 's/compatibility_date = "2026-08-19"/compatibility_date = "2026-05-03"/' wrangler.toml > wrangler.smoke.toml
+          npx --yes wrangler@4 dev --config wrangler.smoke.toml --local --ip 127.0.0.1 --port 8787 --var APP_SECRET:test-app-secret-369 --var ENCRYPTION_KEY:0123456789abcdef0123456789abcdef >/tmp/wrangler.log 2>&1 &
+          WPID=$!; trap 'kill $WPID 2>/dev/null || true' EXIT
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8787/ >/dev/null && break; sleep 1; done
+          node <<'JS'
+          const crypto=require('crypto'),base='http://127.0.0.1:8787';function b64(s){return Buffer.from(s).toString('base64url')}function cookie(uid){const p=b64(JSON.stringify({uid,email:uid+'@test.local',name:uid,exp:Date.now()+3600000}));return `u369_account=${p}.${crypto.createHmac('sha256','test-app-secret-369').update(p).digest('base64url')}`}async function req(uid,path,opt={}){const r=await fetch(base+path,{...opt,headers:{'content-type':'application/json',cookie:cookie(uid),...(opt.headers||{})}}),t=await r.text();let d;try{d=JSON.parse(t)}catch{d=t}if(!r.ok)throw Error(path+' '+r.status+' '+JSON.stringify(d));return d}
+          (async()=>{if((await fetch(base+'/api/native/create')).status!==401)throw Error('anonymous create access');const d=await req('A','/api/native/create/designs',{method:'POST',body:JSON.stringify({name:'Launch',width:1200,height:630,background:'#000000',elements:[{type:'rect',x:20,y:20,width:200,height:80,fill:'#2563eb'},{type:'text',x:40,y:70,text:'Unit369 <script>alert(1)</script>',size:42,fill:'#ffffff'}]})});if(!d.design?.id)throw Error('design create');const r=await fetch(base+'/api/native/create/designs/'+d.design.id+'/render',{headers:{cookie:cookie('A')}}),svg=await r.text();if(r.status!==200||!svg.includes('<svg')||svg.includes('<script>')||!svg.includes('&lt;script&gt;'))throw Error('safe svg render');const list=await req('A','/api/native/create/designs');if(list.designs.length!==1)throw Error('design list');const foreign=await fetch(base+'/api/native/create/designs/'+d.design.id,{headers:{cookie:cookie('B')}});if(foreign.status!==404)throw Error('cross-user design leak');const p=await req('A','/api/native/create/presentations',{method:'POST',body:JSON.stringify({name:'Pitch',slides:[{title:'Intro',blocks:[{type:'text',text:'Hello'}]}]})});if(!p.presentation?.id||p.presentation.slides.length!==1)throw Error('presentation create');const plan=await req('A','/api/native/plan',{method:'POST',body:JSON.stringify({message:'Napravi logo, poster i prezentaciju'})});if(plan.external_required!==false||!plan.steps.some(s=>s.capability==='create'&&s.operation==='design.create')||!plan.steps.some(s=>s.operation==='presentation.create'))throw Error('native create planning');console.log('Unit369 native Create Visual passed')})().catch(e=>{console.error(e);process.exit(1)})
+          JS
