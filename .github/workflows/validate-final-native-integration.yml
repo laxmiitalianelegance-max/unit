@@ -1,0 +1,48 @@
+name: Validate Unit369 final native integration
+on:
+  push:
+    branches: [staging-final-native-integration]
+  pull_request:
+    branches: [main]
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 20}
+      - name: Syntax and build
+        run: |
+          set -e
+          node --check src/final-native-bridge.js
+          node --check src/unit369.js
+          node --check src/native-execution.js
+          npx --yes wrangler@4 deploy --dry-run --outdir .wrangler-dist
+      - name: App shell ownership and bridge contract
+        run: |
+          set -e
+          node <<'JS'
+          const fs=require('fs');
+          const u=fs.readFileSync('src/unit369.js','utf8');
+          const b=fs.readFileSync('src/final-native-bridge.js','utf8');
+          if(!u.includes('decorateAccountUi')||!u.includes('decorateNativeBridge'))throw Error('single app decoration chain missing');
+          if(!b.includes('/api/native/plan')||!b.includes('/api/native/execute'))throw Error('native execution bridge missing');
+          if(!b.includes("p==='/api/free-ai'||p==='/api/ai-proxy'"))throw Error('chat provider bridge missing');
+          if(!b.includes("s.capability!=='intelligence'"))throw Error('conversation/action separation missing');
+          if(!b.includes('External connections'))throw Error('external connections UI distinction missing');
+          if((u.match(/core\.fetch/g)||[]).length!==1)throw Error('multiple core runtime paths detected');
+          console.log('Final native integration static contract passed');
+          JS
+      - name: Local shell smoke test
+        run: |
+          set -e
+          sed 's/compatibility_date = "2026-08-19"/compatibility_date = "2026-05-03"/' wrangler.toml | sed '/\[\[services\]\]/,+2d' > wrangler.smoke.toml
+          npx --yes wrangler@4 dev --config wrangler.smoke.toml --local --ip 127.0.0.1 --port 8787 --var APP_SECRET:test-app-secret-369 --var ENCRYPTION_KEY:0123456789abcdef0123456789abcdef >/tmp/wrangler.log 2>&1 &
+          WPID=$!; trap 'kill $WPID 2>/dev/null || true' EXIT
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8787/ >/tmp/app.html && break; sleep 1; done
+          grep -q 'u369-account-client' /tmp/app.html
+          grep -q 'u369-native-bridge-client' /tmp/app.html
+          grep -q 'u369-native-bridge-style' /tmp/app.html
+          test "$(grep -o 'u369-native-bridge-client' /tmp/app.html | wc -l)" -eq 1
+          echo 'Final native shell smoke test passed'
