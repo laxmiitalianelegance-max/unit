@@ -20,8 +20,9 @@ jobs:
           grep -q "github.ref == 'refs/heads/main'" .github/workflows/deploy-production.yml
           grep -q 'environment: production' .github/workflows/deploy-production.yml
           grep -q 'CLOUDFLARE_API_TOKEN' .github/workflows/deploy-production.yml
-          grep -q 'CLOUDFLARE_ACCOUNT_ID' .github/workflows/deploy-production.yml
-          grep -q 'UNIT369_PRODUCTION_URL' .github/workflows/deploy-production.yml
+          ! grep -q 'CLOUDFLARE_ACCOUNT_ID' .github/workflows/deploy-production.yml
+          grep -q 'wrangler@4 whoami' .github/workflows/deploy-production.yml
+          grep -q 'https://unit.laxmiitalianelegance.workers.dev' .github/workflows/deploy-production.yml
           grep -q '/api/health/release' .github/workflows/deploy-production.yml
           grep -q '/api/auth/google/start' .github/workflows/deploy-production.yml
           grep -q "npx --yes wrangler@4 deploy --dry-run" .github/workflows/deploy-production.yml
