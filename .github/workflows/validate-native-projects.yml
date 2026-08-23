@@ -1,0 +1,53 @@
+name: Validate Unit369 native projects
+on:
+  push:
+    branches: [staging-native-projects]
+  pull_request:
+    branches: [main]
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 20}
+      - name: Syntax and build
+        run: |
+          set -e
+          node --check src/native-work.js
+          node --check src/native-capabilities.js
+          node --check src/native-store.js
+          node --check src/unit369.js
+          npx --yes wrangler@4 deploy --dry-run --outdir .wrangler-dist
+      - name: Projects Tasks CRUD and isolation
+        run: |
+          set -e
+          sed 's/compatibility_date = "2026-08-19"/compatibility_date = "2026-05-03"/' wrangler.toml > wrangler.smoke.toml
+          npx --yes wrangler@4 dev --config wrangler.smoke.toml --local --ip 127.0.0.1 --port 8787 --var APP_SECRET:test-app-secret-369 --var ENCRYPTION_KEY:0123456789abcdef0123456789abcdef >/tmp/wrangler.log 2>&1 &
+          WPID=$!; trap 'kill $WPID 2>/dev/null || true' EXIT
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8787/ >/dev/null && break; sleep 1; done
+          node <<'JS'
+          const crypto=require('crypto');
+          const base='http://127.0.0.1:8787';
+          function b64(s){return Buffer.from(s).toString('base64url')}
+          function cookie(uid){const payload=b64(JSON.stringify({uid,email:uid+'@test.local',name:uid,exp:Date.now()+3600000}));const sig=crypto.createHmac('sha256','test-app-secret-369').update(payload).digest('base64url');return `u369_account=${payload}.${sig}`}
+          async function req(uid,path,opt={}){const r=await fetch(base+path,{...opt,headers:{'content-type':'application/json','cookie':cookie(uid),...(opt.headers||{})}});const t=await r.text();let d;try{d=JSON.parse(t)}catch{d=t}if(!r.ok)throw Error(path+' '+r.status+' '+JSON.stringify(d));return d}
+          (async()=>{
+            let anon=await fetch(base+'/api/native/projects');if(anon.status!==401)throw Error('anonymous projects access must be 401');
+            const plan=await req('userA','/api/native/plan',{method:'POST',body:JSON.stringify({message:'Napravi projekat i zadatke za novu aplikaciju'})});if(plan.external_required!==false||!plan.steps.some(s=>s.capability==='work'))throw Error('native work planning missing');
+            const p=await req('userA','/api/native/projects',{method:'POST',body:JSON.stringify({name:'Launch Unit369',description:'Native project',status:'active'})});if(!p.project?.id)throw Error('project create failed');
+            const pid=p.project.id;
+            const list=await req('userA','/api/native/projects');if(list.projects.length!==1||list.projects[0].id!==pid)throw Error('project list failed');
+            const t=await req('userA',`/api/native/projects/${pid}/tasks`,{method:'POST',body:JSON.stringify({name:'Ship beta',description:'Prepare release',status:'todo',priority:'high',due_at:'2026-09-01'})});if(!t.task?.id||t.task.priority!=='high')throw Error('task create failed');
+            const tid=t.task.id;
+            const upd=await req('userA',`/api/native/projects/${pid}/tasks/${tid}`,{method:'PUT',body:JSON.stringify({status:'done',priority:'normal'})});if(upd.task.status!=='done'||upd.task.priority!=='normal')throw Error('task update failed');
+            const tasks=await req('userA',`/api/native/projects/${pid}/tasks`);if(tasks.tasks.length!==1||tasks.tasks[0].status!=='done')throw Error('task list failed');
+            const b=await req('userB','/api/native/projects');if(b.projects.length!==0)throw Error('cross-user project leak');
+            const foreign=await fetch(base+`/api/native/projects/${pid}`,{headers:{cookie:cookie('userB')}});if(foreign.status!==404)throw Error('userB can address userA project');
+            await req('userA',`/api/native/projects/${pid}`,{method:'DELETE'});
+            const after=await req('userA','/api/native/projects');if(after.projects.length!==0)throw Error('project delete failed');
+            const afterTask=await fetch(base+`/api/native/projects/${pid}/tasks/${tid}`,{headers:{cookie:cookie('userA')}});if(afterTask.status!==404)throw Error('cascade delete failed');
+            console.log('Unit369 native Projects and Tasks passed');
+          })().catch(e=>{console.error(e);process.exit(1)});
+          JS
