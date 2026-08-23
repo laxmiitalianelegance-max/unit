@@ -3,8 +3,9 @@ import { handleOrchestrator, ToolStore } from "./orchestrator.js";
 import { handleAuth } from "./accounts.js";
 import { decorateAccountUi } from "./account-ui.js";
 import { handleNativeCapabilities } from "./native-capabilities.js";
+import { NativeStore } from "./native-store.js";
 
-export { ToolStore };
+export { ToolStore, NativeStore };
 
 export default {
   async fetch(request, env, ctx) {
