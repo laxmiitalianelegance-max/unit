@@ -48,7 +48,7 @@ jobs:
             if(await p.locator('#u369-account-settings').count()!==1)throw Error('settings account missing');
             await p.unroute('**/api/auth/me');
             await p.route('**/api/auth/me',r=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({authenticated:true,user:{uid:'g_test',name:'Test User',email:'test@example.com',picture:''},google_available:true})}));
-            await p.reload({waitUntil:'domcontentloaded'});await p.waitForTimeout(700);
+            await p.evaluate(()=>window.dispatchEvent(new Event('u369-account-refresh')));await p.waitForTimeout(250);
             if(!(await p.getByText('Test User').count()))throw Error('account name missing');if(!(await p.getByText('test@example.com').count()))throw Error('account email missing');if(await p.locator('[data-u369-logout]').count()<1)throw Error('logout missing');
             await p.locator('#u369-chat-input').fill('Test');await p.locator('#u369-chat-send').click();await p.locator('.u369-answer').filter({hasText:'Test odgovor'}).waitFor();
             await p.locator('#u369-menu').click();await p.locator('[data-page="product"]').click();if(!(await p.locator('#page-product').evaluate(e=>e.classList.contains('active'))))throw Error('products regression');
