@@ -10,3 +10,11 @@ binding = "AI"
 directory = "./public"
 binding = "ASSETS"
 run_worker_first = true
+
+[[durable_objects.bindings]]
+name = "TOOL_STORE"
+class_name = "ToolStore"
+
+[[migrations]]
+tag = "orchestrator-v2"
+new_sqlite_classes = ["ToolStore"]
