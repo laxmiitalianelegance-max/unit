@@ -1,0 +1,51 @@
+name: Validate Unit369 native documents
+on:
+  push:
+    branches: [staging-native-docs]
+  pull_request:
+    branches: [main]
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 20}
+      - name: Syntax and build
+        run: |
+          set -e
+          node --check src/native-store.js
+          node --check src/native-capabilities.js
+          node --check src/unit369.js
+          npx --yes wrangler@4 deploy --dry-run --outdir .wrangler-dist
+      - name: Documents Knowledge and isolation
+        run: |
+          set -e
+          sed 's/compatibility_date = "2026-08-19"/compatibility_date = "2026-05-03"/' wrangler.toml > wrangler.smoke.toml
+          npx --yes wrangler@4 dev --config wrangler.smoke.toml --local --ip 127.0.0.1 --port 8787 --var APP_SECRET:test-app-secret-369 --var ENCRYPTION_KEY:0123456789abcdef0123456789abcdef >/tmp/wrangler.log 2>&1 &
+          WPID=$!; trap 'kill $WPID 2>/dev/null || true' EXIT
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8787/ >/dev/null && break; sleep 1; done
+          node <<'JS'
+          const crypto=require('crypto');
+          const base='http://127.0.0.1:8787';
+          function b64(s){return Buffer.from(s).toString('base64url')}
+          function cookie(uid){const payload=b64(JSON.stringify({uid,email:uid+'@test.local',name:uid,exp:Date.now()+3600000}));const sig=crypto.createHmac('sha256','test-app-secret-369').update(payload).digest('base64url');return `u369_account=${payload}.${sig}`}
+          async function req(uid,path,opt={}){const r=await fetch(base+path,{...opt,headers:{'content-type':'application/json','cookie':cookie(uid),...(opt.headers||{})}});const t=await r.text();let d;try{d=JSON.parse(t)}catch{d=t}if(!r.ok)throw Error(path+' '+r.status+' '+JSON.stringify(d));return d}
+          (async()=>{
+            let r=await fetch(base+'/api/native/documents');if(r.status!==401)throw Error('anonymous documents access must be 401');
+            const created=await req('userA','/api/native/documents',{method:'POST',body:JSON.stringify({title:'Unit369 Vision',content:'Unit369 is a native AI operating system with internal documents and knowledge.',format:'markdown',tags:['vision','native']})});
+            const id=created.document?.id;if(!id||created.document.version!==1)throw Error('document create failed');
+            const got=await req('userA','/api/native/documents/'+id);if(got.document.title!=='Unit369 Vision'||!got.document.content.includes('native AI'))throw Error('document read failed');
+            const updated=await req('userA','/api/native/documents/'+id,{method:'PUT',body:JSON.stringify({content:'Unit369 is a native AI operating system. Knowledge remains inside Unit369.',tags:['vision','knowledge']})});if(updated.document.version!==2)throw Error('document version did not increment');
+            const list=await req('userA','/api/native/documents?q=Vision');if(list.documents.length!==1||list.documents[0].version!==2)throw Error('document list/search failed');
+            const knowledge=await req('userA','/api/native/knowledge/search?q=Knowledge');if(knowledge.source!=='unit369-native-documents'||knowledge.results.length!==1||knowledge.results[0].document_id!==id)throw Error('knowledge search failed');
+            const bDocs=await req('userB','/api/native/documents');if(bDocs.documents.length!==0)throw Error('cross-user document leak');
+            const bSearch=await req('userB','/api/native/knowledge/search?q=Knowledge');if(bSearch.results.length!==0)throw Error('cross-user knowledge leak');
+            const direct=await fetch(base+'/api/native/documents/'+id,{headers:{cookie:cookie('userB')}});if(direct.status!==404)throw Error('userB can address userA document');
+            const plan=await req('userA','/api/native/plan',{method:'POST',body:JSON.stringify({message:'Nađi u znanju dokument o Unit369'})});if(!plan.steps.some(s=>s.operation==='knowledge.search')||plan.external_required!==false)throw Error('native knowledge planning failed');
+            const del=await req('userA','/api/native/documents/'+id,{method:'DELETE'});if(!del.ok)throw Error('document delete failed');
+            const after=await req('userA','/api/native/documents');if(after.documents.length!==0)throw Error('document delete not persisted');
+            console.log('Unit369 native Documents and Knowledge passed');
+          })().catch(e=>{console.error(e);process.exit(1)});
+          JS
