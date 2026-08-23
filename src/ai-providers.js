@@ -330,11 +330,13 @@ export async function runPreferredAi(env, messages, options = {}) {
       });
     }
   }
-  throw new HttpError(
+  const error = new HttpError(
     503,
     "No configured AI provider could complete the request.",
     "ai_unavailable",
   );
+  error.attempts = attempts;
+  throw error;
 }
 
 export async function probeAi(env) {
@@ -359,6 +361,12 @@ export async function probeAi(env) {
     return {
       operational: false,
       error: safeError(error),
+      attempts: Array.isArray(error?.attempts)
+        ? error.attempts.map((entry) => ({
+            provider: String(entry.provider || "unknown"),
+            error: safeError(entry.error),
+          }))
+        : [],
       latency_ms: Date.now() - started,
       checked_at: new Date().toISOString(),
     };

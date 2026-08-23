@@ -33,9 +33,10 @@ Bindings are declared in `wrangler.jsonc`: `AI`, `ASSETS`, `SELF`, `TOOL_STORE` 
 Required secrets/variables:
 
 - `APP_SECRET`
-- `ENCRYPTION_KEY`
 - `GOOGLE_CLIENT_ID`
 - `GOOGLE_CLIENT_SECRET`
+
+`ENCRYPTION_KEY` is an optional dedicated credential-encryption secret. When it is absent, Unit369 derives a domain-separated encryption key from `APP_SECRET`.
 
 Optional provider fallback:
 

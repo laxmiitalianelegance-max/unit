@@ -222,8 +222,14 @@ function fromB64url(s) {
   while (s.length % 4) s += "=";
   return Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
 }
-async function shaKey(secret) {
-  if (!secret) throw new Error("ENCRYPTION_KEY is not configured.");
+async function shaKey(env) {
+  const secret = env.ENCRYPTION_KEY
+    ? String(env.ENCRYPTION_KEY)
+    : env.APP_SECRET
+      ? `unit369-credential-encryption-v1:${String(env.APP_SECRET)}`
+      : "";
+  if (!secret)
+    throw new Error("APP_SECRET or ENCRYPTION_KEY is not configured.");
   return crypto.subtle.importKey(
     "raw",
     await crypto.subtle.digest("SHA-256", enc.encode(secret)),
@@ -233,7 +239,7 @@ async function shaKey(secret) {
   );
 }
 async function encrypt(env, obj) {
-  const key = await shaKey(env.ENCRYPTION_KEY),
+  const key = await shaKey(env),
     iv = crypto.getRandomValues(new Uint8Array(12)),
     plain = enc.encode(JSON.stringify(obj)),
     cipher = new Uint8Array(
@@ -247,7 +253,7 @@ async function encrypt(env, obj) {
 async function decrypt(env, value) {
   try {
     const all = fromB64url(value),
-      key = await shaKey(env.ENCRYPTION_KEY),
+      key = await shaKey(env),
       plain = await crypto.subtle.decrypt(
         { name: "AES-GCM", iv: all.slice(0, 12) },
         key,
