@@ -36,6 +36,26 @@ jobs:
           set -euo pipefail
           echo token_check > /tmp/deploy-stage
           test -n "$CLOUDFLARE_API_TOKEN" || { echo 'Missing CLOUDFLARE_API_TOKEN'; exit 1; }
+          normalized_token="$(
+            RAW_CF_TOKEN="$CLOUDFLARE_API_TOKEN" node <<'JS'
+          let token=String(process.env.RAW_CF_TOKEN||'').replace(/[\r\n]/g,'').trim();
+          for(let i=0;i<4;i++){
+            const before=token;
+            if((token.startsWith('"')&&token.endsWith('"'))||(token.startsWith("'")&&token.endsWith("'"))) token=token.slice(1,-1).trim();
+            token=token.replace(/^CLOUDFLARE_API_TOKEN\s*=\s*/i,'').trim();
+            token=token.replace(/^Authorization\s*:\s*Bearer\s+/i,'').trim();
+            token=token.replace(/^Bearer\s+/i,'').trim();
+            if(token===before)break;
+          }
+          if(!token)throw Error('Cloudflare API token is empty after normalization');
+          if(/\s/.test(token))throw Error('Cloudflare API token contains whitespace after normalization');
+          process.stdout.write(token);
+          JS
+          )"
+          echo "::add-mask::$normalized_token"
+          export CLOUDFLARE_API_TOKEN="$normalized_token"
+          printf 'CLOUDFLARE_API_TOKEN=%s\n' "$CLOUDFLARE_API_TOKEN" >> "$GITHUB_ENV"
+          echo token_normalized > /tmp/deploy-stage
           echo account_discovery > /tmp/deploy-stage
           curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
             -H 'Content-Type: application/json' \
