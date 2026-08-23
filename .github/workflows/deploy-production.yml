@@ -73,7 +73,22 @@ jobs:
         run: |
           set -euo pipefail
           echo deploy_start > /tmp/deploy-stage
-          npx --yes wrangler@4 deploy
+          if ! npx --yes wrangler@4 deploy > /tmp/wrangler-deploy.log 2>&1; then
+            echo deploy_failed > /tmp/deploy-stage
+            RAW_CF_TOKEN="$CLOUDFLARE_API_TOKEN" node <<'JS' > /tmp/deploy-error.txt
+          const fs=require('fs');
+          let s=fs.readFileSync('/tmp/wrangler-deploy.log','utf8');
+          const token=String(process.env.RAW_CF_TOKEN||'');
+          if(token)s=s.split(token).join('[REDACTED]');
+          s=s.replace(/Authorization:\s*Bearer\s+\S+/ig,'Authorization: Bearer [REDACTED]');
+          s=s.replace(/[A-Za-z0-9_-]{40,}/g,m=>m.length>80?'[REDACTED_LONG_VALUE]':m);
+          const lines=s.split(/\r?\n/).filter(Boolean);
+          process.stdout.write(lines.slice(-60).join('\n').slice(0,6000));
+          JS
+            cat /tmp/deploy-error.txt
+            exit 1
+          fi
+          cat /tmp/wrangler-deploy.log
           echo deploy_ok > /tmp/deploy-stage
       - name: Verify production health
         run: |
@@ -123,7 +138,9 @@ jobs:
           ORIGINAL_SHA="$GITHUB_SHA"
           STAGE=$(cat /tmp/deploy-stage 2>/dev/null || echo not_started)
           HEALTH='null'
+          ERROR_TEXT=''
           if [ -s /tmp/release-health.json ]; then HEALTH=$(cat /tmp/release-health.json); fi
+          if [ -s /tmp/deploy-error.txt ]; then ERROR_TEXT=$(cat /tmp/deploy-error.txt); fi
           git config user.name 'unit369-release-bot'
           git config user.email 'unit369-release-bot@users.noreply.github.com'
           if git ls-remote --exit-code --heads origin deployment-receipts >/dev/null 2>&1; then
@@ -134,10 +151,10 @@ jobs:
             git rm -rf . >/dev/null 2>&1 || true
           fi
           mkdir -p deployment
-          node - "$ORIGINAL_SHA" "$DEPLOY_STATUS" "$STAGE" "$UNIT369_PRODUCTION_URL" "$HEALTH" <<'JS' > deployment/latest.json
-          const [sha,status,stage,url,rawHealth]=process.argv.slice(2);
+          node - "$ORIGINAL_SHA" "$DEPLOY_STATUS" "$STAGE" "$UNIT369_PRODUCTION_URL" "$HEALTH" "$ERROR_TEXT" <<'JS' > deployment/latest.json
+          const [sha,status,stage,url,rawHealth,error]=process.argv.slice(2);
           let health=null; try{health=JSON.parse(rawHealth)}catch{}
-          console.log(JSON.stringify({sha,status,stage,url,health,recorded_at:new Date().toISOString()},null,2));
+          console.log(JSON.stringify({sha,status,stage,url,health,error:error||null,recorded_at:new Date().toISOString()},null,2));
           JS
           git add deployment/latest.json
           git commit -m "Record Unit369 production deployment $ORIGINAL_SHA" || true
