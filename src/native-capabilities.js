@@ -4,10 +4,11 @@ import { handleNativeBuild } from './native-build.js';
 import { handleNativeAutomation } from './native-automation.js';
 import { handleNativeBusiness } from './native-business.js';
 import { handleNativeCommunicate } from './native-communicate.js';
+import { handleNativeCreate } from './native-create.js';
 
 export const NATIVE_CAPABILITIES = Object.freeze({
   intelligence:{name:'Intelligence',version:1,operations:['chat','research','plan','critique','verify','knowledge.search'],native:true},
-  create:{name:'Create',version:1,operations:['document.create','document.read','document.list','document.update','document.delete','content.generate','asset.describe'],native:true},
+  create:{name:'Create',version:2,operations:['document.create','document.read','document.list','document.update','document.delete','design.create','design.read','design.list','design.update','design.delete','design.render','presentation.create','presentation.read','presentation.list','presentation.update','presentation.delete'],native:true},
   build:{name:'Build',version:2,operations:['workspace.create','workspace.read','workspace.list','workspace.update','workspace.delete','file.create','file.read','file.list','file.update','file.delete','tree.read','snapshot.create','snapshot.list','diff.read','test.plan'],native:true},
   work:{name:'Work',version:2,operations:['project.create','project.read','project.list','project.update','project.delete','task.create','task.read','task.list','task.update','task.delete','milestone.manage'],native:true},
   data:{name:'Data',version:1,operations:['collection.create','record.create','record.update','record.query','search'],native:true},
@@ -25,6 +26,8 @@ export function planNativeIntent(text){
   const q=String(text||'').toLowerCase(),steps=[];
   const add=(capability,operation,reason)=>{if(hasOperation(capability,operation)&&!steps.some(s=>s.capability===capability&&s.operation===operation))steps.push({capability,operation,reason})};
   if(/document|doc|note|report|write|tekst|dokument|izveštaj|izvjestaj/.test(q))add('create','document.create','Create a native Unit369 document');
+  if(/design|visual|poster|banner|logo|image|graphic|dizajn|vizual|slika|grafik/.test(q))add('create','design.create','Create a native Unit369 visual design');
+  if(/presentation|slides|deck|prezentacij|slajd/.test(q))add('create','presentation.create','Create a native Unit369 presentation');
   if(/knowledge|search|find|remember|znanje|pretraž|pretraz|nađi|nadji/.test(q))add('intelligence','knowledge.search','Search native Unit369 knowledge');
   if(/code|app|website|site|build|program|source|repo|kod|aplikacij|sajt/.test(q))add('build','workspace.create','Create or modify a native Unit369 code workspace');
   if(/project|projekat|projekt/.test(q))add('work','project.create','Create or manage a native Unit369 project');
@@ -50,6 +53,7 @@ export async function handleNativeCapabilities(request,env){
   try{
     if(url.pathname==='/api/native/capabilities'&&request.method==='GET')return json({native:true,capabilities:capabilityList()});
     if(url.pathname==='/api/native/plan'&&request.method==='POST'){let body={};try{body=await request.json()}catch{}return json({user_id:account.uid,...planNativeIntent(body.message)});}
+    if(/^\/api\/native\/create(\/|$)/.test(url.pathname))return handleNativeCreate(request,env,account);
     if(/^\/api\/native\/communicate(\/|$)/.test(url.pathname))return handleNativeCommunicate(request,env,account);
     if(/^\/api\/native\/business(\/|$)/.test(url.pathname))return handleNativeBusiness(request,env,account);
     if(/^\/api\/native\/automations(\/|$)/.test(url.pathname))return handleNativeAutomation(request,env,account);
