@@ -1,0 +1,48 @@
+name: Validate Unit369 release readiness
+on:
+  push:
+    branches: [staging-release-readiness]
+  pull_request:
+    branches: [main]
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 20}
+      - name: Build and static release contract
+        run: |
+          set -e
+          node --check src/unit369-core.js
+          grep -q 'rel="manifest" href="/manifest.json"' src/app.html
+          grep -q 'serviceWorker' src/app.html
+          grep -q 'serviceWorker.register' src/app.html
+          grep -q 'binding = "AI"' wrangler.toml
+          grep -q 'binding = "ASSETS"' wrangler.toml
+          grep -q 'binding = "SELF"' wrangler.toml
+          grep -q 'name = "NATIVE_STORE"' wrangler.toml
+          grep -q 'name = "TOOL_STORE"' wrangler.toml
+          npx --yes wrangler@4 deploy --dry-run --outdir .wrangler-dist
+      - name: Runtime health manifest icons and service worker
+        run: |
+          set -e
+          sed 's/compatibility_date = "2026-08-19"/compatibility_date = "2026-05-03"/' wrangler.toml > wrangler.smoke.toml
+          npx --yes wrangler@4 dev --config wrangler.smoke.toml --local --ip 127.0.0.1 --port 8787 --var APP_SECRET:test-app-secret-369 --var ENCRYPTION_KEY:0123456789abcdef0123456789abcdef >/tmp/wrangler.log 2>&1 &
+          WPID=$!; trap 'kill $WPID 2>/dev/null || true' EXIT
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8787/ >/dev/null && break; sleep 1; done
+          node <<'JS'
+          const base='http://127.0.0.1:8787';
+          (async()=>{
+            let r=await fetch(base+'/api/health/release'),h=await r.json();
+            if(!r.ok||h.status!=='ready'||h.core_ready!==true)throw Error('release health not ready '+JSON.stringify(h));
+            for(const k of ['ai','assets','self','native_store','tool_store','app_secret'])if(h.checks?.[k]!==true)throw Error('missing core check '+k);
+            if('APP_SECRET' in h||JSON.stringify(h).includes('test-app-secret-369'))throw Error('secret leaked');
+            r=await fetch(base+'/manifest.json');const m=await r.json();if(!r.ok||m.name!=='Unit369'||m.display!=='standalone'||m.start_url!=='/'||m.scope!=='/')throw Error('manifest contract');
+            if(!Array.isArray(m.icons)||!m.icons.some(x=>x.sizes==='192x192')||!m.icons.some(x=>x.sizes==='512x512'))throw Error('manifest icons');
+            for(const p of ['/app-icon-192.jpg','/app-icon-512.jpg']){const ir=await fetch(base+p);if(!ir.ok||!(ir.headers.get('content-type')||'').startsWith('image/'))throw Error('icon unavailable '+p)}
+            r=await fetch(base+'/sw.js');const sw=await r.text();if(!r.ok||!sw.includes("unit369-2026.08.23.3")||!sw.includes('skipWaiting')||!sw.includes('clients.claim'))throw Error('service worker release contract');
+            console.log('Unit369 release readiness passed', {auth_ready:h.auth_ready});
+          })().catch(e=>{console.error(e);process.exit(1)});
+          JS
