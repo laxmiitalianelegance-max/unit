@@ -1,0 +1,50 @@
+name: Validate Unit369 native core
+on:
+  push:
+    branches: [staging-native-core]
+  pull_request:
+    branches: [main]
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 20}
+      - name: Syntax and build
+        run: |
+          set -e
+          node --check src/native-capabilities.js
+          node --check src/native-store.js
+          node --check src/unit369.js
+          npx --yes wrangler@4 deploy --dry-run --outdir .wrangler-dist
+      - name: Native Files Data and isolation
+        run: |
+          set -e
+          sed 's/compatibility_date = "2026-08-19"/compatibility_date = "2026-05-03"/' wrangler.toml > wrangler.smoke.toml
+          npx --yes wrangler@4 dev --config wrangler.smoke.toml --local --ip 127.0.0.1 --port 8787 --var APP_SECRET:test-app-secret-369 --var ENCRYPTION_KEY:0123456789abcdef0123456789abcdef >/tmp/wrangler.log 2>&1 &
+          WPID=$!; trap 'kill $WPID 2>/dev/null || true' EXIT
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8787/ >/dev/null && break; sleep 1; done
+          node <<'JS'
+          const crypto=require('crypto');
+          const base='http://127.0.0.1:8787';
+          function b64(s){return Buffer.from(s).toString('base64url')}
+          function cookie(uid){const payload=b64(JSON.stringify({uid,email:uid+'@test.local',name:uid,exp:Date.now()+3600000}));const sig=crypto.createHmac('sha256','test-app-secret-369').update(payload).digest('base64url');return `u369_account=${payload}.${sig}`}
+          async function req(uid,path,opt={}){const r=await fetch(base+path,{...opt,headers:{'content-type':'application/json','cookie':cookie(uid),...(opt.headers||{})}});const t=await r.text();let d;try{d=JSON.parse(t)}catch{d=t}if(!r.ok)throw Error(path+' '+r.status+' '+JSON.stringify(d));return d}
+          (async()=>{
+            let r=await fetch(base+'/api/native/capabilities');if(r.status!==401)throw Error('anonymous native access must be 401');
+            const caps=await req('userA','/api/native/capabilities');if(!caps.native||caps.capabilities.length!==10)throw Error('capability registry invalid');
+            const plan=await req('userA','/api/native/plan',{method:'POST',body:JSON.stringify({message:'Napravi aplikaciju, dokument i automatizuj zadatke'})});if(plan.external_required!==false)throw Error('native plan requested external dependency');
+            const f=await req('userA','/api/native/files',{method:'POST',body:JSON.stringify({name:'plan.txt',content:'Unit369 native secret'})});if(!f.file?.id)throw Error('file create failed');
+            const fa=await req('userA','/api/native/files/'+f.file.id);if(fa.file.body!=='Unit369 native secret')throw Error('file read failed');
+            const listA=await req('userA','/api/native/files');if(listA.files.length!==1)throw Error('userA file missing');
+            const listB=await req('userB','/api/native/files');if(listB.files.length!==0)throw Error('cross-user file leak');
+            const directB=await fetch(base+'/api/native/files/'+f.file.id,{headers:{cookie:cookie('userB')}});if(directB.status!==404)throw Error('userB can address userA file');
+            const c=await req('userA','/api/native/data/collections',{method:'POST',body:JSON.stringify({name:'Customers',schema:{name:'string',tier:'string'}})});if(!c.collection?.id)throw Error('collection create failed');
+            const rec=await req('userA',`/api/native/data/collections/${c.collection.id}/records`,{method:'POST',body:JSON.stringify({name:'Ana',record:{name:'Ana',tier:'pro'}})});if(!rec.record?.id)throw Error('record create failed');
+            const qr=await req('userA',`/api/native/data/collections/${c.collection.id}/records?q=pro`);if(qr.records.length!==1||qr.records[0].data.tier!=='pro')throw Error('record query failed');
+            const cb=await req('userB','/api/native/data/collections');if(cb.collections.length!==0)throw Error('cross-user data leak');
+            console.log('Unit369 native core persistence and isolation passed');
+          })().catch(e=>{console.error(e);process.exit(1)});
+          JS
