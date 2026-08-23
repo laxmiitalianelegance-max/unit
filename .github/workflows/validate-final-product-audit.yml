@@ -1,0 +1,43 @@
+name: Validate Unit369 final product audit
+on:
+  push:
+    branches: [staging-final-product-audit]
+  pull_request:
+    branches: [main]
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 20}
+      - name: Syntax and build
+        run: |
+          set -e
+          node --check src/final-native-bridge.js
+          node --check src/unit369.js
+          grep -q "Optional external AI providers are not used by Unit369 Core chat" src/final-native-bridge.js
+          grep -q "/api/native/business/products" src/final-native-bridge.js
+          npx --yes wrangler@4 deploy --dry-run --outdir .wrangler-dist
+      - name: Mobile native-first audit
+        run: |
+          set -e
+          sed 's/compatibility_date = "2026-08-19"/compatibility_date = "2026-05-03"/' wrangler.toml | sed '/\[\[services\]\]/,+2d' > wrangler.audit.toml
+          npx --yes wrangler@4 dev --config wrangler.audit.toml --local --ip 127.0.0.1 --port 8787 --var APP_SECRET:test-app-secret-369 --var ENCRYPTION_KEY:0123456789abcdef0123456789abcdef >/tmp/wrangler.log 2>&1 &
+          WPID=$!; trap 'kill $WPID 2>/dev/null || true' EXIT
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8787/ >/dev/null && break; sleep 1; done
+          npm install --no-save playwright@1.55.0
+          npx playwright install chromium
+          node <<'JS'
+          const crypto=require('crypto');const {chromium}=require('playwright');
+          function session(uid){const p={uid,email:uid+'@test.local',name:uid,picture:'',iat:Date.now(),exp:Date.now()+3600000};const body=Buffer.from(JSON.stringify(p)).toString('base64url');const sig=crypto.createHmac('sha256','test-app-secret-369').update(body).digest('base64url');return body+'.'+sig}
+          (async()=>{const b=await chromium.launch({headless:true});const page=await b.newPage({viewport:{width:390,height:844}});page.setDefaultTimeout(8000);await page.context().addCookies([{name:'u369_account',value:session('audit-user'),domain:'127.0.0.1',path:'/'}]);await page.goto('http://127.0.0.1:8787/',{waitUntil:'domcontentloaded'});await page.waitForTimeout(500);
+            if(await page.locator('.u369-side-section[data-i18n="providers"]').isVisible())throw Error('providers still visible in Core navigation');
+            if(await page.locator('.u369-side-modes').isVisible())throw Error('legacy AI mode still visible');
+            const ext=await page.evaluate(async()=>{const r=await fetch('/api/ai-proxy',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({provider:'openai',messages:[{role:'user',content:'test'}]})});return{status:r.status,body:await r.json()}});if(ext.status!==409||!String(ext.body.error||'').includes('not used'))throw Error('external AI proxy still active in Core chat');
+            const created=await page.evaluate(async()=>{const f=new FormData();f.append('title','Native Audit Product');f.append('price','49.90');f.append('sizes','M,L');f.append('description','native product');f.append('status','DRAFT');const r=await fetch('/api/create-product',{method:'POST',body:f});return{status:r.status,body:await r.json()}});if(created.status!==201||created.body.native!==true||!created.body.product?.id)throw Error('native product create failed '+JSON.stringify(created));
+            const listed=await page.evaluate(async()=>{const r=await fetch('/api/products');return{status:r.status,body:await r.json()}});if(listed.status!==200||listed.body.native!==true||!listed.body.products.some(x=>x.title==='Native Audit Product'))throw Error('native product list failed '+JSON.stringify(listed));
+            await b.close();console.log('Unit369 final native-first product audit passed');
+          })().catch(e=>{console.error(e);process.exit(1)});
+          JS
