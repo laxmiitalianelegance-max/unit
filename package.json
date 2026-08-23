@@ -1,0 +1,23 @@
+{
+  "name": "unit369-worker",
+  "version": "2026.8.23",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "check": "node scripts/check.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "test:smoke": "node scripts/smoke.mjs",
+    "ci": "npm run format:check && npm run check && npm test && npm run build",
+    "format:check": "prettier --check src tests scripts docs .github/workflows wrangler.jsonc README.md",
+    "format": "prettier --write src tests scripts docs .github/workflows wrangler.jsonc README.md",
+    "build": "wrangler deploy --dry-run --outdir .wrangler-dist"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20260823.1",
+    "prettier": "3.6.2",
+    "wrangler": "4.125.0"
+  }
+}

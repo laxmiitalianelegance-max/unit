@@ -1,30 +1,440 @@
-function json(data,status=200){return new Response(JSON.stringify(data),{status,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store'}})}
-function clean(v,max=4000){return String(v??'').trim().slice(0,max)}
-function validId(v){return /^[A-Za-z0-9._:-]{1,160}$/.test(String(v||''))}
-function obj(v){return v&&typeof v==='object'&&!Array.isArray(v)?v:{}}
-function arr(v,max=64){return Array.isArray(v)?v.slice(0,max):[]}
-function store(env,uid){if(!env.NATIVE_STORE)throw new Error('NATIVE_STORE binding is not configured.');return env.NATIVE_STORE.get(env.NATIVE_STORE.idFromName(uid))}
-async function callStore(env,uid,path,init={}){const r=await store(env,uid).fetch(new Request('https://native.internal/native-store'+path,{...init,headers:{'content-type':'application/json',...(init.headers||{})}}));const text=await r.text();let data;try{data=JSON.parse(text)}catch{data={error:text||'Native store error.'}}return{r,data}}
-const COLLECTION='__unit369_automation_v1';
-async function ensureCollection(env,uid){const list=await callStore(env,uid,'/data/collections');if(!list.r.ok)throw new Error(list.data.error||'Unable to list native collections.');let c=(list.data.collections||[]).find(x=>x.name===COLLECTION);if(c)return c;const created=await callStore(env,uid,'/data/collections',{method:'POST',body:JSON.stringify({name:COLLECTION,schema:{type:'workflow|execution',workflow_id:'string',status:'string',trigger:'object',conditions:'array',actions:'array',schedule:'object'}})});if(!created.r.ok)throw new Error(created.data.error||'Unable to create automation collection.');return created.data.collection}
-async function listRecords(env,uid,cid){const x=await callStore(env,uid,`/data/collections/${cid}/records`);if(!x.r.ok)throw new Error(x.data.error||'Unable to read automation records.');return x.data.records||[]}
-async function getRecord(env,uid,cid,id){const x=await callStore(env,uid,`/data/collections/${cid}/records/${id}`);return x.r.ok?x.data.record:null}
-async function saveRecord(env,uid,cid,id,name,data){return callStore(env,uid,`/data/collections/${cid}/records/${id}`,{method:'PUT',body:JSON.stringify({name,record:data})})}
-function normWorkflow(r){const d=r.data||{};return{id:r.id,name:r.name||d.name||'',description:d.description||'',enabled:d.enabled!==false,trigger:obj(d.trigger),conditions:arr(d.conditions),actions:arr(d.actions),schedule:obj(d.schedule),approval_required:!!d.approval_required,created_at:r.created_at,updated_at:r.updated_at}}
-function normExecution(r){const d=r.data||{};return{id:r.id,workflow_id:d.workflow_id,status:d.status||'unknown',input:obj(d.input),output:obj(d.output),logs:arr(d.logs,200),approval_required:!!d.approval_required,approved_at:d.approved_at||null,started_at:d.started_at||r.created_at,finished_at:d.finished_at||null,created_at:r.created_at,updated_at:r.updated_at}}
-function pathValue(input,path){let x=input;for(const p of String(path||'').split('.').filter(Boolean)){if(x==null)return undefined;x=x[p]}return x}
-function conditionPass(c,input){const left=pathValue(input,c.path),right=c.value;switch(c.op){case'neq':return left!==right;case'contains':return String(left??'').includes(String(right??''));case'exists':return left!==undefined&&left!==null;case'gt':return Number(left)>Number(right);case'gte':return Number(left)>=Number(right);case'lt':return Number(left)<Number(right);case'lte':return Number(left)<=Number(right);case'eq':default:return left===right}}
-function interpolate(s,ctx){return String(s??'').replace(/\{\{\s*([\w.-]+)\s*\}\}/g,(_,p)=>{const v=pathValue(ctx,p);return v==null?'':String(v)})}
-function needsApproval(w){return !!w.approval_required||w.actions.some(a=>a&&typeof a==='object'&&(a.external===true||a.destructive===true))}
-function runSafeActions(actions,input){const output={},logs=[],ctx={input,output};for(const a of actions){if(!a||typeof a!=='object')continue;const type=clean(a.type,40);if(type==='set'){const key=clean(a.key,120);if(key)output[key]=a.value;logs.push({type:'set',key})}else if(type==='template'){const key=clean(a.key,120);if(key)output[key]=interpolate(a.template,ctx);logs.push({type:'template',key})}else if(type==='log'){logs.push({type:'log',message:interpolate(a.message,ctx)})}else{logs.push({type:'skipped',action:type||'unknown',reason:'Unsupported safe action'})}}return{output,logs}}
-async function createExecution(env,uid,cid,w,input,status,extra={}){const data={type:'execution',workflow_id:w.id,status,input:obj(input),output:{},logs:[],approval_required:status==='pending_approval',started_at:Date.now(),finished_at:null,...extra};const x=await callStore(env,uid,`/data/collections/${cid}/records`,{method:'POST',body:JSON.stringify({name:`Execution ${w.name}`,record:data})});if(!x.r.ok)throw new Error(x.data.error||'Unable to create execution.');return x.data.record}
-async function finishExecution(env,uid,cid,record,w){const d=record.data||{},res=runSafeActions(w.actions||[],d.input||{}),next={...d,status:'completed',output:res.output,logs:[...(d.logs||[]),...res.logs],approval_required:false,finished_at:Date.now()};const x=await saveRecord(env,uid,cid,record.id,record.name||`Execution ${w.name}`,next);if(!x.r.ok)throw new Error(x.data.error||'Unable to finish execution.');return{id:record.id,...next}}
-export async function handleNativeAutomation(request,env,account){const u=new URL(request.url),p=u.pathname.replace(/^\/api\/native\/automations\/?/,'').split('/').filter(Boolean),cid=(await ensureCollection(env,account.uid)).id;
-  if(!p.length){if(request.method==='GET'){const all=await listRecords(env,account.uid,cid);return json({workflows:all.filter(r=>r.data?.type==='workflow').map(normWorkflow)})}if(request.method==='POST'){const b=await request.json(),name=clean(b.name,160);if(!name)return json({error:'Workflow name is required.'},400);const data={type:'workflow',name,description:clean(b.description),enabled:b.enabled!==false,trigger:obj(b.trigger),conditions:arr(b.conditions),actions:arr(b.actions),schedule:obj(b.schedule),approval_required:!!b.approval_required};const x=await callStore(env,account.uid,`/data/collections/${cid}/records`,{method:'POST',body:JSON.stringify({name,record:data})});if(!x.r.ok)return json(x.data,x.r.status);return json({workflow:normWorkflow(x.data.record)},201)}return json({error:'Method not allowed.'},405)}
-  const wid=p[0];if(!validId(wid))return json({error:'Invalid workflow id.'},400);const wr=await getRecord(env,account.uid,cid,wid);if(!wr||wr.data?.type!=='workflow')return json({error:'Workflow not found.'},404);const w=normWorkflow(wr);
-  if(p.length===1){if(request.method==='GET')return json({workflow:w});if(request.method==='PUT'){const b=await request.json(),old=wr.data||{},name=clean(b.name||wr.name,160),data={...old,type:'workflow',name,description:b.description===undefined?(old.description||''):clean(b.description),enabled:b.enabled===undefined?(old.enabled!==false):!!b.enabled,trigger:b.trigger===undefined?obj(old.trigger):obj(b.trigger),conditions:b.conditions===undefined?arr(old.conditions):arr(b.conditions),actions:b.actions===undefined?arr(old.actions):arr(b.actions),schedule:b.schedule===undefined?obj(old.schedule):obj(b.schedule),approval_required:b.approval_required===undefined?!!old.approval_required:!!b.approval_required};const x=await saveRecord(env,account.uid,cid,wid,name,data);if(!x.r.ok)return json(x.data,x.r.status);return json({workflow:{id:wid,...data,updated_at:Date.now()}})}if(request.method==='DELETE'){const all=await listRecords(env,account.uid,cid);for(const e of all.filter(r=>r.data?.type==='execution'&&r.data?.workflow_id===wid))await callStore(env,account.uid,`/data/collections/${cid}/records/${e.id}`,{method:'DELETE'});const x=await callStore(env,account.uid,`/data/collections/${cid}/records/${wid}`,{method:'DELETE'});if(!x.r.ok)return json(x.data,x.r.status);return json({ok:true})}return json({error:'Method not allowed.'},405)}
-  if(p[1]==='run'&&p.length===2&&request.method==='POST'){if(!w.enabled)return json({error:'Workflow is disabled.'},409);const b=await request.json(),input=obj(b.input),conditions=w.conditions||[],passed=conditions.every(c=>conditionPass(obj(c),input));if(!passed){const rec=await createExecution(env,account.uid,cid,w,input,'skipped',{logs:[{type:'conditions',message:'Conditions did not pass'}],finished_at:Date.now()});return json({execution:normExecution(rec)})}if(needsApproval(w)){const rec=await createExecution(env,account.uid,cid,w,input,'pending_approval',{logs:[{type:'approval',message:'Explicit approval required before execution'}]});return json({execution:normExecution(rec)},202)}const rec=await createExecution(env,account.uid,cid,w,input,'running');const done=await finishExecution(env,account.uid,cid,rec,w);return json({execution:done})}
-  if(p[1]==='executions'&&p.length===2&&request.method==='GET'){const all=await listRecords(env,account.uid,cid);return json({executions:all.filter(r=>r.data?.type==='execution'&&r.data?.workflow_id===wid).map(normExecution)})}
-  if(p[1]==='executions'&&p.length===4&&p[3]==='approve'&&request.method==='POST'){const eid=p[2];if(!validId(eid))return json({error:'Invalid execution id.'},400);const er=await getRecord(env,account.uid,cid,eid);if(!er||er.data?.type!=='execution'||er.data?.workflow_id!==wid)return json({error:'Execution not found.'},404);if(er.data.status!=='pending_approval')return json({error:'Execution is not pending approval.'},409);const approved={...er.data,approved_at:Date.now(),approval_required:false,status:'running',logs:[...(er.data.logs||[]),{type:'approval',message:'Approved'}]};const sx=await saveRecord(env,account.uid,cid,eid,er.name,approved);if(!sx.r.ok)return json(sx.data,sx.r.status);const done=await finishExecution(env,account.uid,cid,{...er,data:approved},w);return json({execution:done})}
-  return json({error:'Automation route not found.'},404)
+import { readJsonLimited, readResponseJsonLimited } from "./runtime-utils.js";
+
+function json(data, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+      "cache-control": "no-store",
+    },
+  });
+}
+function clean(v, max = 4000) {
+  return String(v ?? "")
+    .trim()
+    .slice(0, max);
+}
+function validId(v) {
+  return /^[A-Za-z0-9._:-]{1,160}$/.test(String(v || ""));
+}
+function obj(v) {
+  return v && typeof v === "object" && !Array.isArray(v) ? v : {};
+}
+function arr(v, max = 64) {
+  return Array.isArray(v) ? v.slice(0, max) : [];
+}
+function store(env, uid) {
+  if (!env.NATIVE_STORE)
+    throw new Error("NATIVE_STORE binding is not configured.");
+  return env.NATIVE_STORE.get(env.NATIVE_STORE.idFromName(uid));
+}
+async function callStore(env, uid, path, init = {}) {
+  const r = await store(env, uid).fetch(
+    new Request("https://native.internal/native-store" + path, {
+      ...init,
+      headers: { "content-type": "application/json", ...(init.headers || {}) },
+    }),
+  );
+  const data = await readResponseJsonLimited(r, 8 * 1024 * 1024);
+  return { r, data };
+}
+const COLLECTION = "__unit369_automation_v1";
+async function ensureCollection(env, uid) {
+  const list = await callStore(env, uid, "/data/collections?limit=200");
+  if (!list.r.ok)
+    throw new Error(list.data.error || "Unable to list native collections.");
+  let c = (list.data.collections || []).find((x) => x.name === COLLECTION);
+  if (c) return c;
+  const created = await callStore(env, uid, "/data/collections", {
+    method: "POST",
+    body: JSON.stringify({
+      name: COLLECTION,
+      schema: {
+        type: "workflow|execution",
+        workflow_id: "string",
+        status: "string",
+        trigger: "object",
+        conditions: "array",
+        actions: "array",
+        schedule: "object",
+      },
+    }),
+  });
+  if (!created.r.ok)
+    throw new Error(
+      created.data.error || "Unable to create automation collection.",
+    );
+  return created.data.collection;
+}
+async function listRecords(env, uid, cid) {
+  const x = await callStore(
+    env,
+    uid,
+    `/data/collections/${cid}/records?limit=200`,
+  );
+  if (!x.r.ok)
+    throw new Error(x.data.error || "Unable to read automation records.");
+  return x.data.records || [];
+}
+async function getRecord(env, uid, cid, id) {
+  const x = await callStore(env, uid, `/data/collections/${cid}/records/${id}`);
+  return x.r.ok ? x.data.record : null;
+}
+async function saveRecord(env, uid, cid, id, name, data) {
+  return callStore(env, uid, `/data/collections/${cid}/records/${id}`, {
+    method: "PUT",
+    body: JSON.stringify({ name, record: data }),
+  });
+}
+function normWorkflow(r) {
+  const d = r.data || {};
+  return {
+    id: r.id,
+    name: r.name || d.name || "",
+    description: d.description || "",
+    enabled: d.enabled !== false,
+    trigger: obj(d.trigger),
+    conditions: arr(d.conditions),
+    actions: arr(d.actions),
+    schedule: obj(d.schedule),
+    approval_required: !!d.approval_required,
+    created_at: r.created_at,
+    updated_at: r.updated_at,
+  };
+}
+function normExecution(r) {
+  const d = r.data || {};
+  return {
+    id: r.id,
+    workflow_id: d.workflow_id,
+    status: d.status || "unknown",
+    input: obj(d.input),
+    output: obj(d.output),
+    logs: arr(d.logs, 200),
+    approval_required: !!d.approval_required,
+    approved_at: d.approved_at || null,
+    started_at: d.started_at || r.created_at,
+    finished_at: d.finished_at || null,
+    created_at: r.created_at,
+    updated_at: r.updated_at,
+  };
+}
+function pathValue(input, path) {
+  let x = input;
+  for (const p of String(path || "")
+    .split(".")
+    .filter(Boolean)) {
+    if (x == null) return undefined;
+    x = x[p];
+  }
+  return x;
+}
+function conditionPass(c, input) {
+  const left = pathValue(input, c.path),
+    right = c.value;
+  switch (c.op) {
+    case "neq":
+      return left !== right;
+    case "contains":
+      return String(left ?? "").includes(String(right ?? ""));
+    case "exists":
+      return left !== undefined && left !== null;
+    case "gt":
+      return Number(left) > Number(right);
+    case "gte":
+      return Number(left) >= Number(right);
+    case "lt":
+      return Number(left) < Number(right);
+    case "lte":
+      return Number(left) <= Number(right);
+    case "eq":
+    default:
+      return left === right;
+  }
+}
+function interpolate(s, ctx) {
+  return String(s ?? "").replace(/\{\{\s*([\w.-]+)\s*\}\}/g, (_, p) => {
+    const v = pathValue(ctx, p);
+    return v == null ? "" : String(v);
+  });
+}
+function needsApproval(w) {
+  return (
+    !!w.approval_required ||
+    w.actions.some(
+      (a) =>
+        a &&
+        typeof a === "object" &&
+        (a.external === true || a.destructive === true),
+    )
+  );
+}
+function runSafeActions(actions, input) {
+  const output = {},
+    logs = [],
+    ctx = { input, output };
+  for (const a of actions) {
+    if (!a || typeof a !== "object") continue;
+    const type = clean(a.type, 40);
+    if (type === "set") {
+      const key = clean(a.key, 120);
+      if (key) output[key] = a.value;
+      logs.push({ type: "set", key });
+    } else if (type === "template") {
+      const key = clean(a.key, 120);
+      if (key) output[key] = interpolate(a.template, ctx);
+      logs.push({ type: "template", key });
+    } else if (type === "log") {
+      logs.push({ type: "log", message: interpolate(a.message, ctx) });
+    } else {
+      logs.push({
+        type: "skipped",
+        action: type || "unknown",
+        reason: "Unsupported safe action",
+      });
+    }
+  }
+  return { output, logs };
+}
+async function createExecution(env, uid, cid, w, input, status, extra = {}) {
+  const data = {
+    type: "execution",
+    workflow_id: w.id,
+    status,
+    input: obj(input),
+    output: {},
+    logs: [],
+    approval_required: status === "pending_approval",
+    started_at: Date.now(),
+    finished_at: null,
+    ...extra,
+  };
+  const x = await callStore(env, uid, `/data/collections/${cid}/records`, {
+    method: "POST",
+    body: JSON.stringify({ name: `Execution ${w.name}`, record: data }),
+  });
+  if (!x.r.ok) throw new Error(x.data.error || "Unable to create execution.");
+  return x.data.record;
+}
+async function finishExecution(env, uid, cid, record, w) {
+  const d = record.data || {},
+    res = runSafeActions(w.actions || [], d.input || {}),
+    next = {
+      ...d,
+      status: "completed",
+      output: res.output,
+      logs: [...(d.logs || []), ...res.logs],
+      approval_required: false,
+      finished_at: Date.now(),
+    };
+  const x = await saveRecord(
+    env,
+    uid,
+    cid,
+    record.id,
+    record.name || `Execution ${w.name}`,
+    next,
+  );
+  if (!x.r.ok) throw new Error(x.data.error || "Unable to finish execution.");
+  return { id: record.id, ...next };
+}
+export async function handleNativeAutomation(request, env, account) {
+  const u = new URL(request.url),
+    p = u.pathname
+      .replace(/^\/api\/native\/automations\/?/, "")
+      .split("/")
+      .filter(Boolean),
+    cid = (await ensureCollection(env, account.uid)).id;
+  if (!p.length) {
+    if (request.method === "GET") {
+      const all = await listRecords(env, account.uid, cid);
+      return json({
+        workflows: all
+          .filter((r) => r.data?.type === "workflow")
+          .map(normWorkflow),
+      });
+    }
+    if (request.method === "POST") {
+      const b = await readJsonLimited(request, 256 * 1024),
+        name = clean(b.name, 160);
+      if (!name) return json({ error: "Workflow name is required." }, 400);
+      const data = {
+        type: "workflow",
+        name,
+        description: clean(b.description),
+        enabled: b.enabled !== false,
+        trigger: obj(b.trigger),
+        conditions: arr(b.conditions),
+        actions: arr(b.actions),
+        schedule: obj(b.schedule),
+        approval_required: !!b.approval_required,
+      };
+      const x = await callStore(
+        env,
+        account.uid,
+        `/data/collections/${cid}/records`,
+        { method: "POST", body: JSON.stringify({ name, record: data }) },
+      );
+      if (!x.r.ok) return json(x.data, x.r.status);
+      return json({ workflow: normWorkflow(x.data.record) }, 201);
+    }
+    return json({ error: "Method not allowed." }, 405);
+  }
+  const wid = p[0];
+  if (!validId(wid)) return json({ error: "Invalid workflow id." }, 400);
+  const wr = await getRecord(env, account.uid, cid, wid);
+  if (!wr || wr.data?.type !== "workflow")
+    return json({ error: "Workflow not found." }, 404);
+  const w = normWorkflow(wr);
+  if (p.length === 1) {
+    if (request.method === "GET") return json({ workflow: w });
+    if (request.method === "PUT") {
+      const b = await readJsonLimited(request, 256 * 1024),
+        old = wr.data || {},
+        name = clean(b.name || wr.name, 160),
+        data = {
+          ...old,
+          type: "workflow",
+          name,
+          description:
+            b.description === undefined
+              ? old.description || ""
+              : clean(b.description),
+          enabled:
+            b.enabled === undefined ? old.enabled !== false : !!b.enabled,
+          trigger: b.trigger === undefined ? obj(old.trigger) : obj(b.trigger),
+          conditions:
+            b.conditions === undefined
+              ? arr(old.conditions)
+              : arr(b.conditions),
+          actions: b.actions === undefined ? arr(old.actions) : arr(b.actions),
+          schedule:
+            b.schedule === undefined ? obj(old.schedule) : obj(b.schedule),
+          approval_required:
+            b.approval_required === undefined
+              ? !!old.approval_required
+              : !!b.approval_required,
+        };
+      const x = await saveRecord(env, account.uid, cid, wid, name, data);
+      if (!x.r.ok) return json(x.data, x.r.status);
+      return json({ workflow: { id: wid, ...data, updated_at: Date.now() } });
+    }
+    if (request.method === "DELETE") {
+      const all = await listRecords(env, account.uid, cid);
+      for (const e of all.filter(
+        (r) => r.data?.type === "execution" && r.data?.workflow_id === wid,
+      ))
+        await callStore(
+          env,
+          account.uid,
+          `/data/collections/${cid}/records/${e.id}`,
+          { method: "DELETE" },
+        );
+      const x = await callStore(
+        env,
+        account.uid,
+        `/data/collections/${cid}/records/${wid}`,
+        { method: "DELETE" },
+      );
+      if (!x.r.ok) return json(x.data, x.r.status);
+      return json({ ok: true });
+    }
+    return json({ error: "Method not allowed." }, 405);
+  }
+  if (p[1] === "run" && p.length === 2 && request.method === "POST") {
+    if (!w.enabled) return json({ error: "Workflow is disabled." }, 409);
+    const b = await readJsonLimited(request, 256 * 1024),
+      input = obj(b.input),
+      conditions = w.conditions || [],
+      passed = conditions.every((c) => conditionPass(obj(c), input));
+    if (!passed) {
+      const rec = await createExecution(
+        env,
+        account.uid,
+        cid,
+        w,
+        input,
+        "skipped",
+        {
+          logs: [{ type: "conditions", message: "Conditions did not pass" }],
+          finished_at: Date.now(),
+        },
+      );
+      return json({ execution: normExecution(rec) });
+    }
+    if (needsApproval(w)) {
+      const rec = await createExecution(
+        env,
+        account.uid,
+        cid,
+        w,
+        input,
+        "pending_approval",
+        {
+          logs: [
+            {
+              type: "approval",
+              message: "Explicit approval required before execution",
+            },
+          ],
+        },
+      );
+      return json({ execution: normExecution(rec) }, 202);
+    }
+    const rec = await createExecution(
+      env,
+      account.uid,
+      cid,
+      w,
+      input,
+      "running",
+    );
+    const done = await finishExecution(env, account.uid, cid, rec, w);
+    return json({ execution: done });
+  }
+  if (p[1] === "executions" && p.length === 2 && request.method === "GET") {
+    const all = await listRecords(env, account.uid, cid);
+    return json({
+      executions: all
+        .filter(
+          (r) => r.data?.type === "execution" && r.data?.workflow_id === wid,
+        )
+        .map(normExecution),
+    });
+  }
+  if (
+    p[1] === "executions" &&
+    p.length === 4 &&
+    p[3] === "approve" &&
+    request.method === "POST"
+  ) {
+    const eid = p[2];
+    if (!validId(eid)) return json({ error: "Invalid execution id." }, 400);
+    const er = await getRecord(env, account.uid, cid, eid);
+    if (!er || er.data?.type !== "execution" || er.data?.workflow_id !== wid)
+      return json({ error: "Execution not found." }, 404);
+    if (er.data.status !== "pending_approval")
+      return json({ error: "Execution is not pending approval." }, 409);
+    const approved = {
+      ...er.data,
+      approved_at: Date.now(),
+      approval_required: false,
+      status: "running",
+      logs: [
+        ...(er.data.logs || []),
+        { type: "approval", message: "Approved" },
+      ],
+    };
+    const sx = await saveRecord(env, account.uid, cid, eid, er.name, approved);
+    if (!sx.r.ok) return json(sx.data, sx.r.status);
+    const done = await finishExecution(
+      env,
+      account.uid,
+      cid,
+      { ...er, data: approved },
+      w,
+    );
+    return json({ execution: done });
+  }
+  return json({ error: "Automation route not found." }, 404);
 }

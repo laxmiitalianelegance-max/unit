@@ -1,1 +1,0 @@
-Unit369 clean architecture final validation trigger.

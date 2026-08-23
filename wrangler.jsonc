@@ -1,0 +1,63 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "unit",
+  "main": "src/unit369.js",
+  "compatibility_date": "2026-08-23",
+  "compatibility_flags": ["nodejs_compat"],
+
+  // Production secrets and variables are managed in Cloudflare and must survive deploys.
+  "keep_vars": true,
+
+  "ai": {
+    "binding": "AI",
+  },
+
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": true,
+  },
+
+  "services": [
+    {
+      "binding": "SELF",
+      "service": "unit",
+    },
+  ],
+
+  "r2_buckets": [
+    {
+      "binding": "FILES",
+      "bucket_name": "unit369-files",
+    },
+  ],
+
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "TOOL_STORE",
+        "class_name": "ToolStore",
+      },
+      {
+        "name": "NATIVE_STORE",
+        "class_name": "NativeStore",
+      },
+    ],
+  },
+
+  "migrations": [
+    {
+      "tag": "orchestrator-v2",
+      "new_sqlite_classes": ["ToolStore"],
+    },
+    {
+      "tag": "native-core-v1",
+      "new_sqlite_classes": ["NativeStore"],
+    },
+  ],
+
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+  },
+}
