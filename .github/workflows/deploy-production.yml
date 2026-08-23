@@ -1,0 +1,74 @@
+name: Deploy Unit369 production
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: Type DEPLOY to confirm production deployment
+        required: true
+        default: ""
+permissions:
+  contents: read
+concurrency:
+  group: unit369-production
+  cancel-in-progress: false
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main' && inputs.confirm == 'DEPLOY'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      UNIT369_PRODUCTION_URL: ${{ vars.UNIT369_PRODUCTION_URL }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Verify production deployment contract
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN" || { echo 'Missing CLOUDFLARE_API_TOKEN'; exit 1; }
+          test -n "$CLOUDFLARE_ACCOUNT_ID" || { echo 'Missing CLOUDFLARE_ACCOUNT_ID'; exit 1; }
+          test -n "$UNIT369_PRODUCTION_URL" || { echo 'Missing repository/environment variable UNIT369_PRODUCTION_URL'; exit 1; }
+          case "$UNIT369_PRODUCTION_URL" in https://*) ;; *) echo 'UNIT369_PRODUCTION_URL must use https://'; exit 1;; esac
+          grep -q 'main = "src/unit369.js"' wrangler.toml
+          npx --yes wrangler@4 deploy --dry-run --outdir .wrangler-production-dry-run
+      - name: Deploy exact tested commit
+        run: npx --yes wrangler@4 deploy
+      - name: Verify production health
+        run: |
+          set -euo pipefail
+          BASE="${UNIT369_PRODUCTION_URL%/}"
+          for i in $(seq 1 12); do
+            code=$(curl -sS -o /tmp/release-health.json -w '%{http_code}' "$BASE/api/health/release" || true)
+            if [ "$code" = "200" ]; then break; fi
+            sleep 5
+          done
+          cat /tmp/release-health.json
+          node <<'JS'
+          const fs=require('fs');
+          const h=JSON.parse(fs.readFileSync('/tmp/release-health.json','utf8'));
+          if(h.status!=='ready'||h.core_ready!==true)throw Error('Unit369 Core is not production-ready: '+JSON.stringify(h));
+          const required=['ai','assets','self','native_store','tool_store','app_secret'];
+          for(const k of required)if(h.checks?.[k]!==true)throw Error('Missing production requirement: '+k);
+          if(h.auth_ready!==true)throw Error('Google OAuth is not configured in production.');
+          console.log('Unit369 production health passed',h.version);
+          JS
+      - name: Verify Google OAuth start route
+        run: |
+          set -euo pipefail
+          BASE="${UNIT369_PRODUCTION_URL%/}"
+          headers=$(curl -sS -D - -o /dev/null "$BASE/api/auth/google/start?return_to=/" )
+          echo "$headers" | grep -qE '^HTTP/.* 302'
+          location=$(printf '%s\n' "$headers" | awk 'BEGIN{IGNORECASE=1}/^location:/{sub(/^[^:]*:[[:space:]]*/,""); sub(/\r$/,""); print; exit}')
+          test -n "$location"
+          node - "$location" "$BASE" <<'JS'
+          const [loc,base]=process.argv.slice(2);const u=new URL(loc);const redirect=u.searchParams.get('redirect_uri');
+          const expected=base.replace(/\/$/,'')+'/api/auth/google/callback';
+          if(redirect!==expected)throw Error(`Google redirect mismatch: ${redirect} != ${expected}`);
+          console.log('Google OAuth callback verified:',expected);
+          JS

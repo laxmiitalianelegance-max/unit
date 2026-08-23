@@ -1,0 +1,31 @@
+name: Validate Unit369 production deployment
+on:
+  push:
+    branches: [staging-production-deploy]
+  pull_request:
+    branches: [main]
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 20}
+      - name: Validate deployment workflow contract
+        run: |
+          set -euo pipefail
+          test -f .github/workflows/deploy-production.yml
+          grep -q 'workflow_dispatch:' .github/workflows/deploy-production.yml
+          grep -q "github.ref == 'refs/heads/main'" .github/workflows/deploy-production.yml
+          grep -q 'environment: production' .github/workflows/deploy-production.yml
+          grep -q 'CLOUDFLARE_API_TOKEN' .github/workflows/deploy-production.yml
+          grep -q 'CLOUDFLARE_ACCOUNT_ID' .github/workflows/deploy-production.yml
+          grep -q 'UNIT369_PRODUCTION_URL' .github/workflows/deploy-production.yml
+          grep -q '/api/health/release' .github/workflows/deploy-production.yml
+          grep -q '/api/auth/google/start' .github/workflows/deploy-production.yml
+          grep -q "npx --yes wrangler@4 deploy --dry-run" .github/workflows/deploy-production.yml
+          grep -q "npx --yes wrangler@4 deploy" .github/workflows/deploy-production.yml
+          ! grep -q '^  push:' .github/workflows/deploy-production.yml
+          npx --yes wrangler@4 deploy --dry-run --outdir .wrangler-deploy-contract
+          echo 'Unit369 production deployment contract passed'
