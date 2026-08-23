@@ -20,6 +20,9 @@ export const NATIVE_CAPABILITIES = Object.freeze({
   orchestrate:{name:'Orchestrate',version:2,operations:['intent.plan','capability.execute','result.verify','audit.read','run.execute'],native:true}
 });
 
+const MAX_DOCUMENT_CHARS=250000;
+const MAX_FILE_BYTES=5*1024*1024;
+const encoder=new TextEncoder();
 function json(data,status=200){return new Response(JSON.stringify(data),{status,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store'}})}
 export function capabilityList(){return Object.entries(NATIVE_CAPABILITIES).map(([id,c])=>({id,...c}))}
 export function hasOperation(capability,operation){const c=NATIVE_CAPABILITIES[capability];return !!c&&c.operations.includes(operation)}
@@ -51,9 +54,23 @@ function store(env,uid){
   return env.NATIVE_STORE.get(env.NATIVE_STORE.idFromName(uid));
 }
 
+async function payloadLimit(request,kind){
+  if(!['POST','PUT'].includes(request.method))return null;
+  const declared=Number(request.headers.get('content-length')||0);
+  if(kind==='documents'&&declared>MAX_DOCUMENT_CHARS+65536)return json({error:'Document payload is too large.'},413);
+  if(kind==='files'&&declared>MAX_FILE_BYTES+65536)return json({error:'File payload is too large.'},413);
+  let body;
+  try{body=await request.clone().json()}catch{return null}
+  if(kind==='documents'&&body&&body.content!==undefined&&String(body.content).length>MAX_DOCUMENT_CHARS)return json({error:'Document content exceeds the 250,000 character limit.'},413);
+  if(kind==='files'&&body&&body.content!==undefined&&encoder.encode(String(body.content)).length>MAX_FILE_BYTES)return json({error:'File content exceeds the 5 MiB limit.'},413);
+  return null;
+}
+
 async function proxyNative(request,env,account,url){
   const match=url.pathname.match(/^\/api\/native\/(files|data|documents|knowledge)(.*)$/);
   if(!match)return json({error:'Native capability route not found.'},404);
+  const limited=await payloadLimit(request,match[1]);
+  if(limited)return limited;
   return store(env,account.uid).fetch(new Request('https://native.internal/native-store/'+match[1]+match[2]+url.search,request));
 }
 
