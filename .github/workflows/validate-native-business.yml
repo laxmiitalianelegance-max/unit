@@ -1,0 +1,31 @@
+name: Validate Unit369 native business
+on:
+  push:
+    branches: [staging-native-business]
+  pull_request:
+    branches: [main]
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 20}
+      - name: Syntax and build
+        run: |
+          set -e
+          node --check src/native-business.js
+          node --check src/native-capabilities.js
+          npx --yes wrangler@4 deploy --dry-run --outdir .wrangler-dist
+      - name: Business CRUD dashboard and isolation
+        run: |
+          set -e
+          sed 's/compatibility_date = "2026-08-19"/compatibility_date = "2026-05-03"/' wrangler.toml > wrangler.smoke.toml
+          npx --yes wrangler@4 dev --config wrangler.smoke.toml --local --ip 127.0.0.1 --port 8787 --var APP_SECRET:test-app-secret-369 --var ENCRYPTION_KEY:0123456789abcdef0123456789abcdef >/tmp/wrangler.log 2>&1 &
+          WPID=$!; trap 'kill $WPID 2>/dev/null || true' EXIT
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8787/ >/dev/null && break; sleep 1; done
+          node <<'JS'
+          const crypto=require('crypto'),base='http://127.0.0.1:8787';function b64(s){return Buffer.from(s).toString('base64url')}function cookie(uid){const p=b64(JSON.stringify({uid,email:uid+'@test.local',name:uid,exp:Date.now()+3600000}));return `u369_account=${p}.${crypto.createHmac('sha256','test-app-secret-369').update(p).digest('base64url')}`}async function req(uid,path,opt={}){const r=await fetch(base+path,{...opt,headers:{'content-type':'application/json',cookie:cookie(uid),...(opt.headers||{})}}),t=await r.text();let d;try{d=JSON.parse(t)}catch{d=t}if(!r.ok)throw Error(path+' '+r.status+' '+JSON.stringify(d));return d}
+          (async()=>{if((await fetch(base+'/api/native/business')).status!==401)throw Error('anonymous business access');const c=await req('A','/api/native/business/contacts',{method:'POST',body:JSON.stringify({name:'Ana',email:'ana@example.test'})});if(!c.contact?.id)throw Error('contact create');const l=await req('A','/api/native/business/leads',{method:'POST',body:JSON.stringify({name:'Enterprise lead',status:'new',value:5000})});if(!l.lead?.id)throw Error('lead create');const p=await req('A','/api/native/business/products',{method:'POST',body:JSON.stringify({name:'Unit369 Pro',price:99,stock:10,currency:'EUR'})});if(p.product?.data?.price!==99)throw Error('product create');const o=await req('A','/api/native/business/orders',{method:'POST',body:JSON.stringify({name:'Order 1',total:198,currency:'EUR',status:'paid'})});if(o.order?.data?.total!==198)throw Error('order create');const inv=await req('A','/api/native/business/invoices',{method:'POST',body:JSON.stringify({name:'INV-001',amount:198,currency:'EUR'})});if(!inv.invoice?.id)throw Error('invoice create');const dash=await req('A','/api/native/business');if(dash.summary.contacts!==1||dash.summary.products!==1||dash.summary.orders!==1||dash.summary.order_total!==198)throw Error('dashboard');const b=await req('B','/api/native/business');if(b.summary.contacts!==0||b.summary.orders!==0)throw Error('cross-user leak');const foreign=await fetch(base+'/api/native/business/contacts/'+c.contact.id,{headers:{cookie:cookie('B')}});if(foreign.status!==404)throw Error('foreign record visible');const plan=await req('A','/api/native/plan',{method:'POST',body:JSON.stringify({message:'Dodaj kupca i proizvod pa napravi porudzbinu'})});if(plan.external_required!==false||!plan.steps.some(s=>s.capability==='business'))throw Error('native business planning');console.log('Unit369 native Business passed')})().catch(e=>{console.error(e);process.exit(1)})
+          JS
