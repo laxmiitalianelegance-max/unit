@@ -28,9 +28,10 @@ jobs:
           const b=fs.readFileSync('src/final-native-bridge.js','utf8');
           if(!u.includes('decorateAccountUi')||!u.includes('decorateNativeBridge'))throw Error('single app decoration chain missing');
           if(!b.includes('/api/native/plan')||!b.includes('/api/native/execute'))throw Error('native execution bridge missing');
-          if(!b.includes("p==='/api/free-ai'||p==='/api/ai-proxy'"))throw Error('chat provider bridge missing');
+          if(!b.includes("p==='/api/free-ai'"))throw Error('Core AI bridge missing');
+          if(!b.includes("p==='/api/ai-proxy'")||!b.includes('not used by Unit369 Core chat'))throw Error('external AI isolation missing');
           if(!b.includes("s.capability!=='intelligence'"))throw Error('conversation/action separation missing');
-          if(!b.includes('External connections'))throw Error('external connections UI distinction missing');
+          if(!b.includes('/api/native/business/products'))throw Error('native Products bridge missing');
           if((u.match(/core\.fetch/g)||[]).length!==1)throw Error('multiple core runtime paths detected');
           console.log('Final native integration static contract passed');
           JS
