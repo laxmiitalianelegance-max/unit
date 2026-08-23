@@ -11,7 +11,7 @@ on:
     paths:
       - '.github/release/production-now'
 permissions:
-  contents: read
+  contents: write
 concurrency:
   group: unit369-production
   cancel-in-progress: false
@@ -73,3 +73,30 @@ jobs:
           if(redirect!==expected)throw Error(`Google redirect mismatch: ${redirect} != ${expected}`);
           console.log('Google OAuth callback verified:',expected);
           JS
+      - name: Publish deployment receipt
+        if: always()
+        env:
+          DEPLOY_STATUS: ${{ job.status }}
+        run: |
+          set -euo pipefail
+          ORIGINAL_SHA="$GITHUB_SHA"
+          HEALTH='null'
+          if [ -s /tmp/release-health.json ]; then HEALTH=$(cat /tmp/release-health.json); fi
+          git config user.name 'unit369-release-bot'
+          git config user.email 'unit369-release-bot@users.noreply.github.com'
+          if git ls-remote --exit-code --heads origin deployment-receipts >/dev/null 2>&1; then
+            git fetch origin deployment-receipts:deployment-receipts
+            git switch deployment-receipts
+          else
+            git switch --orphan deployment-receipts
+            git rm -rf . >/dev/null 2>&1 || true
+          fi
+          mkdir -p deployment
+          node - "$ORIGINAL_SHA" "$DEPLOY_STATUS" "$UNIT369_PRODUCTION_URL" "$HEALTH" <<'JS' > deployment/latest.json
+          const [sha,status,url,rawHealth]=process.argv.slice(2);
+          let health=null; try{health=JSON.parse(rawHealth)}catch{}
+          console.log(JSON.stringify({sha,status,url,health,recorded_at:new Date().toISOString()},null,2));
+          JS
+          git add deployment/latest.json
+          git commit -m "Record Unit369 production deployment $ORIGINAL_SHA" || true
+          git push origin deployment-receipts
