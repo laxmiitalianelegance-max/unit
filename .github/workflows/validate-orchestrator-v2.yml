@@ -1,0 +1,67 @@
+name: Validate Unit369 Orchestrator v2
+on:
+  push:
+    branches: [staging-orchestrator-v2]
+  pull_request:
+    branches: [main]
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 20}
+      - name: Static and build validation
+        run: |
+          set -e
+          node --check src/unit369.js
+          node --check src/unit369-core.js
+          node --check src/orchestrator.js
+          grep -q 'main = "src/unit369.js"' wrangler.toml
+          grep -q 'class_name = "ToolStore"' wrangler.toml
+          grep -q '/app-icon-192.jpg' src/app.html
+          grep -q -- '--blue:#28a7ff' src/app.html
+          grep -q -- '--bg:#05070c' src/app.html
+          npx --yes wrangler@4 deploy --dry-run --outdir .wrangler-dist
+      - name: Orchestrator storage and route test
+        run: |
+          set -e
+          sed 's/compatibility_date = "2026-08-19"/compatibility_date = "2026-05-03"/' wrangler.toml > wrangler.smoke.toml
+          npx --yes wrangler@4 dev --config wrangler.smoke.toml --local --ip 127.0.0.1 --port 8787 --var APP_SECRET:test-app-secret-369 --var ENCRYPTION_KEY:0123456789abcdef0123456789abcdef --var GITHUB_CLIENT_ID:test-client --var GITHUB_CLIENT_SECRET:test-secret >/tmp/wrangler.log 2>&1 &
+          WPID=$!; trap 'kill $WPID 2>/dev/null || true' EXIT
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8787/ -o /tmp/root.html && break; sleep 1; done
+          test -s /tmp/root.html
+          grep -q 'Unit369' /tmp/root.html
+          grep -q '/app-icon-192.jpg' /tmp/root.html
+          curl -fsS -c /tmp/cookies.txt http://127.0.0.1:8787/api/orchestrator/health -o /tmp/health.json
+          python3 - <<'PY'
+          import json
+          x=json.load(open('/tmp/health.json')); assert x['ok'] is True and x['storage'] is True
+          PY
+          curl -fsS -b /tmp/cookies.txt http://127.0.0.1:8787/api/orchestrator/tools -o /tmp/tools.json
+          python3 - <<'PY'
+          import json
+          x=json.load(open('/tmp/tools.json')); assert len(x['tools'])==16; assert next(t for t in x['tools'] if t['id']=='github')['oauth_available'] is True
+          PY
+          curl -fsS -b /tmp/cookies.txt -H 'content-type: application/json' -d '{"toolId":"cloudflare","auth":{"api_key":"secret-token-value"}}' http://127.0.0.1:8787/api/orchestrator/connect -o /tmp/connect.json
+          grep -q '"connected":"cloudflare"' /tmp/connect.json
+          curl -fsS -b /tmp/cookies.txt http://127.0.0.1:8787/api/orchestrator/tools -o /tmp/tools2.json
+          python3 - <<'PY'
+          import json
+          x=json.load(open('/tmp/tools2.json')); assert next(t for t in x['tools'] if t['id']=='cloudflare')['connected'] is True
+          PY
+          if grep -R -q 'secret-token-value' .wrangler/state 2>/dev/null; then echo 'plaintext token leaked into DO state'; exit 1; fi
+          curl -fsS -b /tmp/cookies.txt -H 'content-type: application/json' -d '{"toolId":"cloudflare"}' http://127.0.0.1:8787/api/orchestrator/disconnect -o /tmp/disconnect.json
+          grep -q '"disconnected":"cloudflare"' /tmp/disconnect.json
+          curl -sS -D /tmp/oauth.headers -o /dev/null -b /tmp/cookies.txt 'http://127.0.0.1:8787/api/orchestrator/oauth/start/github?return_to=http://127.0.0.1:8787/'
+          grep -qi '^location: https://github.com/login/oauth/authorize' /tmp/oauth.headers
+      - name: Mobile app regression test
+        run: |
+          set -e
+          npm install --no-save playwright@1.55.0
+          npx playwright install chromium
+          node <<'JS'
+          const {chromium}=require('playwright');
+          (async()=>{const b=await chromium.launch({headless:true}),p=await b.newPage({viewport:{width:390,height:844}});p.setDefaultTimeout(7000);const errors=[];p.on('pageerror',e=>errors.push(String(e.message||e)));await p.route('**/api/status',r=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({version:'test',integrations:{claude:false,openai:false,grok:false,workersAi:true,shopify:false}})}));await p.route('**/api/free-ai',r=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({content:'Test odgovor'})}));await p.goto('http://127.0.0.1:8787/',{waitUntil:'domcontentloaded'});await p.waitForTimeout(600);if(!(await p.locator('.u369-brand img').getAttribute('src')).includes('/app-icon-192.jpg'))throw Error('logo regression');if(await p.locator('#u369-chat-input').count()!==1)throw Error('composer regression');await p.locator('#u369-chat-input').fill('Test');await p.locator('#u369-chat-send').click();await p.locator('.u369-answer').filter({hasText:'Test odgovor'}).waitFor();await p.locator('#u369-menu').click();await p.locator('[data-page="product"]').click();if(!(await p.locator('#page-product').evaluate(e=>e.classList.contains('active'))))throw Error('products regression');await p.locator('#u369-menu').click();await p.locator('[data-page="settings"]').click();if(!(await p.locator('#page-settings').evaluate(e=>e.classList.contains('active'))))throw Error('settings regression');if(errors.length)throw Error(errors.join(' | '));await b.close();console.log('orchestrator regression passed')})().catch(e=>{console.error(e);process.exit(1)});
+          JS
