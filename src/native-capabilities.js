@@ -1,10 +1,11 @@
 import { resolveAccount } from './accounts.js';
+import { handleNativeWork } from './native-work.js';
 
 export const NATIVE_CAPABILITIES = Object.freeze({
   intelligence:{name:'Intelligence',version:1,operations:['chat','research','plan','critique','verify','knowledge.search'],native:true},
   create:{name:'Create',version:1,operations:['document.create','document.read','document.list','document.update','document.delete','content.generate','asset.describe'],native:true},
   build:{name:'Build',version:1,operations:['project.create','file.write','file.read','diff.create','test.plan'],native:true},
-  work:{name:'Work',version:1,operations:['project.manage','task.create','task.update','milestone.manage'],native:true},
+  work:{name:'Work',version:2,operations:['project.create','project.read','project.list','project.update','project.delete','task.create','task.read','task.list','task.update','task.delete','milestone.manage'],native:true},
   data:{name:'Data',version:1,operations:['collection.create','record.create','record.update','record.query','search'],native:true},
   automate:{name:'Automate',version:1,operations:['workflow.create','workflow.run','schedule.define','approval.request'],native:true},
   business:{name:'Business',version:1,operations:['contact.manage','lead.manage','product.manage','order.manage','report.create'],native:true},
@@ -22,7 +23,8 @@ export function planNativeIntent(text){
   if(/document|doc|note|report|write|tekst|dokument|izveštaj|izvjestaj/.test(q))add('create','document.create','Create a native Unit369 document');
   if(/knowledge|search|find|remember|znanje|pretraž|pretraz|nađi|nadji/.test(q))add('intelligence','knowledge.search','Search native Unit369 knowledge');
   if(/code|app|website|site|build|program|kod|aplikacij|sajt/.test(q))add('build','project.create','Create or modify a native Unit369 build project');
-  if(/task|project|milestone|plan|zadat|projekat|projekt/.test(q))add('work','task.create','Track work natively in Unit369');
+  if(/project|projekat|projekt/.test(q))add('work','project.create','Create or manage a native Unit369 project');
+  if(/task|milestone|plan|zadat/.test(q))add('work','task.create','Track work natively in Unit369');
   if(/data|table|database|record|podac|tabel|baza/.test(q))add('data','collection.create','Use native Unit369 structured data');
   if(/automat|workflow|schedule|trigger|raspored/.test(q))add('automate','workflow.create','Build a native Unit369 workflow');
   if(/customer|crm|lead|product|order|business|kupac|proizvod|porud/.test(q))add('business','product.manage','Use native Unit369 business capabilities');
@@ -52,6 +54,7 @@ export async function handleNativeCapabilities(request,env){
       try{body=await request.json()}catch{}
       return json({user_id:account.uid,...planNativeIntent(body.message)});
     }
+    if(/^\/api\/native\/projects(\/|$)/.test(url.pathname))return handleNativeWork(request,env,account);
     if(/^\/api\/native\/(files|data|documents|knowledge)(\/|$)/.test(url.pathname))return proxyNative(request,env,account,url);
     return json({error:'Native capability route not found.'},404);
   }catch(e){
