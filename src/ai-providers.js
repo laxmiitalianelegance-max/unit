@@ -87,11 +87,13 @@ async function upstreamJson(url, init, provider) {
         status: response.status,
         detail,
       });
-      throw new HttpError(
+      const error = new HttpError(
         502,
         `${provider} request failed. Try another provider or try again later.`,
         `${provider}_upstream_error`,
       );
+      error.diagnostic = `HTTP ${response.status}: ${detail}`;
+      throw error;
     }
     return data;
   } catch (error) {
@@ -322,7 +324,10 @@ export async function runPreferredAi(env, messages, options = {}) {
         result.fallback_from = attempts.map((entry) => entry.provider);
       return result;
     } catch (error) {
-      attempts.push({ provider, error: safeError(error) });
+      attempts.push({
+        provider,
+        error: safeError(error?.diagnostic || error),
+      });
       logEvent("warn", "ai_provider_failed", {
         provider,
         purpose: options.purpose || "request",
