@@ -1,3 +1,3 @@
-release=auto-discover-cloudflare-account
-attempt=4
-reason=discover-account-and-deploy
+release=normalize-cloudflare-token
+attempt=5
+reason=use-existing-token-value-safely
