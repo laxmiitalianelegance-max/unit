@@ -41,7 +41,7 @@ jobs:
           grep -q '/app-icon-192.jpg' /tmp/root.html
           ! grep -q 'openaiKey' /tmp/root.html
           curl -fsS http://127.0.0.1:8787/sw.js -o /tmp/sw.js
-          grep -q '2026.08.23.1' /tmp/sw.js
+          grep -q '2026.08.23.2' /tmp/sw.js
           ! grep -Fq "CORE=['/'" /tmp/sw.js
           npm install --no-save playwright@1.55.0
           npx playwright install chromium
