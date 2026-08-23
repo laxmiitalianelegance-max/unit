@@ -38,7 +38,7 @@ jobs:
             const b=await chromium.launch({headless:true});
             const ctx=await b.newContext({viewport:{width:390,height:844},serviceWorkers:'block'});
             const p=await ctx.newPage();p.setDefaultTimeout(7000);const errors=[];p.on('pageerror',e=>errors.push(String(e.message||e)));
-            await p.route('**/api/status',r=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({version:'test',integrations:{claude:false,openai:false,grok:false,workersAi:true,shopify:false}})}));
+            await p.route('**/api/status',r=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({version:'test',integrations:{workersAi:true}})}));
             await p.route('**/api/ui-i18n',r=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({d:{connected:'Povezano',notConnected:'Nije povezano'}})}));
             await p.route('**/api/free-ai',r=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({content:'Test odgovor'})}));
             await p.route('**/api/auth/me',r=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({authenticated:false,user:null,google_available:true})}));
@@ -54,7 +54,7 @@ jobs:
             await p.locator('#u369-menu').click();await p.locator('[data-page="team"]').click();
             await p.locator('#u369-chat-input').fill('Test');await p.locator('#u369-chat-send').click();await p.locator('.u369-answer').filter({hasText:'Test odgovor'}).waitFor();
             await p.locator('#u369-menu').click();await p.locator('[data-page="product"]').click();if(!(await p.locator('#page-product').evaluate(e=>e.classList.contains('active'))))throw Error('products regression');
-            await p.locator('#u369-menu').click();await p.locator('[data-page="tools"]').click();if(!(await p.locator('#page-tools').evaluate(e=>e.classList.contains('active'))))throw Error('tools regression');
+            await p.locator('#u369-menu').click();if(await p.locator('[data-page="tools"]').isVisible())throw Error('Toolkit should not be visible in Core navigation');if(await p.locator('#page-tools').isVisible())throw Error('Toolkit page should not be visible in Core');
             if(errors.length)throw Error(errors.join(' | '));await b.close();console.log('account UI regression passed');
           })().catch(e=>{console.error(e);process.exit(1)});
           JS
