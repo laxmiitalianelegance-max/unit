@@ -1,8 +1,8 @@
 {
-  "sha": "7767765211aacdd2049c61c07de2665803130227",
+  "sha": "e57b40cad05e546290c06ca946961eb75b2580bc",
   "status": "failure",
-  "stage": "account_discovery",
+  "stage": "deploy_start",
   "url": "https://unit.laxmiitalianelegance.workers.dev",
   "health": null,
-  "recorded_at": "2026-08-23T19:30:07.614Z"
+  "recorded_at": "2026-08-23T19:34:09.505Z"
 }
