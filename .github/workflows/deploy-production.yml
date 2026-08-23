@@ -106,9 +106,23 @@ jobs:
           set -euo pipefail
           echo health_start > /tmp/deploy-stage
           BASE="${UNIT369_PRODUCTION_URL%/}"
+          EXPECTED_VERSION=$(node --input-type=module <<'JS'
+          import {readFileSync} from 'node:fs';
+          const source=readFileSync('src/unit369-core.js','utf8');
+          const match=source.match(/APP_VERSION\s*=\s*"([^"]+)"/);
+          if(!match)throw Error('APP_VERSION was not found');
+          process.stdout.write(match[1]);
+          JS
+          )
+          export EXPECTED_VERSION
           for i in $(seq 1 12); do
             code=$(curl -sS -o /tmp/release-health.json -w '%{http_code}' "$BASE/api/health/release" || true)
-            if [ "$code" = "200" ]; then break; fi
+            if [ "$code" = "200" ] && node <<'JS'
+          const fs=require('fs');
+          const h=JSON.parse(fs.readFileSync('/tmp/release-health.json','utf8'));
+          process.exit(h.version===process.env.EXPECTED_VERSION&&h.status==='ready'&&h.core_ready===true?0:1);
+          JS
+            then break; fi
             sleep 5
           done
           echo health_response > /tmp/deploy-stage
@@ -116,6 +130,7 @@ jobs:
           node <<'JS'
           const fs=require('fs');
           const h=JSON.parse(fs.readFileSync('/tmp/release-health.json','utf8'));
+          if(h.version!==process.env.EXPECTED_VERSION)throw Error(`Expected ${process.env.EXPECTED_VERSION}, received ${h.version}`);
           if(h.status!=='ready'||h.core_ready!==true)throw Error('Unit369 Core is not production-ready: '+JSON.stringify(h));
           const required=['assets','self','native_store','tool_store','files','app_secret','encryption_key','google_oauth','ai_configured'];
           for(const k of required)if(h.checks?.[k]!==true)throw Error('Missing production requirement: '+k);

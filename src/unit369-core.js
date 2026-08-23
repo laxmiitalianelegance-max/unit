@@ -28,7 +28,7 @@ import {
   validateTranslation,
 } from "./ui-translations.js";
 
-export const APP_VERSION = "2026.08.23.5";
+export const APP_VERSION = "2026.08.23.6";
 const HEALTH_CACHE_KEY = `ai-health-${APP_VERSION}`;
 const TRANSLATION_CACHE_VERSION = "ui-v6";
 
@@ -396,7 +396,7 @@ async function releaseHealth(env) {
       return response.ok;
     }),
     app_secret: !!env.APP_SECRET,
-    encryption_key: !!env.ENCRYPTION_KEY,
+    encryption_key: !!(env.ENCRYPTION_KEY || env.APP_SECRET),
     google_oauth: !!(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET),
     ai_configured:
       providers.workersAi ||
@@ -425,7 +425,12 @@ async function releaseHealth(env) {
     if (!ai) {
       ai = await probeAi(env);
       try {
-        await putSharedCache(env, HEALTH_CACHE_KEY, ai, 4 * 60 * 1000);
+        await putSharedCache(
+          env,
+          HEALTH_CACHE_KEY,
+          ai,
+          ai.operational ? 4 * 60 * 1000 : 20 * 1000,
+        );
       } catch (error) {
         logEvent("warn", "health_cache_write_failed", {
           error: safeError(error),
