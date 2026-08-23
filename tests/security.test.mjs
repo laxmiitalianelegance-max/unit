@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { normalizeMessages } from "../src/ai-providers.js";
+import {
+  normalizeMessages,
+  runWorkersAi,
+  WORKERS_AI_DEFAULT_MODEL,
+} from "../src/ai-providers.js";
 import { handleAuth } from "../src/accounts.js";
 import { planNativeIntent } from "../src/native-capabilities.js";
 import {
@@ -136,6 +140,25 @@ test("message and language validation enforce strict limits", () => {
   assert.equal(normalizeLanguage("sr-Latn"), "sr-Latn");
   assert.throws(() => normalizeLanguage("sr<script>"));
   assert.equal(staticTranslation("sr-RS").price, "Cena");
+});
+
+test("Workers AI uses the quota-efficient production model by default", async () => {
+  let invokedModel = "";
+  const result = await runWorkersAi(
+    {
+      AI: {
+        async run(model) {
+          invokedModel = model;
+          return { response: "OK" };
+        },
+      },
+    },
+    [{ role: "user", content: "Hello" }],
+  );
+
+  assert.equal(invokedModel, WORKERS_AI_DEFAULT_MODEL);
+  assert.equal(result.model, WORKERS_AI_DEFAULT_MODEL);
+  assert.equal(result.content, "OK");
 });
 
 test("Durable Object quotas block excess requests", async () => {

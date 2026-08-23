@@ -9,6 +9,7 @@ const MAX_MESSAGES = 20;
 const MAX_MESSAGE_CHARS = 8_000;
 const MAX_TOTAL_CHARS = 24_000;
 const UPSTREAM_TIMEOUT_MS = 35_000;
+export const WORKERS_AI_DEFAULT_MODEL = "@cf/openai/gpt-oss-20b";
 
 function cleanModel(value, fallback) {
   const model = String(value || "").trim();
@@ -131,10 +132,7 @@ export async function runWorkersAi(env, messages, options = {}) {
       "Workers AI is not configured.",
       "workers_ai_unavailable",
     );
-  const model = cleanModel(
-    options.model,
-    "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
-  );
+  const model = cleanModel(options.model, WORKERS_AI_DEFAULT_MODEL);
   const result = await env.AI.run(model, {
     messages: normalizeMessages(messages),
     max_tokens: maxTokens(options.maxTokens),
