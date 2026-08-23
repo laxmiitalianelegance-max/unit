@@ -1,9 +1,23 @@
 {
-  "sha": "bd3e4260c5b186257b75d2811d7adb7630a00548",
+  "sha": "c7797d1576152e41bd24f52d9b67612dc38d5fcd",
   "status": "failure",
-  "stage": "r2_check",
+  "stage": "health_response",
   "url": "https://unit.laxmiitalianelegance.workers.dev",
-  "health": null,
+  "health": {
+    "status": "ready",
+    "version": "2026.08.23.3",
+    "core_ready": true,
+    "auth_ready": true,
+    "checks": {
+      "ai": true,
+      "assets": true,
+      "self": true,
+      "native_store": true,
+      "tool_store": true,
+      "app_secret": true,
+      "google_oauth": true
+    }
+  },
   "error": null,
-  "recorded_at": "2026-08-23T21:51:00.270Z"
+  "recorded_at": "2026-08-23T21:56:27.765Z"
 }
