@@ -1,0 +1,100 @@
+name: Validate Unit369 clean architecture
+on:
+  push:
+    branches: [staging-architecture-clean]
+  pull_request:
+    branches: [main]
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 20}
+      - name: Static validation
+        run: |
+          set -e
+          grep -q 'main = "src/unit369.js"' wrangler.toml
+          node --check src/unit369.js
+          python3 - <<'PY'
+          from pathlib import Path
+          import re,subprocess
+          h=Path('src/app.html').read_text()
+          assert 'openaiKey' not in h and 'grokKey' not in h and 'sendBtn' not in h and 'promptbox' not in h
+          assert '/app-icon-192.jpg' in h and '--blue:#28a7ff' in h and '--bg:#05070c' in h
+          for i,s in enumerate(re.findall(r'<script\b[^>]*>([\s\S]*?)</script>',h,re.I)):
+            if s.strip():
+              p=Path(f'/tmp/inline-{i}.js');p.write_text(s);subprocess.run(['node','--check',str(p)],check=True)
+          print('static validation passed')
+          PY
+          npx --yes wrangler@4 deploy --dry-run --outdir .wrangler-dist
+      - name: Browser integration smoke test
+        run: |
+          set -e
+          sed 's/compatibility_date = "2026-08-19"/compatibility_date = "2026-05-03"/' wrangler.toml > wrangler.smoke.toml
+          npx --yes wrangler@4 dev --config wrangler.smoke.toml --local --ip 127.0.0.1 --port 8787 >/tmp/wrangler.log 2>&1 &
+          WPID=$!; trap 'kill $WPID 2>/dev/null || true' EXIT
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8787/ -o /tmp/root.html && break; sleep 1; done
+          test -s /tmp/root.html
+          grep -q 'Unit369' /tmp/root.html
+          grep -q '/app-icon-192.jpg' /tmp/root.html
+          ! grep -q 'openaiKey' /tmp/root.html
+          curl -fsS http://127.0.0.1:8787/sw.js -o /tmp/sw.js
+          grep -q '2026.08.23.1' /tmp/sw.js
+          ! grep -Fq "CORE=['/'" /tmp/sw.js
+          npm install --no-save playwright@1.55.0
+          npx playwright install chromium
+          node <<'JS'
+          const {chromium}=require('playwright');
+          (async()=>{
+            const browser=await chromium.launch({headless:true});
+            const page=await browser.newPage({viewport:{width:390,height:844}});
+            page.setDefaultTimeout(6000);
+            const errors=[]; page.on('pageerror',e=>errors.push(String(e.message||e)));
+            await page.addInitScript(()=>localStorage.setItem('u369-lang-all-v4','sr'));
+            await page.route('**/api/status',r=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({version:'test',integrations:{claude:false,openai:false,grok:false,workersAi:true,shopify:false}})}));
+            await page.route('**/api/free-ai',r=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({content:'Ćao! Sve radi kako treba.'})}));
+            await page.route('**/api/ui-i18n',async r=>{
+              const body=JSON.parse(r.request().postData()||'{}'), ar=String(body.target||'').startsWith('ar');
+              const d=ar?{chat:'دردشة',products:'المنتجات',settings:'الإعدادات',newChat:'محادثة جديدة',workspace:'مساحة العمل',aiMode:'وضع الذكاء الاصطناعي',providers:'المزودون',chatHistory:'سجل المحادثات',messageUnit369:'راسل Unit369',application:'التطبيق',applicationLanguage:'لغة التطبيق'}:{chat:'Ćaskanje',products:'Proizvodi',settings:'Podešavanja',newChat:'Novi razgovor',workspace:'Radni prostor',aiMode:'AI režim',providers:'Provajderi',chatHistory:'Istorija razgovora',messageUnit369:'Poruka za Unit369',application:'Aplikacija',applicationLanguage:'Jezik aplikacije',reviewProduct:'Pregledaj proizvod',name:'Naziv',price:'Cena',sizes:'Veličine'};
+              await r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({d})});
+            });
+            await page.goto('http://127.0.0.1:8787/',{waitUntil:'domcontentloaded'});
+            await page.waitForTimeout(900);
+            if(await page.locator('#u369-menu').count()!==1)throw Error('menu count');
+            if(await page.locator('#u369-chat-input').count()!==1)throw Error('composer count');
+            if(await page.locator('#openaiKey,#grokKey,#sendBtn,.promptbox').count())throw Error('legacy UI present');
+            if(!(await page.locator('.u369-brand img').getAttribute('src')).includes('/app-icon-192.jpg'))throw Error('logo missing');
+            if((await page.locator('html').getAttribute('lang'))!=='sr')throw Error('Serbian lang not applied');
+            if((await page.locator('#u369-title').textContent())!=='Ćaskanje')throw Error('Serbian UI not applied');
+            await page.locator('#u369-chat-input').fill('Kako si?');
+            await page.locator('#u369-chat-send').click();
+            await page.locator('.u369-user-msg').filter({hasText:'Kako si?'}).waitFor();
+            await page.locator('.u369-answer').filter({hasText:'Ćao! Sve radi kako treba.'}).waitFor();
+            if(await page.locator('#u369-chat-input').inputValue())throw Error('input not cleared');
+            await page.locator('#u369-menu').click();
+            if(!(await page.locator('#u369-sidebar').evaluate(e=>e.classList.contains('open'))))throw Error('drawer failed');
+            await page.locator('[data-page="product"]').click();
+            await page.locator('[name="title"][form="product-form"]').fill('Test proizvod');
+            await page.locator('[name="price"][form="product-form"]').fill('100');
+            await page.locator('[name="sizes"][form="product-form"]').fill('36,38');
+            await page.locator('#product-review').click();
+            if(!(await page.locator('#product-preview').evaluate(e=>e.classList.contains('open'))))throw Error('product review failed');
+            await page.locator('#u369-menu').click();
+            await page.locator('[data-page="settings"]').click();
+            if((await page.locator('#language-select').inputValue())!=='sr')throw Error('language selector state');
+            await page.locator('#language-select').selectOption('ar');
+            await page.waitForTimeout(700);
+            if((await page.locator('html').getAttribute('dir'))!=='rtl')throw Error('RTL not applied');
+            if((await page.locator('#u369-title').textContent())!=='الإعدادات')throw Error('Arabic UI not applied');
+            await page.locator('#u369-menu').click();
+            await page.locator('[data-page="team"]').click();
+            await page.locator('#u369-menu').click();
+            await page.locator('#u369-new-chat').click();
+            if(await page.locator('.u369-user-msg').count())throw Error('new chat did not clear thread');
+            if(errors.length)throw Error('page errors: '+errors.join(' | '));
+            await browser.close();
+            console.log('clean architecture browser test passed');
+          })().catch(e=>{console.error(e);process.exit(1)});
+          JS
