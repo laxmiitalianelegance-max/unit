@@ -23,6 +23,7 @@ jobs:
     environment: production
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 43d065736d2b5a0ecc8999e8b86ec68e
       UNIT369_PRODUCTION_URL: https://unit.laxmiitalianelegance.workers.dev
     steps:
       - uses: actions/checkout@v4
@@ -56,21 +57,11 @@ jobs:
           export CLOUDFLARE_API_TOKEN="$normalized_token"
           printf 'CLOUDFLARE_API_TOKEN=%s\n' "$CLOUDFLARE_API_TOKEN" >> "$GITHUB_ENV"
           echo token_normalized > /tmp/deploy-stage
-          echo account_discovery > /tmp/deploy-stage
-          curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-            -H 'Content-Type: application/json' \
-            'https://api.cloudflare.com/client/v4/accounts?per_page=50' \
-            -o /tmp/cloudflare-accounts.json
+          echo account_config > /tmp/deploy-stage
           node <<'JS'
-          const fs=require('fs');
-          const d=JSON.parse(fs.readFileSync('/tmp/cloudflare-accounts.json','utf8'));
-          if(d.success!==true)throw Error('Cloudflare Accounts API denied: '+JSON.stringify(d.errors||[]));
-          const accounts=Array.isArray(d.result)?d.result:[];
-          if(accounts.length!==1)throw Error('Expected exactly one accessible Cloudflare account, found '+accounts.length);
-          const id=String(accounts[0]?.id||'').trim();
+          const id=String(process.env.CLOUDFLARE_ACCOUNT_ID||'').trim();
           if(!/^[a-f0-9]{32}$/i.test(id))throw Error('Cloudflare account ID is missing or invalid');
-          fs.appendFileSync(process.env.GITHUB_ENV,`CLOUDFLARE_ACCOUNT_ID=${id}\n`);
-          console.log('Cloudflare account discovered');
+          console.log('Cloudflare account configured');
           JS
           echo account_discovered > /tmp/deploy-stage
           echo config_check > /tmp/deploy-stage
