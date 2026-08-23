@@ -108,7 +108,7 @@ No external adapter may become a required dependency for a native Unit369 capabi
 8. Every capability has regression tests before production merge.
 9. Unit369 logo and established blue/black brand tokens are product invariants.
 10. Third-party removal happens capability-by-capability only after the native replacement is tested.
-11. Large file bodies and product media live in R2; SQLite Durable Objects store structured metadata and records.
+11. File bodies and product media use the account's native SQLite Durable Object storage by default. An optional `FILES` binding upgrades storage to R2 without changing API routes.
 12. All public request and upstream response bodies have explicit size limits.
 
 ## Migration order

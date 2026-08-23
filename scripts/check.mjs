@@ -85,13 +85,16 @@ for (const required of [
   '"binding": "AI"',
   '"binding": "ASSETS"',
   '"binding": "SELF"',
-  '"binding": "FILES"',
   '"name": "TOOL_STORE"',
   '"name": "NATIVE_STORE"',
   '"observability"',
 ]) {
   assert.ok(config.includes(required), `wrangler.jsonc is missing ${required}`);
 }
+assert.ok(
+  !config.includes('"r2_buckets"'),
+  "Production must not require an R2 subscription",
+);
 assert.ok(
   !existsSync(join(root, "wrangler.toml")),
   "Legacy wrangler.toml still exists",

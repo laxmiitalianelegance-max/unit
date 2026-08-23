@@ -9,10 +9,10 @@
     "binding": "ASSETS",
     "run_worker_first": true,
   },
-  "r2_buckets": [
+  "services": [
     {
-      "binding": "FILES",
-      "bucket_name": "unit369-local-files",
+      "binding": "SELF",
+      "service": "unit369-local-test",
     },
   ],
   "durable_objects": {

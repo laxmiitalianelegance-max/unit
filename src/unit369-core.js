@@ -28,7 +28,7 @@ import {
   validateTranslation,
 } from "./ui-translations.js";
 
-export const APP_VERSION = "2026.08.23.4";
+export const APP_VERSION = "2026.08.23.5";
 const HEALTH_CACHE_KEY = `ai-health-${APP_VERSION}`;
 const TRANSLATION_CACHE_VERSION = "ui-v6";
 
@@ -321,6 +321,7 @@ function integrationStatus(env) {
         integrations.openai ||
         integrations.grok,
       authentication_required: true,
+      file_storage: env.FILES ? "r2" : "durable_object",
     },
     integrations,
     external_connections: {
@@ -380,9 +381,19 @@ async function releaseHealth(env) {
       return true;
     }),
     files: await healthCheck("files", async () => {
-      if (!env.FILES) return false;
-      await env.FILES.list({ limit: 1 });
-      return true;
+      if (env.FILES) {
+        await env.FILES.list({ limit: 1 });
+        return true;
+      }
+      if (!env.NATIVE_STORE) return false;
+      const stub = env.NATIVE_STORE.get(
+        env.NATIVE_STORE.idFromName("__unit369_file_health__"),
+      );
+      const response = await stub.fetch(
+        "https://native.internal/native-store/files?limit=1",
+      );
+      await response.body?.cancel();
+      return response.ok;
     }),
     app_secret: !!env.APP_SECRET,
     encryption_key: !!env.ENCRYPTION_KEY,
@@ -430,6 +441,7 @@ async function releaseHealth(env) {
     auth_ready: checks.google_oauth,
     ai_operational: ai?.operational === true,
     ai: ai || { operational: false, error: "No AI provider is configured." },
+    file_storage: env.FILES ? "r2" : "durable_object",
     checks,
   };
 }

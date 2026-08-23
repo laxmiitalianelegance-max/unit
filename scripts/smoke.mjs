@@ -109,6 +109,33 @@ try {
   assert.equal(plan.status, 200);
   assert.ok((await plan.json()).steps.length >= 2);
 
+  const productForm = new FormData();
+  productForm.append("title", "Smoke product");
+  productForm.append("price", "19.90");
+  productForm.append("sizes", "M,L");
+  productForm.append("status", "DRAFT");
+  productForm.append(
+    "images",
+    new File([new Uint8Array([137, 80, 78, 71])], "smoke.png", {
+      type: "image/png",
+    }),
+  );
+  const product = await fetch(`${origin}/api/create-product`, {
+    method: "POST",
+    headers: { origin, cookie: sessionCookie("smoke-user") },
+    body: productForm,
+  });
+  assert.equal(product.status, 201, await product.text());
+  const products = await fetch(`${origin}/api/products`, {
+    headers: { cookie: sessionCookie("smoke-user") },
+  });
+  assert.equal(products.status, 200);
+  assert.ok(
+    (await products.json()).products.some(
+      (entry) => entry.media?.[0]?.storage === "native",
+    ),
+  );
+
   const oauth = await fetch(
     `${origin}/api/auth/google/start?return_to=/settings`,
     { redirect: "manual" },
