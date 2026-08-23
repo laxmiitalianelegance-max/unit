@@ -36,7 +36,7 @@ jobs:
           (async()=>{
             const weird='Stress 🚀 <tag> & "quotes" — čćžšđ العربية 日本語';
             let x=await req('stress','/api/native/execute',{method:'POST',body:JSON.stringify({message:'Napravi dokument '+weird})});if(!x.r.ok||x.d.status==='failed')throw Error('special-char execution failed '+JSON.stringify(x.d));
-            const docs1=(await req('stress','/api/native/documents')).d.documents||[];if(!docs1.some(d=>JSON.stringify(d).includes('Stress')))throw Error('special-char document missing');
+            const createdId=x.d.results?.find(v=>v.status==='completed')?.result?.document?.id;if(!createdId)throw Error('special-char document id missing');const full=(await req('stress','/api/native/documents/'+createdId)).d.document;if(!full||!String(full.content||'').includes(weird))throw Error('special-char document content missing');
             const long='Napravi dokument '+('abc 🚀 '.repeat(2500));x=await req('stress','/api/native/execute',{method:'POST',body:JSON.stringify({message:long})});if(x.r.status>=500)throw Error('long prompt crashed execution');
             x=await req('stress','/api/native/execute',{method:'POST',body:JSON.stringify({message:'Pretraži knowledge za nešto što ne postoji'})});if(!x.r.ok||!['partial','completed'].includes(x.d.status))throw Error('partial execution unstable '+JSON.stringify(x.d));
             x=await req('stress','/api/native/execute',{method:'POST',body:JSON.stringify({message:'Napravi dokument recovery-posle-partial'})});if(!x.r.ok||x.d.status==='failed')throw Error('recovery after partial failed');
