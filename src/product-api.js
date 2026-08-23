@@ -9,6 +9,7 @@ import {
 const MAX_FORM_BYTES = 30 * 1024 * 1024;
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const MAX_VIDEO_BYTES = 24 * 1024 * 1024;
+const MAX_NATIVE_MEDIA_BYTES = 4 * 1024 * 1024;
 const MAX_IMAGES = 8;
 const IMAGE_TYPES = new Set([
   "image/jpeg",
@@ -28,6 +29,16 @@ function clean(value, max = 4000) {
 function safeFileName(value) {
   const name = clean(value || "file", 180).replace(/[^A-Za-z0-9._-]+/g, "-");
   return name || "file";
+}
+
+function encodeBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let raw = "";
+  const chunkSize = 0x8000;
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    raw += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
+  }
+  return btoa(raw);
 }
 
 async function requireAccount(request, env) {
@@ -70,13 +81,7 @@ async function nativeRequest(request, env, path, init = {}) {
   return data;
 }
 
-async function saveMedia(env, account, file, kind) {
-  if (!env.FILES)
-    throw new HttpError(
-      503,
-      "R2 file storage is not configured.",
-      "file_storage_unavailable",
-    );
+async function saveMedia(request, env, account, file, kind) {
   if (!(file instanceof File) || file.size < 1) return null;
   const maxBytes = kind === "video" ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES;
   if (file.size > maxBytes) {
@@ -102,8 +107,43 @@ async function saveMedia(env, account, file, kind) {
   }
 
   const id = `media_${crypto.randomUUID().replace(/-/g, "")}`;
-  const key = `users/${account.uid}/product-media/${id}/${safeFileName(file.name)}`;
   const uploadedAt = new Date().toISOString();
+  if (!env.FILES) {
+    if (file.size > MAX_NATIVE_MEDIA_BYTES) {
+      throw new HttpError(
+        413,
+        `${kind === "video" ? "Video" : "Image"} exceeds the 4 MiB built-in storage limit.`,
+        "native_media_too_large",
+      );
+    }
+    const stored = await nativeRequest(request, env, "/api/native/files", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        name: safeFileName(file.name),
+        mime: file.type || "application/octet-stream",
+        content: encodeBase64(await file.arrayBuffer()),
+        meta: {
+          encoding: "base64",
+          kind: "product-media",
+          media_kind: kind,
+          uploaded_at: uploadedAt,
+        },
+      }),
+    });
+    return {
+      id: stored.file.id,
+      key: null,
+      name: safeFileName(file.name),
+      mime: file.type || "application/octet-stream",
+      size: file.size,
+      kind,
+      storage: "native",
+      uploaded_at: uploadedAt,
+    };
+  }
+
+  const key = `users/${account.uid}/product-media/${id}/${safeFileName(file.name)}`;
   await env.FILES.put(key, file, {
     httpMetadata: { contentType: file.type || "application/octet-stream" },
     customMetadata: {
@@ -120,8 +160,24 @@ async function saveMedia(env, account, file, kind) {
     mime: file.type || "application/octet-stream",
     size: file.size,
     kind,
+    storage: "r2",
     uploaded_at: uploadedAt,
   };
+}
+
+async function removeMedia(request, env, item) {
+  if (item.storage === "r2" && env.FILES && item.key) {
+    await env.FILES.delete(item.key);
+    return;
+  }
+  if (item.storage === "native" && item.id) {
+    await nativeRequest(
+      request,
+      env,
+      `/api/native/files/${encodeURIComponent(item.id)}`,
+      { method: "DELETE" },
+    );
+  }
 }
 
 async function listProducts(request, env) {
@@ -219,9 +275,9 @@ async function createProduct(request, env) {
   const media = [];
   try {
     for (const image of images)
-      media.push(await saveMedia(env, account, image, "image"));
+      media.push(await saveMedia(request, env, account, image, "image"));
     if (video instanceof File && video.size > 0)
-      media.push(await saveMedia(env, account, video, "video"));
+      media.push(await saveMedia(request, env, account, video, "video"));
     const payload = {
       name: title,
       title,
@@ -257,13 +313,11 @@ async function createProduct(request, env) {
     );
     return json({ product: data.product, native: true }, 201);
   } catch (error) {
-    if (env.FILES) {
-      await Promise.all(
-        media
-          .filter(Boolean)
-          .map((item) => env.FILES.delete(item.key).catch(() => undefined)),
-      );
-    }
+    await Promise.all(
+      media
+        .filter(Boolean)
+        .map((item) => removeMedia(request, env, item).catch(() => undefined)),
+    );
     throw error;
   }
 }

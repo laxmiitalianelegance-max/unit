@@ -1,3 +1,3 @@
-release=unit369-production-hardening-v4
-attempt=1
-reason=deploy-tested-secure-runtime-and-r2-storage
+release=unit369-production-hardening-v5
+attempt=2
+reason=deploy-with-built-in-durable-file-storage

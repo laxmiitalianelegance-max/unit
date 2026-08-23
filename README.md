@@ -11,7 +11,7 @@ Unit369 is a Cloudflare Worker/PWA with authenticated AI chat, native workspaces
 - Static assets: `public/`
 - Per-user structured state: `NativeStore` Durable Object
 - Quotas, connection secrets, shared cache and approvals: `ToolStore` Durable Object
-- User files and product media: R2 binding `FILES` (`unit369-files`)
+- User files and product media: built-in `NATIVE_STORE`; optional R2 is used automatically when a `FILES` binding is added later
 
 There is one active runtime graph. Historical wrappers and branch-specific validation workflows have been removed so CI validates the code that is actually deployed.
 
@@ -28,7 +28,7 @@ There is one active runtime graph. Historical wrappers and branch-specific valid
 
 ## Required production bindings and secrets
 
-Bindings are declared in `wrangler.jsonc`: `AI`, `ASSETS`, `SELF`, `FILES`, `TOOL_STORE` and `NATIVE_STORE`.
+Bindings are declared in `wrangler.jsonc`: `AI`, `ASSETS`, `SELF`, `TOOL_STORE` and `NATIVE_STORE`.
 
 Required secrets/variables:
 
@@ -58,4 +58,4 @@ npm run test:smoke
 
 ## Deployment
 
-`.github/workflows/deploy-production.yml` deploys only an explicitly confirmed `main` commit. It verifies the locked source, ensures the R2 bucket exists, performs a dry-run, deploys the exact tested commit, then checks release health, Google OAuth, CSP and PWA assets.
+`.github/workflows/deploy-production.yml` deploys only an explicitly confirmed `main` commit. It verifies the locked source and subscription-free storage contract, performs a dry-run, deploys the exact tested commit, then checks release health, Google OAuth, CSP and PWA assets.

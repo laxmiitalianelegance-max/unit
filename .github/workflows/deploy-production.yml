@@ -75,10 +75,8 @@ jobs:
           echo account_discovered > /tmp/deploy-stage
           echo config_check > /tmp/deploy-stage
           grep -q '"main": "src/unit369.js"' wrangler.jsonc
-          echo r2_check > /tmp/deploy-stage
-          if ! ./node_modules/.bin/wrangler r2 bucket info unit369-files >/tmp/r2-info.log 2>&1; then
-            ./node_modules/.bin/wrangler r2 bucket create unit369-files
-          fi
+          echo storage_check > /tmp/deploy-stage
+          ! grep -q '"r2_buckets"' wrangler.jsonc
           echo dry_run > /tmp/deploy-stage
           ./node_modules/.bin/wrangler deploy --dry-run --outdir .wrangler-production-dry-run
           echo preflight_ok > /tmp/deploy-stage
