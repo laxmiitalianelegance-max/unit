@@ -1,6 +1,7 @@
 import core from "./unit369-core.js";
 import { handleOrchestrator, ToolStore } from "./orchestrator.js";
 import { handleAuth } from "./accounts.js";
+import { decorateAccountUi } from "./account-ui.js";
 
 export { ToolStore };
 
@@ -15,6 +16,8 @@ export default {
       const response = await handleOrchestrator(request, env, ctx);
       if (response) return response;
     }
-    return core.fetch(request, env, ctx);
+    const response = await core.fetch(request, env, ctx);
+    if (request.method === "GET" && (url.pathname === "/" || url.pathname === "/app")) return decorateAccountUi(response);
+    return response;
   }
 };
