@@ -36,7 +36,8 @@ jobs:
           const {chromium}=require('playwright');
           (async()=>{
             const b=await chromium.launch({headless:true});
-            const p=await b.newPage({viewport:{width:390,height:844}});p.setDefaultTimeout(7000);const errors=[];p.on('pageerror',e=>errors.push(String(e.message||e)));
+            const ctx=await b.newContext({viewport:{width:390,height:844},serviceWorkers:'block'});
+            const p=await ctx.newPage();p.setDefaultTimeout(7000);const errors=[];p.on('pageerror',e=>errors.push(String(e.message||e)));
             await p.route('**/api/status',r=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({version:'test',integrations:{claude:false,openai:false,grok:false,workersAi:true,shopify:false}})}));
             await p.route('**/api/ui-i18n',r=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({d:{connected:'Povezano',notConnected:'Nije povezano'}})}));
             await p.route('**/api/free-ai',r=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({content:'Test odgovor'})}));
