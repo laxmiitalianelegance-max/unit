@@ -1,8 +1,8 @@
 import { resolveAccount } from './accounts.js';
 
 export const NATIVE_CAPABILITIES = Object.freeze({
-  intelligence:{name:'Intelligence',version:1,operations:['chat','research','plan','critique','verify'],native:true},
-  create:{name:'Create',version:1,operations:['document.create','document.update','content.generate','asset.describe'],native:true},
+  intelligence:{name:'Intelligence',version:1,operations:['chat','research','plan','critique','verify','knowledge.search'],native:true},
+  create:{name:'Create',version:1,operations:['document.create','document.read','document.list','document.update','document.delete','content.generate','asset.describe'],native:true},
   build:{name:'Build',version:1,operations:['project.create','file.write','file.read','diff.create','test.plan'],native:true},
   work:{name:'Work',version:1,operations:['project.manage','task.create','task.update','milestone.manage'],native:true},
   data:{name:'Data',version:1,operations:['collection.create','record.create','record.update','record.query','search'],native:true},
@@ -20,6 +20,7 @@ export function planNativeIntent(text){
   const q=String(text||'').toLowerCase(),steps=[];
   const add=(capability,operation,reason)=>{if(hasOperation(capability,operation)&&!steps.some(s=>s.capability===capability&&s.operation===operation))steps.push({capability,operation,reason})};
   if(/document|doc|note|report|write|tekst|dokument|izveštaj|izvjestaj/.test(q))add('create','document.create','Create a native Unit369 document');
+  if(/knowledge|search|find|remember|znanje|pretraž|pretraz|nađi|nadji/.test(q))add('intelligence','knowledge.search','Search native Unit369 knowledge');
   if(/code|app|website|site|build|program|kod|aplikacij|sajt/.test(q))add('build','project.create','Create or modify a native Unit369 build project');
   if(/task|project|milestone|plan|zadat|projekat|projekt/.test(q))add('work','task.create','Track work natively in Unit369');
   if(/data|table|database|record|podac|tabel|baza/.test(q))add('data','collection.create','Use native Unit369 structured data');
@@ -33,8 +34,9 @@ export function planNativeIntent(text){
 
 function store(env,uid){if(!env.NATIVE_STORE)throw new Error('NATIVE_STORE binding is not configured.');return env.NATIVE_STORE.get(env.NATIVE_STORE.idFromName(uid))}
 async function proxyNative(request,env,account,url){
-  const suffix=url.pathname.replace(/^\/api\/native\/(files|data)/,m=>m.includes('files')?'/files':'/data');
-  const target='https://native.internal/native-store'+suffix+url.search;
+  const match=url.pathname.match(/^\/api\/native\/(files|data|documents|knowledge)(.*)$/);
+  if(!match)return json({error:'Native capability route not found.'},404);
+  const target='https://native.internal/native-store/'+match[1]+match[2]+url.search;
   return store(env,account.uid).fetch(new Request(target,request));
 }
 
@@ -50,8 +52,7 @@ export async function handleNativeCapabilities(request,env){
       try{body=await request.json()}catch{}
       return json({user_id:account.uid,...planNativeIntent(body.message)});
     }
-    if(url.pathname==='/api/native/files'||url.pathname.startsWith('/api/native/files/'))return proxyNative(request,env,account,url);
-    if(url.pathname==='/api/native/data'||url.pathname.startsWith('/api/native/data/'))return proxyNative(request,env,account,url);
+    if(/^\/api\/native\/(files|data|documents|knowledge)(\/|$)/.test(url.pathname))return proxyNative(request,env,account,url);
     return json({error:'Native capability route not found.'},404);
   }catch(e){
     return json({error:String(e.message||e)},500);
