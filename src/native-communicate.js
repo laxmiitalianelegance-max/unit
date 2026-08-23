@@ -1,26 +1,256 @@
-function json(data,status=200){return new Response(JSON.stringify(data),{status,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store'}})}
-function clean(v,max=4000){return String(v??'').trim().slice(0,max)}
-function validId(v){return /^[A-Za-z0-9._:-]{1,160}$/.test(String(v||''))}
-function obj(v){return v&&typeof v==='object'&&!Array.isArray(v)?v:{}}
-function store(env,uid){if(!env.NATIVE_STORE)throw new Error('NATIVE_STORE binding is not configured.');return env.NATIVE_STORE.get(env.NATIVE_STORE.idFromName(uid))}
-async function call(env,uid,path,init={}){const r=await store(env,uid).fetch(new Request('https://native.internal/native-store'+path,{...init,headers:{'content-type':'application/json',...(init.headers||{})}}));const t=await r.text();let d;try{d=JSON.parse(t)}catch{d={error:t}}return{r,d}}
-const COLLECTION='__unit369_communicate_v1';
-async function collection(env,uid){let x=await call(env,uid,'/data/collections');let c=(x.d.collections||[]).find(v=>v.name===COLLECTION);if(c)return c;x=await call(env,uid,'/data/collections',{method:'POST',body:JSON.stringify({name:COLLECTION,schema:{type:'thread|message|notification',thread_id:'string',status:'string'}})});if(!x.r.ok)throw new Error(x.d.error||'Communication store unavailable');return x.d.collection}
-async function rows(env,uid,cid){const x=await call(env,uid,`/data/collections/${cid}/records`);if(!x.r.ok)throw new Error(x.d.error||'Communication records unavailable');return x.d.records||[]}
-async function get(env,uid,cid,id){const x=await call(env,uid,`/data/collections/${cid}/records/${id}`);return x.r.ok?x.d.record:null}
-async function create(env,uid,cid,name,record){const x=await call(env,uid,`/data/collections/${cid}/records`,{method:'POST',body:JSON.stringify({name,record})});if(!x.r.ok)throw new Error(x.d.error||'Unable to create communication record');return x.d.record}
-export async function handleNativeCommunicate(request,env,account){const u=new URL(request.url),p=u.pathname.replace(/^\/api\/native\/communicate\/?/,'').split('/').filter(Boolean),cid=(await collection(env,account.uid)).id;
- if(!p.length&&request.method==='GET'){const all=await rows(env,account.uid,cid);return json({threads:all.filter(r=>r.data?.type==='thread'),notifications:all.filter(r=>r.data?.type==='notification')})}
- if(p[0]==='threads'){
-  if(p.length===1){if(request.method==='GET'){const all=await rows(env,account.uid,cid);return json({threads:all.filter(r=>r.data?.type==='thread')})}if(request.method==='POST'){const b=await request.json(),title=clean(b.title||b.name,200);if(!title)return json({error:'Thread title is required.'},400);const r=await create(env,account.uid,cid,title,{type:'thread',title,topic:clean(b.topic,500),status:'open',meta:obj(b.meta)});return json({thread:r},201)}return json({error:'Method not allowed.'},405)}
-  const tid=p[1];if(!validId(tid))return json({error:'Invalid thread id.'},400);const tr=await get(env,account.uid,cid,tid);if(!tr||tr.data?.type!=='thread')return json({error:'Thread not found.'},404);
-  if(p.length===2){if(request.method==='GET')return json({thread:tr});if(request.method==='PUT'){const b=await request.json(),data={...tr.data,title:clean(b.title||tr.data.title,200),topic:b.topic===undefined?tr.data.topic:clean(b.topic,500),status:clean(b.status||tr.data.status||'open',40),meta:b.meta===undefined?tr.data.meta:obj(b.meta)};const x=await call(env,account.uid,`/data/collections/${cid}/records/${tid}`,{method:'PUT',body:JSON.stringify({name:data.title,record:data})});return json(x.r.ok?{thread:{id:tid,...data}}:x.d,x.r.status)}if(request.method==='DELETE'){for(const r of (await rows(env,account.uid,cid)).filter(x=>x.data?.type==='message'&&x.data?.thread_id===tid))await call(env,account.uid,`/data/collections/${cid}/records/${r.id}`,{method:'DELETE'});const x=await call(env,account.uid,`/data/collections/${cid}/records/${tid}`,{method:'DELETE'});return json(x.d,x.r.status)}return json({error:'Method not allowed.'},405)}
-  if(p[2]==='messages'){if(p.length===3&&request.method==='GET'){const all=await rows(env,account.uid,cid);return json({messages:all.filter(r=>r.data?.type==='message'&&r.data?.thread_id===tid)})}if(p.length===3&&request.method==='POST'){const b=await request.json(),body=clean(b.body,12000);if(!body)return json({error:'Message body is required.'},400);const r=await create(env,account.uid,cid,clean(b.subject||body.slice(0,80),120),{type:'message',thread_id:tid,body,role:clean(b.role||'user',40),status:'sent',meta:obj(b.meta)});return json({message:r},201)}}
- }
- if(p[0]==='notifications'){
-  if(p.length===1&&request.method==='GET'){const all=await rows(env,account.uid,cid),unread=u.searchParams.get('unread')==='1';return json({notifications:all.filter(r=>r.data?.type==='notification'&&(!unread||r.data?.status!=='read'))})}
-  if(p.length===1&&request.method==='POST'){const b=await request.json(),title=clean(b.title,200),body=clean(b.body,2000);if(!title)return json({error:'Notification title is required.'},400);const r=await create(env,account.uid,cid,title,{type:'notification',title,body,status:'unread',link:clean(b.link,500),meta:obj(b.meta)});return json({notification:r},201)}
-  const nid=p[1];if(!validId(nid))return json({error:'Invalid notification id.'},400);const nr=await get(env,account.uid,cid,nid);if(!nr||nr.data?.type!=='notification')return json({error:'Notification not found.'},404);if(request.method==='PUT'){const b=await request.json(),data={...nr.data,status:clean(b.status||nr.data.status||'unread',40)};const x=await call(env,account.uid,`/data/collections/${cid}/records/${nid}`,{method:'PUT',body:JSON.stringify({name:nr.name,record:data})});return json(x.r.ok?{notification:{id:nid,...data}}:x.d,x.r.status)}if(request.method==='DELETE'){const x=await call(env,account.uid,`/data/collections/${cid}/records/${nid}`,{method:'DELETE'});return json(x.d,x.r.status)}
- }
- return json({error:'Communication route not found.'},404)
+import { readJsonLimited, readResponseJsonLimited } from "./runtime-utils.js";
+
+function json(data, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+      "cache-control": "no-store",
+    },
+  });
+}
+function clean(v, max = 4000) {
+  return String(v ?? "")
+    .trim()
+    .slice(0, max);
+}
+function validId(v) {
+  return /^[A-Za-z0-9._:-]{1,160}$/.test(String(v || ""));
+}
+function obj(v) {
+  return v && typeof v === "object" && !Array.isArray(v) ? v : {};
+}
+function store(env, uid) {
+  if (!env.NATIVE_STORE)
+    throw new Error("NATIVE_STORE binding is not configured.");
+  return env.NATIVE_STORE.get(env.NATIVE_STORE.idFromName(uid));
+}
+async function call(env, uid, path, init = {}) {
+  const r = await store(env, uid).fetch(
+    new Request("https://native.internal/native-store" + path, {
+      ...init,
+      headers: { "content-type": "application/json", ...(init.headers || {}) },
+    }),
+  );
+  const d = await readResponseJsonLimited(r, 8 * 1024 * 1024);
+  return { r, d };
+}
+const COLLECTION = "__unit369_communicate_v1";
+async function collection(env, uid) {
+  let x = await call(env, uid, "/data/collections?limit=200");
+  let c = (x.d.collections || []).find((v) => v.name === COLLECTION);
+  if (c) return c;
+  x = await call(env, uid, "/data/collections", {
+    method: "POST",
+    body: JSON.stringify({
+      name: COLLECTION,
+      schema: {
+        type: "thread|message|notification",
+        thread_id: "string",
+        status: "string",
+      },
+    }),
+  });
+  if (!x.r.ok) throw new Error(x.d.error || "Communication store unavailable");
+  return x.d.collection;
+}
+async function rows(env, uid, cid) {
+  const x = await call(env, uid, `/data/collections/${cid}/records?limit=200`);
+  if (!x.r.ok)
+    throw new Error(x.d.error || "Communication records unavailable");
+  return x.d.records || [];
+}
+async function get(env, uid, cid, id) {
+  const x = await call(env, uid, `/data/collections/${cid}/records/${id}`);
+  return x.r.ok ? x.d.record : null;
+}
+async function create(env, uid, cid, name, record) {
+  const x = await call(env, uid, `/data/collections/${cid}/records`, {
+    method: "POST",
+    body: JSON.stringify({ name, record }),
+  });
+  if (!x.r.ok)
+    throw new Error(x.d.error || "Unable to create communication record");
+  return x.d.record;
+}
+export async function handleNativeCommunicate(request, env, account) {
+  const u = new URL(request.url),
+    p = u.pathname
+      .replace(/^\/api\/native\/communicate\/?/, "")
+      .split("/")
+      .filter(Boolean),
+    cid = (await collection(env, account.uid)).id;
+  if (!p.length && request.method === "GET") {
+    const all = await rows(env, account.uid, cid);
+    return json({
+      threads: all.filter((r) => r.data?.type === "thread"),
+      notifications: all.filter((r) => r.data?.type === "notification"),
+    });
+  }
+  if (p[0] === "threads") {
+    if (p.length === 1) {
+      if (request.method === "GET") {
+        const all = await rows(env, account.uid, cid);
+        return json({ threads: all.filter((r) => r.data?.type === "thread") });
+      }
+      if (request.method === "POST") {
+        const b = await readJsonLimited(request, 256 * 1024),
+          title = clean(b.title || b.name, 200);
+        if (!title) return json({ error: "Thread title is required." }, 400);
+        const r = await create(env, account.uid, cid, title, {
+          type: "thread",
+          title,
+          topic: clean(b.topic, 500),
+          status: "open",
+          meta: obj(b.meta),
+        });
+        return json({ thread: r }, 201);
+      }
+      return json({ error: "Method not allowed." }, 405);
+    }
+    const tid = p[1];
+    if (!validId(tid)) return json({ error: "Invalid thread id." }, 400);
+    const tr = await get(env, account.uid, cid, tid);
+    if (!tr || tr.data?.type !== "thread")
+      return json({ error: "Thread not found." }, 404);
+    if (p.length === 2) {
+      if (request.method === "GET") return json({ thread: tr });
+      if (request.method === "PUT") {
+        const b = await readJsonLimited(request, 256 * 1024),
+          data = {
+            ...tr.data,
+            title: clean(b.title || tr.data.title, 200),
+            topic: b.topic === undefined ? tr.data.topic : clean(b.topic, 500),
+            status: clean(b.status || tr.data.status || "open", 40),
+            meta: b.meta === undefined ? tr.data.meta : obj(b.meta),
+          };
+        const x = await call(
+          env,
+          account.uid,
+          `/data/collections/${cid}/records/${tid}`,
+          {
+            method: "PUT",
+            body: JSON.stringify({ name: data.title, record: data }),
+          },
+        );
+        return json(
+          x.r.ok ? { thread: { id: tid, ...data } } : x.d,
+          x.r.status,
+        );
+      }
+      if (request.method === "DELETE") {
+        for (const r of (await rows(env, account.uid, cid)).filter(
+          (x) => x.data?.type === "message" && x.data?.thread_id === tid,
+        ))
+          await call(
+            env,
+            account.uid,
+            `/data/collections/${cid}/records/${r.id}`,
+            { method: "DELETE" },
+          );
+        const x = await call(
+          env,
+          account.uid,
+          `/data/collections/${cid}/records/${tid}`,
+          { method: "DELETE" },
+        );
+        return json(x.d, x.r.status);
+      }
+      return json({ error: "Method not allowed." }, 405);
+    }
+    if (p[2] === "messages") {
+      if (p.length === 3 && request.method === "GET") {
+        const all = await rows(env, account.uid, cid);
+        return json({
+          messages: all.filter(
+            (r) => r.data?.type === "message" && r.data?.thread_id === tid,
+          ),
+        });
+      }
+      if (p.length === 3 && request.method === "POST") {
+        const b = await readJsonLimited(request, 256 * 1024),
+          body = clean(b.body, 12000);
+        if (!body) return json({ error: "Message body is required." }, 400);
+        const r = await create(
+          env,
+          account.uid,
+          cid,
+          clean(b.subject || body.slice(0, 80), 120),
+          {
+            type: "message",
+            thread_id: tid,
+            body,
+            role: clean(b.role || "user", 40),
+            status: "sent",
+            meta: obj(b.meta),
+          },
+        );
+        return json({ message: r }, 201);
+      }
+    }
+  }
+  if (p[0] === "notifications") {
+    if (p.length === 1 && request.method === "GET") {
+      const all = await rows(env, account.uid, cid),
+        unread = u.searchParams.get("unread") === "1";
+      return json({
+        notifications: all.filter(
+          (r) =>
+            r.data?.type === "notification" &&
+            (!unread || r.data?.status !== "read"),
+        ),
+      });
+    }
+    if (p.length === 1 && request.method === "POST") {
+      const b = await readJsonLimited(request, 256 * 1024),
+        title = clean(b.title, 200),
+        body = clean(b.body, 2000);
+      if (!title)
+        return json({ error: "Notification title is required." }, 400);
+      const r = await create(env, account.uid, cid, title, {
+        type: "notification",
+        title,
+        body,
+        status: "unread",
+        link: clean(b.link, 500),
+        meta: obj(b.meta),
+      });
+      return json({ notification: r }, 201);
+    }
+    const nid = p[1];
+    if (!validId(nid)) return json({ error: "Invalid notification id." }, 400);
+    const nr = await get(env, account.uid, cid, nid);
+    if (!nr || nr.data?.type !== "notification")
+      return json({ error: "Notification not found." }, 404);
+    if (request.method === "PUT") {
+      const b = await readJsonLimited(request, 256 * 1024),
+        data = {
+          ...nr.data,
+          status: clean(b.status || nr.data.status || "unread", 40),
+        };
+      const x = await call(
+        env,
+        account.uid,
+        `/data/collections/${cid}/records/${nid}`,
+        {
+          method: "PUT",
+          body: JSON.stringify({ name: nr.name, record: data }),
+        },
+      );
+      return json(
+        x.r.ok ? { notification: { id: nid, ...data } } : x.d,
+        x.r.status,
+      );
+    }
+    if (request.method === "DELETE") {
+      const x = await call(
+        env,
+        account.uid,
+        `/data/collections/${cid}/records/${nid}`,
+        { method: "DELETE" },
+      );
+      return json(x.d, x.r.status);
+    }
+  }
+  return json({ error: "Communication route not found." }, 404);
 }

@@ -9,7 +9,7 @@ on:
   push:
     branches: [main]
     paths:
-      - '.github/release/production-now'
+      - ".github/release/production-now"
 permissions:
   contents: write
 concurrency:
@@ -31,7 +31,16 @@ jobs:
           ref: ${{ github.sha }}
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
+          cache: npm
+      - name: Install and verify exact source
+        run: |
+          set -euo pipefail
+          npm ci
+          npm run format:check
+          npm run check
+          npm test
+          npm run build
       - name: Discover Cloudflare account and verify production contract
         run: |
           set -euo pipefail
@@ -65,15 +74,19 @@ jobs:
           JS
           echo account_discovered > /tmp/deploy-stage
           echo config_check > /tmp/deploy-stage
-          grep -q 'main = "src/unit369.js"' wrangler.toml
+          grep -q '"main": "src/unit369.js"' wrangler.jsonc
+          echo r2_check > /tmp/deploy-stage
+          if ! ./node_modules/.bin/wrangler r2 bucket info unit369-files >/tmp/r2-info.log 2>&1; then
+            ./node_modules/.bin/wrangler r2 bucket create unit369-files
+          fi
           echo dry_run > /tmp/deploy-stage
-          npx --yes wrangler@4 deploy --dry-run --outdir .wrangler-production-dry-run
+          ./node_modules/.bin/wrangler deploy --dry-run --outdir .wrangler-production-dry-run
           echo preflight_ok > /tmp/deploy-stage
       - name: Deploy exact tested commit
         run: |
           set -euo pipefail
           echo deploy_start > /tmp/deploy-stage
-          if ! npx --yes wrangler@4 deploy > /tmp/wrangler-deploy.log 2>&1; then
+          if ! ./node_modules/.bin/wrangler deploy > /tmp/wrangler-deploy.log 2>&1; then
             echo deploy_failed > /tmp/deploy-stage
             RAW_CF_TOKEN="$CLOUDFLARE_API_TOKEN" node <<'JS' > /tmp/deploy-error.txt
           const fs=require('fs');
@@ -106,7 +119,7 @@ jobs:
           const fs=require('fs');
           const h=JSON.parse(fs.readFileSync('/tmp/release-health.json','utf8'));
           if(h.status!=='ready'||h.core_ready!==true)throw Error('Unit369 Core is not production-ready: '+JSON.stringify(h));
-          const required=['ai','assets','self','native_store','tool_store','app_secret'];
+          const required=['assets','self','native_store','tool_store','files','app_secret','encryption_key','google_oauth','ai_configured'];
           for(const k of required)if(h.checks?.[k]!==true)throw Error('Missing production requirement: '+k);
           if(h.auth_ready!==true)throw Error('Google OAuth is not configured in production.');
           console.log('Unit369 production health passed',h.version);
@@ -129,6 +142,26 @@ jobs:
           console.log('Google OAuth callback verified:',expected);
           JS
           echo oauth_verified > /tmp/deploy-stage
+      - name: Verify security and PWA contract
+        run: |
+          set -euo pipefail
+          BASE="${UNIT369_PRODUCTION_URL%/}"
+          curl -fsS -D /tmp/root-headers -o /tmp/root.html "$BASE/"
+          grep -qi '^content-security-policy:.*nonce-' /tmp/root-headers
+          grep -qi '^x-frame-options: DENY' /tmp/root-headers
+          grep -q 'data-mode="auto"' /tmp/root.html
+          curl -fsS "$BASE/manifest.json" -o /tmp/manifest.json
+          node <<'JS'
+          const fs=require('fs');
+          const manifest=JSON.parse(fs.readFileSync('/tmp/manifest.json','utf8'));
+          if(!Array.isArray(manifest.icons)||manifest.icons.length!==2)throw Error('PWA icons are missing');
+          for(const icon of manifest.icons)if(icon.type!=='image/png')throw Error('PWA icon is not PNG');
+          JS
+          curl -fsS "$BASE/app-icon-512.png" -o /tmp/icon-512.png
+          node <<'JS'
+          const fs=require('fs');const b=fs.readFileSync('/tmp/icon-512.png');
+          if(b.length<100000||b.readUInt32BE(0)!==0x89504e47)throw Error('512px icon is invalid');
+          JS
       - name: Publish deployment receipt
         if: always()
         env:

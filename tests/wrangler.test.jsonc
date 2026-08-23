@@ -1,0 +1,36 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "unit369-local-test",
+  "main": "../src/unit369.js",
+  "compatibility_date": "2026-08-23",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "../public",
+    "binding": "ASSETS",
+    "run_worker_first": true,
+  },
+  "r2_buckets": [
+    {
+      "binding": "FILES",
+      "bucket_name": "unit369-local-files",
+    },
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "TOOL_STORE",
+        "class_name": "ToolStore",
+      },
+      {
+        "name": "NATIVE_STORE",
+        "class_name": "NativeStore",
+      },
+    ],
+  },
+  "migrations": [
+    {
+      "tag": "local-v1",
+      "new_sqlite_classes": ["ToolStore", "NativeStore"],
+    },
+  ],
+}
