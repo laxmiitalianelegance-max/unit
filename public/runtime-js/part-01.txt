@@ -1,0 +1,385 @@
+      const key = element.getAttribute("data-i18n");
+      if (key) element.textContent = t(key);
+    });
+    $$('[data-i18n-placeholder]').forEach((element) => {
+      const key = element.getAttribute("data-i18n-placeholder");
+      if (key) element.setAttribute("placeholder", t(key));
+    });
+    $$('[data-i18n-aria]').forEach((element) => {
+      const key = element.getAttribute("data-i18n-aria");
+      if (key) element.setAttribute("aria-label", t(key));
+    });
+    window.Unit369I18n = { lang: selectedLanguage(), t };
+    updatePageTitle();
+    renderProviderLists();
+    renderHistory();
+    renderConversation(false);
+    renderProductChecks();
+    renderSettingsStatus();
+  }
+
+  async function loadLanguage(force = false) {
+    const token = ++languageLoadToken;
+    const language = selectedLanguage();
+    const code = languageCode(language);
+    setRootLanguage(language);
+
+    if (code === "en") {
+      dictionary = { ...BASE };
+      applyTranslations();
+      dispatchLanguageChanged(language);
+      return;
+    }
+
+    if (code === "sr") {
+      dictionary = { ...BASE, ...SR };
+      applyTranslations();
+      dispatchLanguageChanged(language);
+      return;
+    }
+
+    const cacheKey = KEYS.languageCache + String(language).toLowerCase();
+    const cached = parseStoredJson(cacheKey, null);
+    if (cached && typeof cached === "object") {
+      dictionary = { ...BASE, ...cached };
+      applyTranslations();
+      if (!force) dispatchLanguageChanged(language);
+    } else {
+      dictionary = { ...BASE };
+      applyTranslations();
+    }
+
+    try {
+      const response = await fetch("/api/ui-i18n", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        cache: "no-store",
+        body: JSON.stringify({ target: language, source: BASE })
+      });
+      const payload = await response.json();
+      if (!response.ok || !payload || typeof payload.d !== "object") throw new Error("translation failed");
+      if (token !== languageLoadToken) return;
+      dictionary = { ...BASE, ...payload.d };
+      safeSet(cacheKey, JSON.stringify(dictionary));
+    } catch {
+      if (token !== languageLoadToken) return;
+      dictionary = cached && typeof cached === "object" ? { ...BASE, ...cached } : { ...BASE };
+    }
+
+    setRootLanguage(language);
+    applyTranslations();
+    dispatchLanguageChanged(language);
+  }
+
+  function dispatchLanguageChanged(language) {
+    window.dispatchEvent(new CustomEvent("unit369-language-changed", { detail: { lang: language } }));
+  }
+
+  function mountLanguageOptions() {
+    const select = $("#u369-lang-all-s");
+    const custom = $("#u369-lang-custom");
+    if (!select || !custom || select.dataset.mounted === "1") return;
+    select.dataset.mounted = "1";
+    select.replaceChildren();
+    for (const [value, label] of LANGS) {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = label;
+      select.appendChild(option);
+    }
+    syncLanguageControl();
+
+    select.addEventListener("change", () => {
+      if (select.value === "custom") {
+        custom.hidden = false;
+        custom.focus();
+        return;
+      }
+      custom.hidden = true;
+      safeSet(KEYS.language, select.value);
+      loadLanguage(true);
+    });
+
+    custom.addEventListener("change", () => {
+      const value = custom.value.trim() || "auto";
+      safeSet(KEYS.language, value);
+      syncLanguageControl();
+      loadLanguage(true);
+    });
+
+    custom.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        custom.blur();
+      }
+    });
+  }
+
+  function syncLanguageControl() {
+    const select = $("#u369-lang-all-s");
+    const custom = $("#u369-lang-custom");
+    if (!select || !custom) return;
+    const choice = languageChoice();
+    const known = LANGS.some(([value]) => value === choice && value !== "custom");
+    select.value = known ? choice : "custom";
+    custom.hidden = select.value !== "custom";
+    if (!custom.hidden) custom.value = choice === "custom" ? "" : choice;
+  }
+
+  function openDrawer() {
+    const sidebar = $("#u369-sidebar");
+    const shade = $("#u369-drawer-shade");
+    const menu = $("#u369-menu");
+    sidebar?.classList.add("open");
+    shade?.classList.add("open");
+    shade?.setAttribute("aria-hidden", "false");
+    menu?.setAttribute("aria-expanded", "true");
+    menu?.setAttribute("aria-label", t("closeMenu"));
+    refreshProviderStatus(false);
+  }
+
+  function closeDrawer() {
+    const sidebar = $("#u369-sidebar");
+    const shade = $("#u369-drawer-shade");
+    const menu = $("#u369-menu");
+    sidebar?.classList.remove("open");
+    shade?.classList.remove("open");
+    shade?.setAttribute("aria-hidden", "true");
+    menu?.setAttribute("aria-expanded", "false");
+    menu?.setAttribute("aria-label", t("openMenu"));
+  }
+
+  function showPage(page) {
+    const valid = new Set(["team", "product", "settings"]);
+    currentPage = valid.has(page) ? page : "team";
+    $$(".page").forEach((section) => {
+      const active = section.id === "page-" + currentPage;
+      section.classList.toggle("active", active);
+      section.setAttribute("aria-hidden", active ? "false" : "true");
+    });
+    $$('[data-shell-page]').forEach((button) => {
+      const active = button.dataset.shellPage === currentPage;
+      button.classList.toggle("active", active);
+      if (active) button.setAttribute("aria-current", "page");
+      else button.removeAttribute("aria-current");
+    });
+    document.body.dataset.currentPage = currentPage;
+    updatePageTitle();
+    closeDrawer();
+    if (currentPage === "settings") refreshProviderStatus(false);
+    if (currentPage === "product") loadRecentProducts(false);
+  }
+
+  function updatePageTitle() {
+    const title = $("#u369-work-title");
+    if (!title) return;
+    const key = currentPage === "product" ? "products" : currentPage === "settings" ? "settings" : "chat";
+    title.textContent = t(key);
+    document.title = currentPage === "team" ? "Unit369" : t(key) + " · Unit369";
+  }
+
+  function loadSettings() {
+    const defaults = { compact: false, productDefault: "DRAFT" };
+    const stored = parseStoredJson(KEYS.settings, {});
+    return {
+      ...defaults,
+      ...(stored && typeof stored === "object" ? stored : {}),
+      compact: Boolean(stored && stored.compact),
+      productDefault: stored && stored.productDefault === "ACTIVE" ? "ACTIVE" : "DRAFT"
+    };
+  }
+
+  let settingsState = loadSettings();
+
+  function saveSettings() {
+    safeSet(KEYS.settings, JSON.stringify(settingsState));
+    applySettings();
+  }
+
+  function applySettings() {
+    document.body.classList.toggle("compact", Boolean(settingsState.compact));
+    const compact = $("#ss-compact");
+    const productDefault = $("#ss-product");
+    if (compact) compact.checked = Boolean(settingsState.compact);
+    if (productDefault) productDefault.value = settingsState.productDefault;
+    const status = $('#page-product select[name="status"]');
+    if (status && status.dataset.userChanged !== "1") status.value = settingsState.productDefault;
+  }
+
+  function resetPreferences() {
+    settingsState = { compact: false, productDefault: "DRAFT" };
+    saveSettings();
+    showSettingsMessage(t("preferencesReset"));
+  }
+
+  function showSettingsMessage(message) {
+    const reset = $("#ss-reset");
+    if (!reset) return;
+    const previous = reset.textContent;
+    reset.textContent = message;
+    window.setTimeout(() => {
+      reset.textContent = t("resetPreferences", previous);
+    }, 1600);
+  }
+
+  function providerDisplayName(key) {
+    return t(PROVIDER_NAMES[key] || key, key);
+  }
+
+  function normalizedIntegrations(value) {
+    const input = value && typeof value === "object" ? value : {};
+    return {
+      claude: Boolean(input.claude),
+      openai: Boolean(input.openai),
+      grok: Boolean(input.grok),
+      workersAi: input.workersAi !== false,
+      shopify: Boolean(input.shopify)
+    };
+  }
+
+  async function refreshProviderStatus(force = true) {
+    if (providerStatus && !force) {
+      renderProviderLists();
+      renderSettingsStatus();
+      return providerStatus;
+    }
+    try {
+      const response = await fetch("/api/status", { cache: "no-store" });
+      const payload = await response.json();
+      if (!response.ok) throw new Error("status failed");
+      providerStatus = {
+        version: payload.version || APP_VERSION,
+        integrations: normalizedIntegrations(payload.integrations)
+      };
+    } catch {
+      providerStatus = {
+        version: APP_VERSION,
+        integrations: normalizedIntegrations({ workersAi: true })
+      };
+    }
+    renderProviderLists();
+    renderSettingsStatus();
+    return providerStatus;
+  }
+
+  function makeProviderRow(key, connected) {
+    const row = document.createElement("div");
+    row.className = "u369-provider";
+    const dot = document.createElement("span");
+    dot.className = "u369-provider-dot " + (connected ? "ok" : "bad");
+    dot.setAttribute("aria-hidden", "true");
+    const name = document.createElement("span");
+    name.className = "u369-provider-name";
+    name.textContent = providerDisplayName(key);
+    const meta = document.createElement("small");
+    meta.className = "u369-provider-meta";
+    meta.textContent = connected ? t("on") : t("optional");
+    row.append(dot, name, meta);
+    return row;
+  }
+
+  function renderProviderLists() {
+    const box = $("#u369-side-providers");
+    if (!box) return;
+    const integrations = normalizedIntegrations(providerStatus?.integrations);
+    const rows = [
+      makeProviderRow("claude", integrations.claude),
+      makeProviderRow("openai", integrations.openai),
+      makeProviderRow("grok", integrations.grok),
+      makeProviderRow("workers", integrations.workersAi)
+    ];
+    box.replaceChildren(...rows);
+  }
+
+  function renderSettingsStatus() {
+    const grid = $("#ss-grid");
+    if (!grid) return;
+    const integrations = normalizedIntegrations(providerStatus?.integrations);
+    const items = [
+      ["claude", integrations.claude],
+      ["openai", integrations.openai],
+      ["grok", integrations.grok],
+      ["workers", integrations.workersAi],
+      ["shopify", integrations.shopify]
+    ].map(([key, connected]) => {
+      const item = document.createElement("div");
+      item.className = "ss-item";
+      const row = document.createElement("div");
+      row.className = "ss-item-row";
+      const name = document.createElement("div");
+      name.className = "ss-name";
+      name.textContent = providerDisplayName(key);
+      const dot = document.createElement("span");
+      dot.className = "ss-dot" + (connected ? " ok" : "");
+      dot.setAttribute("aria-hidden", "true");
+      const meta = document.createElement("div");
+      meta.className = "ss-meta";
+      meta.textContent = connected ? t("connected") : t("notConnected");
+      row.append(name, dot);
+      item.append(row, meta);
+      return item;
+    });
+    grid.replaceChildren(...items);
+    const version = $("#ss-version");
+    if (version) version.textContent = providerStatus?.version || APP_VERSION;
+  }
+
+  function validSessions(value) {
+    if (!Array.isArray(value)) return [];
+    return value
+      .filter((session) => session && typeof session === "object" && typeof session.id === "string")
+      .map((session) => ({
+        id: session.id,
+        title: typeof session.title === "string" ? session.title : "",
+        createdAt: Number(session.createdAt) || Date.now(),
+        updatedAt: Number(session.updatedAt) || Date.now(),
+        turns: Array.isArray(session.turns) ? session.turns.slice(-80) : []
+      }))
+      .slice(0, 40);
+  }
+
+  function loadSessions() {
+    return validSessions(parseStoredJson(KEYS.sessions, []));
+  }
+
+  function writeSessions(sessions, currentId) {
+    const clean = validSessions(sessions).sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 40);
+    safeSet(KEYS.sessions, JSON.stringify(clean));
+    if (currentId) safeSet(KEYS.current, currentId);
+    return clean;
+  }
+
+  function createSession() {
+    return {
+      id: "s" + Date.now() + Math.random().toString(36).slice(2, 8),
+      title: "",
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      turns: []
+    };
+  }
+
+  function currentSessionBundle() {
+    let sessions = loadSessions();
+    let currentId = safeGet(KEYS.current, "");
+    let session = sessions.find((item) => item.id === currentId) || sessions[0];
+    if (!session) {
+      session = createSession();
+      sessions = writeSessions([session], session.id);
+      currentId = session.id;
+      session = sessions.find((item) => item.id === currentId) || session;
+    } else if (currentId !== session.id) {
+      safeSet(KEYS.current, session.id);
+    }
+    return { sessions, session };
+  }
+
+  function persistSession(session) {
+    const sessions = loadSessions().filter((item) => item.id !== session.id);
+    session.updatedAt = Date.now();
+    writeSessions([session, ...sessions], session.id);
+    window.dispatchEvent(new CustomEvent("unit369-chat-updated"));
+  }
+
+  function newChat() {
+    const session = createSession();

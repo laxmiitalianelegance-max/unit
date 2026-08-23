@@ -1,79 +1,245 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en" dir="ltr">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Unit369</title>
-<link rel="manifest" href="/manifest.json">
-<meta name="theme-color" content="#05070c">
-<style>
-:root{--bg:#05070c;--surface:#0b111a;--line:#233247;--ink:#f5f8fc;--muted:#95a3b8}*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}html,body{margin:0;min-height:100%;background:var(--bg);color:var(--ink);font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}body{min-height:100dvh}.page{display:none}.page.active{display:block}button,input,textarea,select{font:inherit}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}#page-product form{display:grid;gap:10px}#page-product label{display:block;margin-top:6px;font-size:11px;color:var(--muted)}#page-product input,#page-product textarea,#page-product select{width:100%;background:#070c13;color:var(--ink);border:1px solid var(--line);border-radius:12px;padding:12px}#page-product textarea{min-height:100px;resize:vertical}#page-product .primary{margin-top:10px;padding:13px;border:0;border-radius:12px;background:#178ce8;color:white;font-weight:800}#pStatus{margin-top:12px;font-size:12px;white-space:pre-wrap}.section-title{font-size:24px;font-weight:800;margin:0 0 4px}.section-sub{font-size:13px;color:var(--muted);margin:0 0 16px}
-</style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#212121">
+  <meta name="color-scheme" content="dark">
+  <meta name="application-name" content="Unit369">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Unit369</title>
+  <link rel="manifest" href="/manifest.json?v=2026.08.23.1">
+  <link rel="icon" type="image/png" sizes="192x192" href="/unit369-192.png?v=2026.08.23.1">
+  <link rel="apple-touch-icon" href="/unit369-192.png?v=2026.08.23.1">
+  <link rel="stylesheet" href="/runtime.css?v=2026.08.23.1">
 </head>
 <body class="u369-shell">
-<header><h1>Unit369</h1></header>
-<aside id="u369-sidebar" class="u369-sidebar">
-  <div class="u369-side-top">
-    <div class="u369-brand"><div class="u369-brand-mark">369</div><span>Unit369</span></div>
-    <button type="button" class="u369-newchat" id="u369-shell-new">＋ <span data-i18n="newChat">New chat</span></button>
-  </div>
-  <div class="u369-side-section" data-i18n="workspace">Workspace</div>
-  <div class="u369-side-nav">
-    <button type="button" class="u369-side-item active" data-shell-page="team"><span>✦</span><span data-i18n="chat">Chat</span></button>
-    <button type="button" class="u369-side-item" data-shell-page="product"><span>▦</span><span data-i18n="products">Products</span></button>
-    <button type="button" class="u369-side-item" data-shell-page="settings"><span>⚙</span><span data-i18n="settings">Settings</span></button>
-  </div>
-  <div class="u369-side-section" data-i18n="aiMode">AI mode</div>
-  <div class="u369-side-modes">
-    <button type="button" class="u369-mode-btn" data-chat-mode="side"><span data-i18n="sideBySide">Side by side</span></button>
-    <button type="button" class="u369-mode-btn active" data-chat-mode="combine"><span data-i18n="combinedAnswer">Combined answer</span></button>
-    <button type="button" class="u369-mode-btn" data-chat-mode="critique"><span data-i18n="crossCritique">Cross-critique</span></button>
-  </div>
-  <div class="u369-side-section" data-i18n="providers">Providers</div>
-  <div id="u369-side-providers" class="u369-side-providers"></div>
-  <div class="u369-side-section" data-i18n="chatHistory">Chat history</div>
-  <div id="u369-side-history" class="u369-side-history"></div>
-  <div class="u369-side-spacer"></div>
-</aside>
-<div id="u369-topbar" class="u369-topbar">
-  <button type="button" id="u369-menu" class="u369-menu" data-i18n-aria="openMenu" aria-label="Open menu">☰</button>
-  <div id="u369-work-title" class="u369-work-title" data-i18n="chat">Chat</div>
-  <div class="u369-work-sub">Unit369</div>
-</div>
-<div id="u369-drawer-shade" class="u369-drawer-shade"></div>
-<main>
-  <section class="page active" id="page-team">
-    <div class="u369-conversation-wrap"><div id="u369-conversation" class="u369-conversation"></div></div>
-    <div id="u369-chat-composer" class="u369-chat-composer">
-      <textarea id="u369-chat-input" class="u369-chat-input" rows="1" data-i18n-placeholder="messageUnit369" data-i18n-aria="messageUnit369" aria-label="Message Unit369" placeholder="Message Unit369"></textarea>
-      <button type="button" id="u369-chat-send" class="u369-chat-send" data-i18n-aria="send" aria-label="Send">↑</button>
+  <div id="u369-offline" class="u369-offline" role="status" aria-live="polite" data-i18n="offline">Offline — server actions are unavailable until connection returns.</div>
+
+  <aside id="u369-sidebar" class="u369-sidebar" aria-label="Unit369">
+    <div class="u369-side-top">
+      <div class="u369-brand">
+        <img class="u369-brand-logo" src="/unit369-192.png?v=2026.08.23.1" alt="" width="30" height="30">
+        <span>Unit369</span>
+      </div>
+      <button type="button" class="u369-newchat" id="u369-shell-new">
+        <span aria-hidden="true">＋</span>
+        <span data-i18n="newChat">New chat</span>
+      </button>
     </div>
-    <div id="u369-chat-status" class="u369-chat-status" aria-live="polite"></div>
-  </section>
-  <section class="page" id="page-product">
-    <div class="section-title" data-i18n="products">Products</div>
-    <div class="section-sub" data-i18n="productIntro">Create and review products before saving.</div>
-    <form id="f" novalidate>
-      <label data-i18n="name">Name</label><input type="text" name="title" required>
-      <label data-i18n="price">Price</label><input type="text" name="price" inputmode="decimal" required>
-      <label data-i18n="sizes">Sizes</label><input type="text" name="sizes" required>
-      <label data-i18n="description">Description</label><textarea name="description"></textarea>
-      <label data-i18n="status">Status</label><select name="status"><option value="DRAFT" data-i18n="draft">Draft</option><option value="ACTIVE" data-i18n="active">Active</option></select>
-      <label data-i18n="sku">SKU</label><input type="text" name="sku">
-      <label data-i18n="type">Type</label><input type="text" name="productType">
-      <label data-i18n="vendor">Vendor</label><input type="text" name="vendor">
-      <label data-i18n="tags">Tags</label><input type="text" name="tags">
-      <label data-i18n="images">Images</label><input type="file" name="images" accept="image/*" multiple>
-      <label data-i18n="video">Video</label><input type="file" name="video" accept="video/*">
-      <button type="submit" class="primary" data-i18n="reviewProduct">Review product</button>
-    </form>
-    <div id="pStatus" aria-live="polite"></div>
-  </section>
-  <section class="page" id="page-settings">
-    <div class="section-title" data-i18n="settings">Settings</div>
-    <div class="section-sub" data-i18n="settingsIntro">Application, language and integration settings.</div>
-  </section>
-</main>
-<script>if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(()=>{})}</script>
+
+    <div class="u369-side-scroll">
+      <div class="u369-side-section" data-i18n="workspace">Workspace</div>
+      <nav class="u369-side-nav" aria-label="Workspace">
+        <button type="button" class="u369-side-item active" data-shell-page="team" aria-current="page">
+          <span class="u369-nav-icon" aria-hidden="true">✦</span>
+          <span data-i18n="chat">Chat</span>
+        </button>
+        <button type="button" class="u369-side-item" data-shell-page="product">
+          <span class="u369-nav-icon" aria-hidden="true">▦</span>
+          <span data-i18n="products">Products</span>
+        </button>
+        <button type="button" class="u369-side-item" data-shell-page="settings">
+          <span class="u369-nav-icon" aria-hidden="true">⚙</span>
+          <span data-i18n="settings">Settings</span>
+        </button>
+      </nav>
+
+      <div class="u369-side-section" data-i18n="aiMode">AI mode</div>
+      <div class="u369-side-modes" role="group" aria-label="AI mode">
+        <button type="button" class="u369-mode-btn" data-chat-mode="side">
+          <span data-i18n="sideBySide">Side by side</span>
+        </button>
+        <button type="button" class="u369-mode-btn active" data-chat-mode="combine">
+          <span data-i18n="combinedAnswer">Combined answer</span>
+        </button>
+        <button type="button" class="u369-mode-btn" data-chat-mode="critique">
+          <span data-i18n="crossCritique">Cross-critique</span>
+        </button>
+      </div>
+
+      <div class="u369-side-section" data-i18n="providers">Providers</div>
+      <div id="u369-side-providers" class="u369-side-providers" aria-live="polite"></div>
+
+      <div class="u369-side-section" data-i18n="chatHistory">Chat history</div>
+      <div id="u369-side-history" class="u369-side-history"></div>
+    </div>
+
+    <div class="u369-side-bottom">
+      <span class="u369-runtime-badge">Unit369</span>
+      <span id="u369-side-language" class="u369-side-language">English</span>
+    </div>
+  </aside>
+
+  <div id="u369-drawer-shade" class="u369-drawer-shade" aria-hidden="true"></div>
+
+  <header id="u369-topbar" class="u369-topbar">
+    <button type="button" id="u369-menu" class="u369-menu" data-i18n-aria="openMenu" aria-label="Open menu" aria-controls="u369-sidebar" aria-expanded="false">☰</button>
+    <div id="u369-work-title" class="u369-work-title" data-i18n="chat">Chat</div>
+    <div class="u369-work-sub">Unit369</div>
+  </header>
+
+  <main id="u369-main" class="u369-main">
+    <section class="page active" id="page-team" data-page="team" aria-labelledby="u369-work-title">
+      <div class="u369-conversation-wrap" id="u369-conversation-wrap">
+        <div id="u369-conversation" class="u369-conversation" aria-live="polite"></div>
+      </div>
+      <div class="u369-composer-zone">
+        <div id="u369-chat-composer" class="u369-chat-composer">
+          <textarea id="u369-chat-input" class="u369-chat-input" rows="1" maxlength="24000" data-i18n-placeholder="messageUnit369" data-i18n-aria="messageUnit369" aria-label="Message Unit369" placeholder="Message Unit369"></textarea>
+          <button type="button" id="u369-chat-send" class="u369-chat-send" data-i18n-aria="send" aria-label="Send">
+            <span aria-hidden="true">↑</span>
+          </button>
+        </div>
+        <div id="u369-chat-status" class="u369-chat-status" aria-live="polite"></div>
+        <div class="u369-chat-note" data-i18n="aiMayMakeMistakes">AI can make mistakes. Review important information.</div>
+      </div>
+    </section>
+
+    <section class="page" id="page-product" data-page="product" aria-labelledby="u369-product-title">
+      <div class="u369-page-container">
+        <div class="u369-page-head">
+          <div>
+            <h1 id="u369-product-title" class="section-title" data-i18n="products">Products</h1>
+            <p class="section-sub" data-i18n="productIntro">Create and review products before saving.</p>
+          </div>
+          <button type="button" id="u369-products-refresh" class="u369-secondary-btn" data-i18n="refresh">Refresh</button>
+        </div>
+
+        <div id="pws" class="pws">
+          <div class="pws-head" aria-label="Product workflow">
+            <div class="pws-step on"><span>1</span><span data-i18n="input">Input</span></div>
+            <div class="pws-step"><span>2</span><span data-i18n="aiAssist">AI assist</span></div>
+            <div class="pws-step"><span>3</span><span data-i18n="review">Review</span></div>
+            <div class="pws-step"><span>4</span><span data-i18n="save">Save</span></div>
+          </div>
+          <div class="pws-body">
+            <p class="pws-note" data-i18n="safeDraftNote">Draft is the safe default. AI may improve copy but never replaces factual review.</p>
+            <div id="pws-checks" class="pws-checks" aria-live="polite"></div>
+            <div class="pws-actions">
+              <button type="button" class="u369-secondary-btn" id="pws-ai" data-i18n="aiPrepareDraft">AI prepare draft</button>
+            </div>
+            <div id="pws-msg" class="pws-message" aria-live="polite"></div>
+            <div id="pws-preview" class="pws-preview" aria-live="polite"></div>
+          </div>
+        </div>
+
+        <form id="f" class="u369-product-form" novalidate>
+          <div class="u369-form-grid">
+            <label class="u369-field u369-field-wide">
+              <span data-i18n="name">Name</span>
+              <input type="text" name="title" maxlength="240" autocomplete="off" required>
+            </label>
+            <label class="u369-field">
+              <span data-i18n="price">Price</span>
+              <input type="text" name="price" inputmode="decimal" autocomplete="off" required>
+            </label>
+            <label class="u369-field">
+              <span data-i18n="status">Status</span>
+              <select name="status">
+                <option value="DRAFT" data-i18n="draft">Draft</option>
+                <option value="ACTIVE" data-i18n="active">Active</option>
+              </select>
+            </label>
+            <label class="u369-field u369-field-wide">
+              <span data-i18n="sizes">Sizes</span>
+              <input type="text" name="sizes" maxlength="500" data-i18n-placeholder="sizesPlaceholder" placeholder="S, M, L" required>
+            </label>
+            <label class="u369-field u369-field-wide">
+              <span data-i18n="description">Description</span>
+              <textarea name="description" rows="6" maxlength="12000"></textarea>
+            </label>
+            <label class="u369-field">
+              <span data-i18n="sku">SKU</span>
+              <input type="text" name="sku" maxlength="120" dir="ltr">
+            </label>
+            <label class="u369-field">
+              <span data-i18n="type">Type</span>
+              <input type="text" name="productType" maxlength="180">
+            </label>
+            <label class="u369-field">
+              <span data-i18n="vendor">Vendor</span>
+              <input type="text" name="vendor" maxlength="180">
+            </label>
+            <label class="u369-field">
+              <span data-i18n="tags">Tags</span>
+              <input type="text" name="tags" maxlength="800" data-i18n-placeholder="tagsPlaceholder" placeholder="tag one, tag two">
+            </label>
+            <label class="u369-field">
+              <span data-i18n="images">Images</span>
+              <input type="file" name="images" accept="image/jpeg,image/png,image/webp" multiple>
+            </label>
+            <label class="u369-field">
+              <span data-i18n="video">Video</span>
+              <input type="file" name="video" accept="video/mp4,video/webm,video/quicktime">
+            </label>
+          </div>
+          <button type="submit" class="u369-primary-btn" data-i18n="reviewProduct">Review product</button>
+        </form>
+        <div id="pStatus" class="u369-form-status" aria-live="polite"></div>
+
+        <section class="u369-recent-products" aria-labelledby="u369-recent-products-title">
+          <h2 id="u369-recent-products-title" data-i18n="recentProducts">Recent products</h2>
+          <div id="u369-products-list" class="u369-products-list" aria-live="polite"></div>
+        </section>
+      </div>
+    </section>
+
+    <section class="page" id="page-settings" data-page="settings" aria-labelledby="u369-settings-title">
+      <div class="u369-page-container u369-settings-container">
+        <h1 id="u369-settings-title" class="section-title" data-i18n="settings">Settings</h1>
+        <p class="section-sub" data-i18n="settingsIntro">Application, language and integration settings.</p>
+
+        <div id="u369-lang-all" class="ss-card">
+          <h2 class="ss-title" data-i18n="applicationLanguage">Application language</h2>
+          <label class="u369-field">
+            <span class="sr-only" data-i18n="applicationLanguage">Application language</span>
+            <select id="u369-lang-all-s" class="ss-select" aria-label="Application language"></select>
+          </label>
+          <input id="u369-lang-custom" class="ss-input" type="text" maxlength="80" hidden data-i18n-placeholder="languageName" placeholder="Language name / BCP-47">
+          <p class="ss-note" data-i18n="languageScopeNote">The selected language controls the complete interface and AI replies.</p>
+        </div>
+
+        <div id="ss-root">
+          <section class="ss-card">
+            <div class="ss-card-head">
+              <h2 class="ss-title" data-i18n="integrations">Integrations</h2>
+              <button id="ss-refresh" type="button" class="u369-secondary-btn" data-i18n="refresh">Refresh</button>
+            </div>
+            <div id="ss-grid" class="ss-grid" aria-live="polite"></div>
+            <p class="ss-note" data-i18n="secretsNote">API secrets remain server-side. This screen only reports connection status.</p>
+          </section>
+
+          <section class="ss-card">
+            <h2 class="ss-title" data-i18n="application">Application</h2>
+            <label class="ss-toggle">
+              <span data-i18n="compactInterface">Compact interface</span>
+              <input id="ss-compact" class="ss-check" type="checkbox">
+            </label>
+            <label class="u369-field ss-field">
+              <span data-i18n="defaultProductStatus">Default product status</span>
+              <select id="ss-product" class="ss-select">
+                <option value="DRAFT" data-i18n="draft">Draft</option>
+                <option value="ACTIVE" data-i18n="active">Active</option>
+              </select>
+            </label>
+          </section>
+
+          <section class="ss-card">
+            <h2 class="ss-title" data-i18n="about">About Unit369</h2>
+            <div class="ss-row-static">
+              <span data-i18n="version">Version</span>
+              <strong id="ss-version">2026.08.23.1</strong>
+            </div>
+            <button id="ss-reset" type="button" class="u369-secondary-btn" data-i18n="resetPreferences">Reset local preferences</button>
+          </section>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <noscript>This application requires JavaScript.</noscript>
+  <script src="/runtime.js?v=2026.08.23.1" defer></script>
 </body>
 </html>

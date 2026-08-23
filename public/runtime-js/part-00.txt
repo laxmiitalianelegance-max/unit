@@ -1,0 +1,385 @@
+(() => {
+  "use strict";
+
+  if (window.__UNIT369_RUNTIME__) return;
+
+  const APP_VERSION = "2026.08.23.1";
+  window.__UNIT369_RUNTIME__ = { version: APP_VERSION, owner: "consolidated-runtime" };
+
+  const $ = (selector, root = document) => root.querySelector(selector);
+  const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
+
+  const KEYS = Object.freeze({
+    sessions: "unit369-team-safe-v1",
+    current: "unit369-team-safe-current-v1",
+    mode: "unit369-chat-mode",
+    language: "u369-lang-all-v4",
+    languageCache: "u369-ui-i18n-v5-",
+    settings: "unit369-settings-safe-v2"
+  });
+
+  const BASE = Object.freeze({
+    chat: "Chat",
+    products: "Products",
+    settings: "Settings",
+    newChat: "New chat",
+    workspace: "Workspace",
+    aiMode: "AI mode",
+    providers: "Providers",
+    chatHistory: "Chat history",
+    sideBySide: "Side by side",
+    combinedAnswer: "Combined answer",
+    crossCritique: "Cross-critique",
+    on: "On",
+    optional: "Optional",
+    noHistory: "No conversations yet",
+    howHelp: "How can I help?",
+    howHelpSub: "Ask a question and Unit369 will coordinate the available AI team.",
+    messageUnit369: "Message Unit369",
+    send: "Send",
+    copy: "Copy",
+    copied: "Copied",
+    thinking: "Thinking…",
+    aiTeamDetails: "AI Team details",
+    noAnswer: "No answer available.",
+    problemAnswer: "There was a problem generating the answer. Please try again.",
+    noProvider: "No AI provider is currently connected.",
+    integrations: "Integrations",
+    refresh: "Refresh",
+    secretsNote: "API secrets remain server-side. This screen only reports connection status.",
+    connected: "Connected",
+    notConnected: "Not connected",
+    application: "Application",
+    compactInterface: "Compact interface",
+    defaultProductStatus: "Default product status",
+    about: "About Unit369",
+    version: "Version",
+    resetPreferences: "Reset local preferences",
+    preferencesReset: "Local preferences were reset.",
+    input: "Input",
+    aiAssist: "AI assist",
+    review: "Review",
+    save: "Save",
+    safeDraftNote: "Draft is the safe default. AI may improve copy but never replaces factual review.",
+    name: "Name",
+    price: "Price",
+    variants: "Variants",
+    description: "Description",
+    media: "Media",
+    aiPrepareDraft: "AI prepare draft",
+    reviewProduct: "Review product",
+    preparing: "Preparing…",
+    aiDraftPrepared: "AI draft prepared. Review every field before saving.",
+    addProductFirst: "Add a product name or rough notes first.",
+    finalPreview: "Final preview",
+    sizes: "Sizes",
+    sizesPlaceholder: "S, M, L",
+    status: "Status",
+    draft: "Draft",
+    active: "Active",
+    sku: "SKU",
+    type: "Type",
+    vendor: "Vendor",
+    tags: "Tags",
+    tagsPlaceholder: "tag one, tag two",
+    images: "Images",
+    video: "Video",
+    publishImmediately: "This will publish immediately.",
+    savedDraft: "This will be saved as Draft.",
+    edit: "Edit",
+    confirmSave: "Confirm & save",
+    saving: "Saving…",
+    productSaved: "Product saved.",
+    requiredFields: "Name, valid price and at least one size are required.",
+    publishConfirm: "This product will be published immediately. Continue?",
+    applicationLanguage: "Application language",
+    automatic: "Automatic",
+    custom: "Custom",
+    languageName: "Language name / BCP-47",
+    languageScopeNote: "The selected language controls the complete interface and AI replies.",
+    openMenu: "Open menu",
+    closeMenu: "Close menu",
+    productIntro: "Create and review products before saving.",
+    settingsIntro: "Application, language and integration settings.",
+    offline: "Offline — server actions are unavailable until connection returns.",
+    aiMayMakeMistakes: "AI can make mistakes. Review important information.",
+    recentProducts: "Recent products",
+    noProducts: "No products were returned.",
+    productsUnavailable: "Products are currently unavailable.",
+    loading: "Loading…",
+    image: "Image",
+    unknown: "Unknown",
+    requestFailed: "The request failed. Please try again.",
+    networkError: "A network error occurred. Check the connection and try again.",
+    responseEmpty: "The AI returned an empty response.",
+    sessionUntitled: "New chat",
+    productChecks: "Product checks",
+    ready: "Ready",
+    missing: "Missing",
+    clearChat: "Clear chat history",
+    chatCleared: "Chat history was cleared.",
+    confirmClearChat: "Clear all local chat history?",
+    providerClaude: "Claude",
+    providerOpenAI: "ChatGPT",
+    providerGrok: "Grok",
+    providerWorkers: "Workers AI",
+    providerShopify: "Shopify",
+    selectedLanguage: "Selected language"
+  });
+
+  const SR = Object.freeze({
+    chat: "Ćaskanje",
+    products: "Proizvodi",
+    settings: "Podešavanja",
+    newChat: "Novi razgovor",
+    workspace: "Radni prostor",
+    aiMode: "AI režim",
+    providers: "Provajderi",
+    chatHistory: "Istorija razgovora",
+    sideBySide: "Jedan pored drugog",
+    combinedAnswer: "Spojeni odgovor",
+    crossCritique: "Unakrsna kritika",
+    on: "Uključeno",
+    optional: "Opciono",
+    noHistory: "Još nema razgovora",
+    howHelp: "Kako mogu da pomognem?",
+    howHelpSub: "Postavi pitanje, a Unit369 će uskladiti dostupni AI tim.",
+    messageUnit369: "Poruka za Unit369",
+    send: "Pošalji",
+    copy: "Kopiraj",
+    copied: "Kopirano",
+    thinking: "Razmišljam…",
+    aiTeamDetails: "Detalji AI tima",
+    noAnswer: "Odgovor nije dostupan.",
+    problemAnswer: "Došlo je do problema pri generisanju odgovora. Pokušaj ponovo.",
+    noProvider: "Trenutno nije povezan nijedan AI provajder.",
+    integrations: "Integracije",
+    refresh: "Osveži",
+    secretsNote: "API tajne ostaju na serveru. Ovaj ekran prikazuje samo stanje veze.",
+    connected: "Povezano",
+    notConnected: "Nije povezano",
+    application: "Aplikacija",
+    compactInterface: "Kompaktan interfejs",
+    defaultProductStatus: "Podrazumevani status proizvoda",
+    about: "O aplikaciji Unit369",
+    version: "Verzija",
+    resetPreferences: "Vrati lokalna podešavanja",
+    preferencesReset: "Lokalna podešavanja su vraćena.",
+    input: "Unos",
+    aiAssist: "AI pomoć",
+    review: "Provera",
+    save: "Čuvanje",
+    safeDraftNote: "Nacrt je bezbedna početna opcija. AI može da poboljša tekst, ali ne zamenjuje proveru činjenica.",
+    name: "Naziv",
+    price: "Cena",
+    variants: "Varijante",
+    description: "Opis",
+    media: "Mediji",
+    aiPrepareDraft: "AI priprema nacrta",
+    reviewProduct: "Pregledaj proizvod",
+    preparing: "Pripremam…",
+    aiDraftPrepared: "AI nacrt je pripremljen. Proveri svako polje pre čuvanja.",
+    addProductFirst: "Prvo unesi naziv proizvoda ili grube beleške.",
+    finalPreview: "Završni pregled",
+    sizes: "Veličine",
+    sizesPlaceholder: "S, M, L",
+    status: "Status",
+    draft: "Nacrt",
+    active: "Aktivan",
+    sku: "SKU",
+    type: "Tip",
+    vendor: "Dobavljač",
+    tags: "Oznake",
+    tagsPlaceholder: "oznaka jedan, oznaka dva",
+    images: "Slike",
+    video: "Video",
+    publishImmediately: "Ovo će odmah objaviti proizvod.",
+    savedDraft: "Ovo će biti sačuvano kao nacrt.",
+    edit: "Izmeni",
+    confirmSave: "Potvrdi i sačuvaj",
+    saving: "Čuvam…",
+    productSaved: "Proizvod je sačuvan.",
+    requiredFields: "Naziv, ispravna cena i najmanje jedna veličina su obavezni.",
+    publishConfirm: "Ovaj proizvod će odmah biti objavljen. Nastaviti?",
+    applicationLanguage: "Jezik aplikacije",
+    automatic: "Automatski",
+    custom: "Prilagođeni",
+    languageName: "Naziv jezika / BCP-47",
+    languageScopeNote: "Izabrani jezik važi za ceo interfejs i AI odgovore.",
+    openMenu: "Otvori meni",
+    closeMenu: "Zatvori meni",
+    productIntro: "Napravi i proveri proizvod pre čuvanja.",
+    settingsIntro: "Podešavanja aplikacije, jezika i integracija.",
+    offline: "Nema veze — serverske radnje nisu dostupne dok se veza ne uspostavi.",
+    aiMayMakeMistakes: "AI može da pogreši. Proveri važne informacije.",
+    recentProducts: "Nedavni proizvodi",
+    noProducts: "Nije vraćen nijedan proizvod.",
+    productsUnavailable: "Proizvodi trenutno nisu dostupni.",
+    loading: "Učitavam…",
+    image: "Slika",
+    unknown: "Nepoznato",
+    requestFailed: "Zahtev nije uspeo. Pokušaj ponovo.",
+    networkError: "Došlo je do mrežne greške. Proveri vezu i pokušaj ponovo.",
+    responseEmpty: "AI je vratio prazan odgovor.",
+    sessionUntitled: "Novi razgovor",
+    productChecks: "Provera proizvoda",
+    ready: "Spremno",
+    missing: "Nedostaje",
+    clearChat: "Obriši istoriju razgovora",
+    chatCleared: "Istorija razgovora je obrisana.",
+    confirmClearChat: "Obrisati celu lokalnu istoriju razgovora?",
+    providerClaude: "Claude",
+    providerOpenAI: "ChatGPT",
+    providerGrok: "Grok",
+    providerWorkers: "Workers AI",
+    providerShopify: "Shopify",
+    selectedLanguage: "Izabrani jezik"
+  });
+
+  const LANGS = Object.freeze([
+    ["auto", "Automatic"],
+    ["af", "Afrikaans"],
+    ["sq", "Shqip"],
+    ["am", "አማርኛ"],
+    ["ar", "العربية"],
+    ["hy", "Հայերեն"],
+    ["az", "Azərbaycanca"],
+    ["bn", "বাংলা"],
+    ["bs", "Bosanski"],
+    ["bg", "Български"],
+    ["ca", "Català"],
+    ["zh-CN", "中文（简体）"],
+    ["zh-TW", "中文（繁體）"],
+    ["hr", "Hrvatski"],
+    ["cs", "Čeština"],
+    ["da", "Dansk"],
+    ["nl", "Nederlands"],
+    ["en", "English"],
+    ["et", "Eesti"],
+    ["fi", "Suomi"],
+    ["fr", "Français"],
+    ["de", "Deutsch"],
+    ["el", "Ελληνικά"],
+    ["he", "עברית"],
+    ["hi", "हिन्दी"],
+    ["hu", "Magyar"],
+    ["id", "Bahasa Indonesia"],
+    ["it", "Italiano"],
+    ["ja", "日本語"],
+    ["ko", "한국어"],
+    ["ms", "Bahasa Melayu"],
+    ["no", "Norsk"],
+    ["fa", "فارسی"],
+    ["pl", "Polski"],
+    ["pt", "Português"],
+    ["ro", "Română"],
+    ["ru", "Русский"],
+    ["sr", "Srpski"],
+    ["sk", "Slovenčina"],
+    ["sl", "Slovenščina"],
+    ["es", "Español"],
+    ["sv", "Svenska"],
+    ["th", "ไทย"],
+    ["tr", "Türkçe"],
+    ["uk", "Українська"],
+    ["ur", "اردو"],
+    ["vi", "Tiếng Việt"],
+    ["custom", "Custom / BCP-47"]
+  ]);
+
+  const RTL = new Set(["ar", "fa", "he", "ur", "ps", "sd", "ug", "yi", "ckb", "dv"]);
+  const LONG_LOCALES = new Set(["de", "fi", "hu", "nl", "pl", "ru", "uk", "el", "tr", "cs", "sk"]);
+  const PROVIDER_NAMES = Object.freeze({
+    claude: "providerClaude",
+    openai: "providerOpenAI",
+    grok: "providerGrok",
+    workers: "providerWorkers",
+    workersAi: "providerWorkers",
+    shopify: "providerShopify"
+  });
+
+  let dictionary = { ...BASE };
+  let languageLoadToken = 0;
+  let providerStatus = null;
+  let sending = false;
+  let productBusy = false;
+  let productPreviewArmed = false;
+  let currentPage = "team";
+
+  function safeGet(key, fallback = "") {
+    try {
+      const value = localStorage.getItem(key);
+      return value == null ? fallback : value;
+    } catch {
+      return fallback;
+    }
+  }
+
+  function safeSet(key, value) {
+    try {
+      localStorage.setItem(key, value);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function safeRemove(key) {
+    try {
+      localStorage.removeItem(key);
+    } catch {
+      // Storage may be unavailable in private browser modes.
+    }
+  }
+
+  function parseStoredJson(key, fallback) {
+    try {
+      const parsed = JSON.parse(safeGet(key, ""));
+      return parsed == null ? fallback : parsed;
+    } catch {
+      return fallback;
+    }
+  }
+
+  function languageChoice() {
+    return safeGet(KEYS.language, "auto") || "auto";
+  }
+
+  function selectedLanguage() {
+    const choice = languageChoice();
+    if (choice === "auto") return navigator.language || "en";
+    return choice;
+  }
+
+  function languageCode(value = selectedLanguage()) {
+    return String(value || "en").toLowerCase().split("-")[0];
+  }
+
+  function t(key, fallback) {
+    return dictionary[key] || BASE[key] || fallback || key;
+  }
+
+  function setRootLanguage(language) {
+    const lang = String(language || "en").trim() || "en";
+    const code = languageCode(lang);
+    document.documentElement.lang = lang;
+    document.documentElement.dir = RTL.has(code) ? "rtl" : "ltr";
+    document.documentElement.classList.toggle("locale-long", LONG_LOCALES.has(code));
+    document.body.dataset.locale = lang;
+    const sideLanguage = $("#u369-side-language");
+    if (sideLanguage) sideLanguage.textContent = languageDisplayName(lang);
+  }
+
+  function languageDisplayName(language) {
+    const exact = LANGS.find(([value]) => value.toLowerCase() === String(language).toLowerCase());
+    if (exact) return exact[1];
+    try {
+      const names = new Intl.DisplayNames([language], { type: "language" });
+      return names.of(language) || language;
+    } catch {
+      return language;
+    }
+  }
+
+  function applyTranslations() {
+    $$('[data-i18n]').forEach((element) => {

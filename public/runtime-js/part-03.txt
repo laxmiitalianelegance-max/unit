@@ -1,0 +1,384 @@
+      const item = document.createElement("div");
+      item.className = "pws-check" + (checks[checkKey] ? " ok" : "");
+      item.textContent = (checks[checkKey] ? "✓ " : "○ ") + t(labelKey);
+      item.title = checks[checkKey] ? t("ready") : t("missing");
+      return item;
+    });
+    box.replaceChildren(...nodes);
+  }
+
+  function productMessage(message = "", type = "") {
+    const target = $("#pws-msg");
+    if (!target) return;
+    target.textContent = message;
+    target.className = "pws-message" + (type ? " " + type : "");
+  }
+
+  function formStatus(message = "", type = "") {
+    const target = $("#pStatus");
+    if (!target) return;
+    target.textContent = message;
+    target.className = "u369-form-status" + (type ? " " + type : "");
+  }
+
+  async function prepareProductDraft() {
+    if (productBusy) return;
+    const title = productValue("title");
+    const notes = productValue("description");
+    if (!title && !notes) {
+      productMessage(t("addProductFirst"), "err");
+      return;
+    }
+    productBusy = true;
+    const button = $("#pws-ai");
+    const original = button?.textContent || t("aiPrepareDraft");
+    if (button) {
+      button.disabled = true;
+      button.textContent = t("preparing");
+    }
+    productMessage("");
+    try {
+      const response = await fetch("/api/product-prepare-safe", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        cache: "no-store",
+        body: JSON.stringify({ title, notes, language: selectedLanguage() })
+      });
+      const payload = await response.json();
+      if (!response.ok || payload.error) throw new Error(payload.error || t("requestFailed"));
+      const draft = payload.draft || {};
+      setProductValue("title", draft.title || title);
+      if (draft.description) setProductValue("description", draft.description);
+      if (draft.productType) setProductValue("productType", draft.productType);
+      if (Array.isArray(draft.tags) && draft.tags.length) setProductValue("tags", draft.tags.join(", "));
+      if (Array.isArray(draft.suggestedSizes) && draft.suggestedSizes.length && !productValue("sizes")) {
+        setProductValue("sizes", draft.suggestedSizes.join(", "));
+      }
+      if (draft.skuBase && !productValue("sku")) setProductValue("sku", draft.skuBase);
+      productPreviewArmed = false;
+      renderProductChecks();
+      productMessage(t("aiDraftPrepared"), "ok");
+    } catch (error) {
+      productMessage(String(error?.message || error || t("requestFailed")), "err");
+    } finally {
+      productBusy = false;
+      if (button) {
+        button.disabled = false;
+        button.textContent = t("aiPrepareDraft", original);
+      }
+    }
+  }
+
+  function previewProduct() {
+    const state = productState();
+    const checks = productChecks(state);
+    const preview = $("#pws-preview");
+    if (!preview) return;
+    preview.replaceChildren();
+    preview.classList.add("open");
+
+    if (!checks.title || !checks.price || !checks.sizes) {
+      const error = document.createElement("div");
+      error.className = "pws-message err";
+      error.textContent = t("requiredFields");
+      preview.appendChild(error);
+      productPreviewArmed = false;
+      return;
+    }
+
+    const title = document.createElement("h3");
+    title.className = "pws-preview-title";
+    title.textContent = t("finalPreview");
+    preview.appendChild(title);
+
+    const definitions = [
+      ["name", state.title],
+      ["price", state.price],
+      ["sizes", state.sizes],
+      ["status", state.status === "ACTIVE" ? t("active") : t("draft")],
+      ["sku", state.sku || "—"],
+      ["type", state.productType || "—"],
+      ["vendor", state.vendor || "—"],
+      ["tags", state.tags || "—"],
+      ["images", String(state.images)],
+      ["video", String(state.video)]
+    ];
+    for (const [key, value] of definitions) {
+      const row = document.createElement("div");
+      row.className = "pws-row";
+      const label = document.createElement("span");
+      label.textContent = t(key);
+      const strong = document.createElement("strong");
+      strong.textContent = value;
+      row.append(label, strong);
+      preview.appendChild(row);
+    }
+
+    const note = document.createElement("div");
+    note.className = state.status === "ACTIVE" ? "pws-warn" : "pws-note";
+    note.textContent = state.status === "ACTIVE" ? t("publishImmediately") : t("savedDraft");
+    preview.appendChild(note);
+
+    const actions = document.createElement("div");
+    actions.className = "pws-actions";
+    actions.style.marginTop = "12px";
+    const edit = document.createElement("button");
+    edit.type = "button";
+    edit.className = "u369-secondary-btn";
+    edit.textContent = t("edit");
+    edit.addEventListener("click", () => {
+      productPreviewArmed = false;
+      preview.classList.remove("open");
+      productField("title")?.focus();
+    });
+    const save = document.createElement("button");
+    save.type = "button";
+    save.id = "pws-save";
+    save.className = "u369-primary-btn";
+    save.style.marginTop = "0";
+    save.textContent = t("confirmSave");
+    save.addEventListener("click", saveProduct);
+    actions.append(edit, save);
+    preview.appendChild(actions);
+    productPreviewArmed = true;
+    preview.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
+  async function saveProduct() {
+    if (!productPreviewArmed || productBusy) return;
+    const form = $("#f");
+    if (!form) return;
+    if (productValue("status") === "ACTIVE" && !window.confirm(t("publishConfirm"))) return;
+    productBusy = true;
+    const button = $("#pws-save");
+    if (button) {
+      button.disabled = true;
+      button.textContent = t("saving");
+    }
+    formStatus("");
+    try {
+      const response = await fetch("/api/create-product", {
+        method: "POST",
+        cache: "no-store",
+        body: new FormData(form)
+      });
+      const payload = await response.json();
+      if (!response.ok || payload.error) throw new Error(payload.error || t("requestFailed"));
+      formStatus(t("productSaved"), "ok");
+      productMessage(t("productSaved"), "ok");
+      productPreviewArmed = false;
+      $("#pws-preview")?.classList.remove("open");
+      form.reset();
+      const status = productField("status");
+      if (status) {
+        status.dataset.userChanged = "0";
+        status.value = settingsState.productDefault;
+      }
+      renderProductChecks();
+      loadRecentProducts(true);
+    } catch (error) {
+      const message = String(error?.message || error || t("requestFailed"));
+      formStatus(message, "err");
+      productMessage(message, "err");
+    } finally {
+      productBusy = false;
+      if (button) {
+        button.disabled = false;
+        button.textContent = t("confirmSave");
+      }
+    }
+  }
+
+  let recentProductsLoaded = false;
+
+  async function loadRecentProducts(force = false) {
+    const box = $("#u369-products-list");
+    if (!box || (recentProductsLoaded && !force)) return;
+    recentProductsLoaded = true;
+    const loading = document.createElement("div");
+    loading.className = "u369-empty-list";
+    loading.textContent = t("loading");
+    box.replaceChildren(loading);
+    try {
+      const response = await fetch("/api/products", { cache: "no-store" });
+      const payload = await response.json();
+      if (!response.ok || payload.error) throw new Error(payload.error || t("productsUnavailable"));
+      const products = Array.isArray(payload.products) ? payload.products : [];
+      if (!products.length) {
+        const empty = document.createElement("div");
+        empty.className = "u369-empty-list";
+        empty.textContent = t("noProducts");
+        box.replaceChildren(empty);
+        return;
+      }
+      const cards = products.slice(0, 20).map((product) => {
+        const card = document.createElement("article");
+        card.className = "u369-product-card";
+        const thumb = document.createElement("div");
+        thumb.className = "u369-product-thumb";
+        const imageUrl = product?.featuredMedia?.preview?.image?.url;
+        if (imageUrl) {
+          const image = document.createElement("img");
+          image.src = imageUrl;
+          image.alt = product.title || t("image");
+          image.loading = "lazy";
+          thumb.appendChild(image);
+        } else {
+          thumb.textContent = "369";
+        }
+        const info = document.createElement("div");
+        info.className = "u369-product-info";
+        const name = document.createElement("div");
+        name.className = "u369-product-name";
+        name.textContent = product.title || t("unknown");
+        const meta = document.createElement("div");
+        meta.className = "u369-product-meta";
+        const parts = [product.status, product.productType, product.vendor].filter(Boolean);
+        meta.textContent = parts.join(" · ") || "—";
+        info.append(name, meta);
+        card.append(thumb, info);
+        return card;
+      });
+      box.replaceChildren(...cards);
+    } catch {
+      recentProductsLoaded = false;
+      const error = document.createElement("div");
+      error.className = "u369-list-error";
+      error.textContent = t("productsUnavailable");
+      box.replaceChildren(error);
+    }
+  }
+
+  function updateNetworkState() {
+    const banner = $("#u369-offline");
+    if (!banner) return;
+    banner.classList.toggle("show", !navigator.onLine);
+  }
+
+  function registerServiceWorker() {
+    if (!("serviceWorker" in navigator)) return;
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("/sw.js?v=" + encodeURIComponent(APP_VERSION), { scope: "/" })
+        .then((registration) => registration.update())
+        .catch(() => {});
+    }, { once: true });
+  }
+
+  function bindEvents() {
+    $$('[data-shell-page]').forEach((button) => {
+      button.addEventListener("click", () => showPage(button.dataset.shellPage));
+    });
+    $("#u369-shell-new")?.addEventListener("click", newChat);
+    $("#u369-menu")?.addEventListener("click", () => {
+      const open = $("#u369-sidebar")?.classList.contains("open");
+      if (open) closeDrawer();
+      else openDrawer();
+    });
+    $("#u369-drawer-shade")?.addEventListener("click", closeDrawer);
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") closeDrawer();
+    });
+
+    $$('[data-chat-mode]').forEach((button) => {
+      button.addEventListener("click", () => {
+        const mode = button.dataset.chatMode || "combine";
+        safeSet(KEYS.mode, mode);
+        syncModes();
+        window.dispatchEvent(new CustomEvent("unit369-mode-changed", { detail: { mode } }));
+      });
+    });
+
+    const input = $("#u369-chat-input");
+    input?.addEventListener("input", resizeComposer);
+    input?.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
+        event.preventDefault();
+        sendMessage();
+      }
+    });
+    $("#u369-chat-send")?.addEventListener("click", sendMessage);
+
+    const form = $("#f");
+    form?.addEventListener("submit", (event) => {
+      event.preventDefault();
+      previewProduct();
+    });
+    form?.addEventListener("input", () => {
+      productPreviewArmed = false;
+      renderProductChecks();
+    });
+    form?.addEventListener("change", (event) => {
+      productPreviewArmed = false;
+      if (event.target?.name === "status") event.target.dataset.userChanged = "1";
+      renderProductChecks();
+    });
+    $("#pws-ai")?.addEventListener("click", prepareProductDraft);
+    $("#u369-products-refresh")?.addEventListener("click", () => loadRecentProducts(true));
+
+    $("#ss-refresh")?.addEventListener("click", () => refreshProviderStatus(true));
+    $("#ss-compact")?.addEventListener("change", (event) => {
+      settingsState.compact = Boolean(event.target.checked);
+      saveSettings();
+    });
+    $("#ss-product")?.addEventListener("change", (event) => {
+      settingsState.productDefault = event.target.value === "ACTIVE" ? "ACTIVE" : "DRAFT";
+      const status = productField("status");
+      if (status) status.dataset.userChanged = "0";
+      saveSettings();
+    });
+    $("#ss-reset")?.addEventListener("click", resetPreferences);
+
+    window.addEventListener("online", updateNetworkState);
+    window.addEventListener("offline", updateNetworkState);
+    window.addEventListener("storage", (event) => {
+      if (event.key === KEYS.sessions || event.key === KEYS.current) {
+        renderHistory();
+        renderConversation(false);
+      }
+      if (event.key === KEYS.language) {
+        syncLanguageControl();
+        loadLanguage(true);
+      }
+      if (event.key === KEYS.settings) {
+        settingsState = loadSettings();
+        applySettings();
+      }
+    });
+    window.addEventListener("unit369-chat-updated", renderHistory);
+  }
+
+  function syncModes() {
+    const mode = ["side", "combine", "critique"].includes(safeGet(KEYS.mode, "combine"))
+      ? safeGet(KEYS.mode, "combine")
+      : "combine";
+    $$('[data-chat-mode]').forEach((button) => {
+      button.classList.toggle("active", button.dataset.chatMode === mode);
+      button.setAttribute("aria-pressed", button.dataset.chatMode === mode ? "true" : "false");
+    });
+  }
+
+  function boot() {
+    mountLanguageOptions();
+    bindEvents();
+    syncModes();
+    applySettings();
+    updateNetworkState();
+    renderProviderLists();
+    renderSettingsStatus();
+    currentSessionBundle();
+    renderHistory();
+    renderConversation(false);
+    renderProductChecks();
+    resizeComposer();
+    showPage(document.body.dataset.currentPage || "team");
+    loadLanguage(true);
+    refreshProviderStatus(true);
+    registerServiceWorker();
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", boot, { once: true });
+  } else {
+    boot();
+  }
+})();

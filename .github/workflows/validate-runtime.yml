@@ -1,0 +1,78 @@
+name: Validate consolidated Unit369 runtime
+
+on:
+  push:
+    branches:
+      - main
+      - fix/consolidated-runtime-20260823
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Verify the single production owner
+        run: |
+          set -euo pipefail
+          node --check src/runtime.js
+          node --check src/unit369.js
+          node --check src/worker.js
+          node --check src/enhancements.js
+          cat public/runtime-js/*.txt > /tmp/unit369-runtime.js
+          node --check /tmp/unit369-runtime.js
+          grep -Fxq 'main = "src/runtime.js"' wrangler.toml
+          grep -Fq 'import app from "./worker.js"' src/enhancements.js
+          ! grep -Eq 'chat-final-safe|chat-runtime-safe|chat-language-safe|i18n-coordinator-safe|conversation-safe|app-shell-safe|layout-safe|settings-safe|product-workflow-safe' src/runtime.js
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          html = Path('src/app.html').read_text()
+          assert len(re.findall(r'id="u369-sidebar"', html)) == 1
+          assert len(re.findall(r'id="u369-chat-composer"', html)) == 1
+          assert len(re.findall(r'id="u369-lang-all"', html)) == 1
+          assert len(re.findall(r'id="ss-root"', html)) == 1
+          assert len(re.findall(r'id="pws"', html)) == 1
+          assert html.count('/runtime.css?v=2026.08.23.1') == 1
+          assert html.count('/runtime.js?v=2026.08.23.1') == 1
+          forbidden = ['u369-shell-style','u369-conversation-style','u369-i18n-all-style','u369-chat-final-style','id="sendBtn"','id="prompt"','id="panels"']
+          for value in forbidden:
+              assert value not in html, value
+          print('static ownership checks passed')
+          PY
+
+      - name: Wrangler dry-run build
+        run: npx --yes wrangler@4 deploy --dry-run --outdir .wrangler-dist
+
+      - name: Runtime, mobile UI, chat and language smoke test
+        run: |
+          set -euo pipefail
+          sed 's/compatibility_date = "2026-08-19"/compatibility_date = "2026-05-03"/' wrangler.toml > wrangler.smoke.toml
+          npx --yes wrangler@4 dev --config wrangler.smoke.toml --local --ip 127.0.0.1 --port 8787 >/tmp/wrangler.log 2>&1 &
+          WPID=$!
+          trap 'kill $WPID 2>/dev/null || true; cat /tmp/wrangler.log' EXIT
+          for i in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:8787/ -o /tmp/root.html; then break; fi
+            sleep 1
+          done
+          test -s /tmp/root.html
+          curl -fsS -D /tmp/root.headers http://127.0.0.1:8787/ -o /dev/null
+          grep -Fiq 'x-unit369-runtime: 2026.08.23.1' /tmp/root.headers
+          grep -Fiq 'cache-control: no-store' /tmp/root.headers
+          test "$(grep -o 'id="u369-sidebar"' /tmp/root.html | wc -l)" -eq 1
+          test "$(grep -o 'id="u369-chat-composer"' /tmp/root.html | wc -l)" -eq 1
+          ! grep -Eq 'u369-shell-style|u369-conversation-style|u369-i18n-all-style|u369-chat-final-style|id="sendBtn"|id="prompt"|id="panels"' /tmp/root.html
+          curl -fsS http://127.0.0.1:8787/api/runtime | grep -Fq 'consolidated-runtime'
+          curl -fsS http://127.0.0.1:8787/sw.js | grep -Fq 'unit369-runtime-'
+
+          npm install --no-save playwright@1.55.0
+          npx playwright install chromium
+          node .github/scripts/runtime-smoke.cjs
