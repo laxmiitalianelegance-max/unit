@@ -1,11 +1,11 @@
 {
-  "sha": "8315f07404f008754c13a11ba5c3d9d3b3f38ce9",
+  "sha": "878cd5acced9e469a9ad71b41d032561418d27c1",
   "status": "failure",
   "stage": "health_response",
   "url": "https://unit.laxmiitalianelegance.workers.dev",
   "health": {
     "status": "not_ready",
-    "version": "2026.08.23.7",
+    "version": "2026.08.23.8",
     "core_ready": false,
     "auth_ready": true,
     "ai_operational": false,
@@ -22,8 +22,8 @@
           "error": "HTTP 400: Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits."
         }
       ],
-      "latency_ms": 289,
-      "checked_at": "2026-08-23T22:04:58.586Z"
+      "latency_ms": 505,
+      "checked_at": "2026-08-23T22:13:17.582Z"
     },
     "file_storage": "durable_object",
     "checks": {
@@ -39,5 +39,5 @@
     }
   },
   "error": null,
-  "recorded_at": "2026-08-23T22:05:20.765Z"
+  "recorded_at": "2026-08-23T22:13:40.144Z"
 }
