@@ -1,0 +1,59 @@
+name: Validate Unit369 product hardening
+on:
+  push:
+    branches: [staging-product-hardening]
+  pull_request:
+    branches: [main]
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 20}
+      - name: Build
+        run: |
+          set -e
+          node --check src/i18n-coordinator-safe.js
+          node --check src/final-native-bridge.js
+          node --check src/native-execution.js
+          npx --yes wrangler@4 deploy --dry-run --outdir .wrangler-dist
+      - name: Language offline and execution edge cases
+        run: |
+          set -e
+          sed 's/compatibility_date = "2026-08-19"/compatibility_date = "2026-05-03"/' wrangler.toml > wrangler.smoke.toml
+          npx --yes wrangler@4 dev --config wrangler.smoke.toml --local --ip 127.0.0.1 --port 8787 --var APP_SECRET:test-app-secret-369 --var ENCRYPTION_KEY:0123456789abcdef0123456789abcdef >/tmp/wrangler.log 2>&1 &
+          WPID=$!; trap 'kill $WPID 2>/dev/null || true' EXIT
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8787/ >/dev/null && break; sleep 1; done
+          npm install --no-save playwright@1.55.0
+          npx playwright install chromium
+          node <<'JS'
+          const crypto=require('crypto'),base='http://127.0.0.1:8787';
+          function b64(s){return Buffer.from(s).toString('base64url')}
+          function cookie(uid){const p=b64(JSON.stringify({uid,email:uid+'@test.local',name:uid,exp:Date.now()+3600000}));return `u369_account=${p}.${crypto.createHmac('sha256','test-app-secret-369').update(p).digest('base64url')}`}
+          async function req(uid,path,opt={}){const r=await fetch(base+path,{...opt,headers:{'content-type':'application/json',cookie:cookie(uid),...(opt.headers||{})}}),t=await r.text();let d;try{d=JSON.parse(t)}catch{d=t}return{r,d}}
+          (async()=>{
+            let x=await req('A','/api/native/execute',{method:'POST',body:'{}'});if(x.r.status!==400)throw Error('empty execute must be 400');
+            x=await req('A','/api/native/plan',{method:'POST',body:JSON.stringify({message:''})});if(!x.r.ok||!Array.isArray(x.d.steps))throw Error('empty planner must stay stable');
+            const browser=await require('playwright').chromium.launch({headless:true});
+            const ctx=await browser.newContext({viewport:{width:390,height:844},serviceWorkers:'allow'});const p=await ctx.newPage();p.setDefaultTimeout(7000);const errors=[];p.on('pageerror',e=>errors.push(String(e.message||e)));
+            await ctx.addCookies([{name:'u369_account',value:cookie('A').split('=')[1],domain:'127.0.0.1',path:'/'}]);
+            await p.route('**/api/ui-i18n',async r=>{const b=await r.request().postDataJSON().catch(()=>({}));const target=String(b.target||'');const sr={chat:'Ćaskanje',products:'Proizvodi',settings:'Podešavanja',applicationLanguage:'Jezik aplikacije',offline:'Nema mreže — serverske radnje nisu dostupne dok se veza ne vrati.'};const ar={chat:'الدردشة',products:'المنتجات',settings:'الإعدادات',applicationLanguage:'لغة التطبيق',offline:'غير متصل'};await r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({d:target.startsWith('ar')?ar:sr})})});
+            await p.goto(base+'/',{waitUntil:'domcontentloaded'});await p.waitForTimeout(500);
+            await p.evaluate(()=>localStorage.setItem('u369-lang-all-v4','sr'));await p.reload({waitUntil:'domcontentloaded'});await p.waitForTimeout(400);
+            if(await p.evaluate(()=>document.documentElement.lang)!=='sr')throw Error('Serbian lang root');if(await p.evaluate(()=>document.documentElement.dir)!=='ltr')throw Error('Serbian direction');
+            if(!(await p.locator('body').innerText()).includes('Podešavanja'))throw Error('Serbian UI translation');
+            await p.evaluate(()=>localStorage.setItem('u369-lang-all-v4','ar'));await p.reload({waitUntil:'domcontentloaded'});await p.waitForTimeout(400);
+            if(await p.evaluate(()=>document.documentElement.dir)!=='rtl')throw Error('Arabic direction');if(await p.evaluate(()=>document.documentElement.lang)!=='ar')throw Error('Arabic lang root');
+            await p.evaluate(()=>localStorage.setItem('u369-lang-all-v4','sr'));await p.reload({waitUntil:'domcontentloaded'});await p.waitForTimeout(400);
+            const before=(await req('A','/api/native/documents')).d.documents||[];
+            await ctx.setOffline(true);await p.evaluate(()=>window.dispatchEvent(new Event('offline')));await p.waitForTimeout(100);
+            if(!(await p.locator('#u369-offline').evaluate(e=>e.classList.contains('show'))))throw Error('offline banner');
+            await p.locator('#u369-chat-input').fill('Napravi dokument dok nema mreže');await p.locator('#u369-chat-send').click();await p.waitForTimeout(1200);
+            if(await p.locator('#u369-chat-send').isDisabled())throw Error('chat stuck after offline failure');
+            await ctx.setOffline(false);await p.evaluate(()=>window.dispatchEvent(new Event('online')));await p.waitForTimeout(100);
+            const after=(await req('A','/api/native/documents')).d.documents||[];if(after.length!==before.length)throw Error('offline chat created native data');
+            if(errors.length)throw Error('page errors '+errors.join(' | '));await browser.close();console.log('Unit369 product hardening passed');
+          })().catch(e=>{console.error(e);process.exit(1)});
+          JS
