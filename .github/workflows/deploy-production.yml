@@ -31,7 +31,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Discover Cloudflare account and verify production contract
+      - name: Verify production deployment contract
         run: |
           set -euo pipefail
           echo token_check > /tmp/deploy-stage
@@ -56,23 +56,6 @@ jobs:
           export CLOUDFLARE_API_TOKEN="$normalized_token"
           printf 'CLOUDFLARE_API_TOKEN=%s\n' "$CLOUDFLARE_API_TOKEN" >> "$GITHUB_ENV"
           echo token_normalized > /tmp/deploy-stage
-          echo account_discovery > /tmp/deploy-stage
-          curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-            -H 'Content-Type: application/json' \
-            'https://api.cloudflare.com/client/v4/accounts?per_page=50' \
-            -o /tmp/cloudflare-accounts.json
-          node <<'JS'
-          const fs=require('fs');
-          const d=JSON.parse(fs.readFileSync('/tmp/cloudflare-accounts.json','utf8'));
-          if(d.success!==true)throw Error('Cloudflare Accounts API denied: '+JSON.stringify(d.errors||[]));
-          const accounts=Array.isArray(d.result)?d.result:[];
-          if(accounts.length!==1)throw Error('Expected exactly one accessible Cloudflare account, found '+accounts.length);
-          const id=String(accounts[0]?.id||'').trim();
-          if(!/^[a-f0-9]{32}$/i.test(id))throw Error('Cloudflare account ID is missing or invalid');
-          fs.appendFileSync(process.env.GITHUB_ENV,`CLOUDFLARE_ACCOUNT_ID=${id}\n`);
-          console.log('Cloudflare account discovered');
-          JS
-          echo account_discovered > /tmp/deploy-stage
           echo config_check > /tmp/deploy-stage
           grep -q 'main = "src/unit369.js"' wrangler.toml
           echo dry_run > /tmp/deploy-stage
