@@ -110,6 +110,8 @@ No external adapter may become a required dependency for a native Unit369 capabi
 10. Third-party removal happens capability-by-capability only after the native replacement is tested.
 11. File bodies and product media use the account's native SQLite Durable Object storage by default. An optional `FILES` binding upgrades storage to R2 without changing API routes.
 12. All public request and upstream response bodies have explicit size limits.
+13. Core release readiness is gated by Unit369 Native, not by an external AI provider.
+14. Owner-controlled generative inference uses the provider-neutral `UNIT369_INFERENCE_URL` contract; third-party models remain optional accelerators only.
 
 ## Migration order
 
