@@ -4,6 +4,12 @@ import {
   readResponseJsonLimited,
   safeError,
 } from "./runtime-utils.js";
+import {
+  ownedInferenceConfiguration,
+  probeNativeIntelligence,
+  runNativeIntelligence,
+  runOwnedModel,
+} from "./owned-inference.js";
 
 const MAX_MESSAGES = 20;
 const MAX_MESSAGE_CHARS = 8_000;
@@ -111,8 +117,11 @@ async function upstreamJson(url, init, provider) {
   }
 }
 
-export function configuredProviders(env) {
+export function configuredProviders(env = {}) {
+  const owned = ownedInferenceConfiguration(env);
   return {
+    unit369Native: true,
+    unit369Owned: owned.endpoint_configured,
     workersAi: !!env.AI,
     claude: !!env.ANTHROPIC_API_KEY,
     openai: !!env.OPENAI_API_KEY,
@@ -285,37 +294,48 @@ export async function runExternalProvider(
 
 export async function runPreferredAi(env, messages, options = {}) {
   const attempts = [];
+  const normalized = normalizeMessages(messages);
   const configured = configuredProviders(env);
   const candidates = [
     [
+      "unit369-owned",
+      () => runOwnedModel(env, normalized, options),
+      configured.unit369Owned,
+    ],
+    [
       "workers",
       () =>
-        runWorkersAi(env, messages, {
+        runWorkersAi(env, normalized, {
           ...options,
           model: options.workersModel || options.model,
         }),
+      configured.workersAi,
     ],
     [
       "claude",
       () =>
-        runClaude(env, messages, { ...options, model: options.claudeModel }),
+        runClaude(env, normalized, { ...options, model: options.claudeModel }),
+      configured.claude,
     ],
     [
       "openai",
       () =>
-        runOpenAi(env, messages, { ...options, model: options.openaiModel }),
+        runOpenAi(env, normalized, { ...options, model: options.openaiModel }),
+      configured.openai,
     ],
     [
       "grok",
-      () => runGrok(env, messages, { ...options, model: options.grokModel }),
+      () => runGrok(env, normalized, { ...options, model: options.grokModel }),
+      configured.grok,
+    ],
+    [
+      "unit369-native",
+      () => runNativeIntelligence(normalized, options),
+      options.nativeFallback !== false,
     ],
   ];
-  for (const [provider, run] of candidates) {
-    if (
-      (provider === "workers" && !configured.workersAi) ||
-      (provider !== "workers" && !configured[provider])
-    )
-      continue;
+  for (const [provider, run, available] of candidates) {
+    if (!available) continue;
     try {
       const result = await run();
       if (attempts.length)
@@ -335,7 +355,7 @@ export async function runPreferredAi(env, messages, options = {}) {
   }
   const error = new HttpError(
     503,
-    "No configured AI provider could complete the request.",
+    "No Unit369 intelligence path could complete the request.",
     "ai_unavailable",
   );
   error.attempts = attempts;
@@ -343,35 +363,5 @@ export async function runPreferredAi(env, messages, options = {}) {
 }
 
 export async function probeAi(env) {
-  const started = Date.now();
-  try {
-    const result = await runPreferredAi(
-      env,
-      [{ role: "user", content: "Reply with OK." }],
-      {
-        purpose: "health_probe",
-        workersModel: "@cf/meta/llama-3.2-1b-instruct",
-        maxTokens: 2,
-      },
-    );
-    return {
-      operational: true,
-      provider: result.provider,
-      latency_ms: Date.now() - started,
-      checked_at: new Date().toISOString(),
-    };
-  } catch (error) {
-    return {
-      operational: false,
-      error: safeError(error),
-      attempts: Array.isArray(error?.attempts)
-        ? error.attempts.map((entry) => ({
-            provider: String(entry.provider || "unknown"),
-            error: safeError(entry.error),
-          }))
-        : [],
-      latency_ms: Date.now() - started,
-      checked_at: new Date().toISOString(),
-    };
-  }
+  return probeNativeIntelligence(env);
 }
