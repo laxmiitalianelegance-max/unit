@@ -1419,7 +1419,13 @@
           return String(value ?? "").slice(0, max);
         }
         function compactSession(session) {
-          const providerKeys = ["workers", "openai", "claude", "grok"];
+          const providerKeys = [
+            "unit369",
+            "workers",
+            "openai",
+            "claude",
+            "grok",
+          ];
           return {
             id: boundedText(session?.id, 100),
             title: boundedText(session?.title, 100),
@@ -1537,6 +1543,7 @@
         function answerFor(x) {
           return (
             x?.final ||
+            x?.answers?.unit369 ||
             x?.answers?.workers ||
             x?.answers?.openai ||
             x?.answers?.claude ||
@@ -1556,6 +1563,7 @@
             .map((tr, i) => {
               const ans = answerFor(tr),
                 names = {
+                  unit369: "Unit369",
                   workers: "Workers AI",
                   openai: "ChatGPT",
                   claude: "Claude",
@@ -1611,9 +1619,12 @@
               ...historyMessages(s, p),
               { role: "user", content: q },
             ],
-            url = p === "workers" ? "/api/free-ai" : "/api/ai-proxy",
+            url =
+              p === "unit369" || p === "workers"
+                ? "/api/free-ai"
+                : "/api/ai-proxy",
             body =
-              p === "workers"
+              p === "unit369" || p === "workers"
                 ? { messages }
                 : {
                     provider: p,
@@ -1665,9 +1676,9 @@
           try {
             const active =
               mode === "auto"
-                ? ["workers"]
+                ? ["unit369"]
                 : [
-                    "workers",
+                    "unit369",
                     ...["claude", "openai", "grok"].filter(
                       (p) => integrations[p],
                     ),
@@ -1702,6 +1713,7 @@
               } catch {}
             if (!tr.final)
               tr.final =
+                tr.answers.unit369 ||
                 tr.answers.workers ||
                 tr.answers.openai ||
                 tr.answers.claude ||
@@ -1748,6 +1760,8 @@
         }
         function renderProviders() {
           const n = {
+            unit369Native: "Unit369 Native",
+            unit369Owned: "Unit369 Model",
             claude: "Claude",
             openai: "OpenAI",
             grok: "Grok",
@@ -1776,6 +1790,8 @@
         }
         function renderIntegrations() {
           const n = {
+              unit369Native: "Unit369 Native",
+              unit369Owned: "Unit369 Model",
               claude: "Claude",
               openai: "OpenAI",
               grok: "Grok",

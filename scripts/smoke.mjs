@@ -81,7 +81,19 @@ try {
 
   const status = await fetch(`${origin}/api/status`);
   assert.equal(status.status, 200);
-  assert.equal((await status.json()).core.authentication_required, true);
+  const statusBody = await status.json();
+  assert.equal(statusBody.core.authentication_required, true);
+  assert.equal(statusBody.core.ai_configured, true);
+  assert.equal(statusBody.integrations.unit369Native, true);
+  assert.equal(statusBody.integrations.workersAi, false);
+
+  const releaseHealth = await fetch(`${origin}/api/health/release`);
+  assert.equal(releaseHealth.status, 200);
+  const releaseHealthBody = await releaseHealth.json();
+  assert.equal(releaseHealthBody.status, "ready");
+  assert.equal(releaseHealthBody.core_ready, true);
+  assert.equal(releaseHealthBody.ai.provider, "unit369-native");
+  assert.equal(releaseHealthBody.checks.external_ai_configured, false);
 
   const crossSite = await fetch(`${origin}/api/free-ai`, {
     method: "POST",
@@ -96,6 +108,23 @@ try {
     body: JSON.stringify({ messages: [{ role: "user", content: "Hello" }] }),
   });
   assert.equal(unauthenticated.status, 401);
+
+  const nativeChat = await fetch(`${origin}/api/free-ai`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      origin,
+      cookie: sessionCookie("native-chat-user"),
+    },
+    body: JSON.stringify({
+      messages: [{ role: "user", content: "Napravi projekat i dokument" }],
+    }),
+  });
+  assert.equal(nativeChat.status, 200, await nativeChat.clone().text());
+  const nativeChatBody = await nativeChat.json();
+  assert.equal(nativeChatBody.provider, "unit369-native");
+  assert.equal(nativeChatBody.external_required, false);
+  assert.ok(nativeChatBody.plan.steps.length >= 2);
 
   const plan = await fetch(`${origin}/api/native/plan`, {
     method: "POST",

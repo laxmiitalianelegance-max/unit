@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  configuredProviders,
   normalizeMessages,
+  runPreferredAi,
   runWorkersAi,
   WORKERS_AI_DEFAULT_MODEL,
 } from "../src/ai-providers.js";
@@ -159,6 +161,80 @@ test("Workers AI uses the quota-efficient production model by default", async ()
   assert.equal(invokedModel, WORKERS_AI_DEFAULT_MODEL);
   assert.equal(result.model, WORKERS_AI_DEFAULT_MODEL);
   assert.equal(result.content, "OK");
+});
+
+test("owner-controlled inference is preferred through the bounded HTTPS contract", async (t) => {
+  t.mock.method(globalThis, "fetch", async (input, init) => {
+    assert.equal(
+      String(input),
+      "https://inference.unit369.example/v1/chat/completions",
+    );
+    assert.equal(init.method, "POST");
+    assert.equal(init.headers.authorization, "Bearer test-owned-token");
+    const body = JSON.parse(init.body);
+    assert.equal(body.model, "unit369-test-model");
+    assert.equal(body.stream, false);
+    assert.deepEqual(body.messages, [{ role: "user", content: "Hello" }]);
+    return Response.json({
+      choices: [{ message: { content: "Owned response" } }],
+    });
+  });
+
+  const result = await runPreferredAi(
+    {
+      UNIT369_INFERENCE_URL:
+        "https://inference.unit369.example/v1/chat/completions",
+      UNIT369_INFERENCE_MODEL: "unit369-test-model",
+      UNIT369_INFERENCE_TOKEN: "test-owned-token",
+    },
+    [{ role: "user", content: "Hello" }],
+  );
+  assert.equal(result.provider, "unit369-owned");
+  assert.equal(result.content, "Owned response");
+  assert.equal(result.external_required, false);
+});
+
+test("Unit369 intelligence remains available with every provider removed", async () => {
+  const configured = configuredProviders({});
+  assert.equal(configured.unit369Native, true);
+  assert.equal(configured.unit369Owned, false);
+  assert.equal(configured.workersAi, false);
+  assert.equal(configured.claude, false);
+  assert.equal(configured.openai, false);
+  assert.equal(configured.grok, false);
+
+  const result = await runPreferredAi(
+    {},
+    [{ role: "user", content: "Napravi projekat i dokument" }],
+    { purpose: "chat" },
+  );
+  assert.equal(result.provider, "unit369-native");
+  assert.equal(result.external_required, false);
+  assert.equal(result.capability_level, "deterministic-foundation");
+  assert.ok(result.plan.steps.some((step) => step.capability === "work"));
+  assert.ok(result.plan.steps.some((step) => step.capability === "create"));
+});
+
+test("native product preparation preserves facts without provider keys", async () => {
+  const result = await runPreferredAi(
+    {},
+    [{ role: "user", content: "Prepare this product" }],
+    {
+      purpose: "product_prepare",
+      nativeContext: {
+        title: "Blue Silk Scarf",
+        notes: "Customer supplied description only.",
+        language: "en",
+      },
+    },
+  );
+  const product = JSON.parse(result.content);
+  assert.equal(result.provider, "unit369-native");
+  assert.equal(product.title, "Blue Silk Scarf");
+  assert.equal(product.description, "Customer supplied description only.");
+  assert.deepEqual(product.tags, []);
+  assert.deepEqual(product.suggestedSizes, []);
+  assert.equal(product.skuBase, "BLUE-SILK-SCARF");
 });
 
 test("Durable Object quotas block excess requests", async () => {

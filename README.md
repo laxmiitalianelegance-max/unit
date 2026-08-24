@@ -20,7 +20,8 @@ There is one active runtime graph. Historical wrappers and branch-specific valid
 - Google OAuth uses signed state, browser-bound flow state and PKCE.
 - AI and product routes require an authenticated Unit369 account.
 - Unsafe same-origin requests require a matching `Origin` header.
-- Workers AI is preferred; configured Claude, OpenAI and Grok credentials provide server-side fallback.
+- The Unit369 route is primary in the UI. It uses the owner-controlled Unit369 model when configured, optional server-side AI accelerators during migration, and the native deterministic foundation as the final no-provider path.
+- Production core readiness is verified against Unit369 Native and does not depend on Cloudflare AI, Claude, OpenAI or Grok availability.
 - The default **Auto fallback** chat mode makes one logical AI request. Parallel provider and synthesis calls occur only in explicitly selected team modes.
 - AI routes have per-account Durable Object quotas.
 - Native and external mutations use short-lived, immutable, one-time approval tokens.
@@ -43,6 +44,14 @@ Optional provider fallback:
 - `ANTHROPIC_API_KEY` and optional `ANTHROPIC_MODEL`
 - `OPENAI_API_KEY` and optional `OPENAI_MODEL`
 - `GROK_API_KEY` or `XAI_API_KEY`, and optional `GROK_MODEL`
+
+Optional owner-controlled Unit369 generative model:
+
+- `UNIT369_INFERENCE_URL` — full HTTPS URL of an OpenAI-compatible chat-completions endpoint
+- `UNIT369_INFERENCE_MODEL` — model identifier exposed by that endpoint
+- `UNIT369_INFERENCE_TOKEN` — bearer token stored as a Cloudflare secret, never in source or browser storage
+
+No AI provider key is required for the native foundation. The current independence boundary and the remaining work for a fully owner-operated generative model are documented in `docs/UNIT369_INDEPENDENCE.md`.
 
 Optional external adapters use their corresponding OAuth client secrets or manually encrypted server-side credentials.
 
