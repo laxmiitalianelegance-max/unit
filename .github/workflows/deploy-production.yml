@@ -132,9 +132,10 @@ jobs:
           const h=JSON.parse(fs.readFileSync('/tmp/release-health.json','utf8'));
           if(h.version!==process.env.EXPECTED_VERSION)throw Error(`Expected ${process.env.EXPECTED_VERSION}, received ${h.version}`);
           if(h.status!=='ready'||h.core_ready!==true)throw Error('Unit369 Core is not production-ready: '+JSON.stringify(h));
-          const required=['assets','self','native_store','tool_store','files','app_secret','encryption_key','google_oauth','ai_configured'];
+          const required=['assets','self','native_store','tool_store','files','app_secret','encryption_key','google_oauth','native_intelligence'];
           for(const k of required)if(h.checks?.[k]!==true)throw Error('Missing production requirement: '+k);
           if(h.auth_ready!==true)throw Error('Google OAuth is not configured in production.');
+          if(h.ai?.provider!=='unit369-native'||h.ai?.external_required!==false)throw Error('Unit369 Native intelligence probe did not pass.');
           console.log('Unit369 production health passed',h.version);
           JS
           echo health_verified > /tmp/deploy-stage
