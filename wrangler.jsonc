@@ -2,7 +2,7 @@
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "unit",
   "main": "src/unit369.js",
-  "compatibility_date": "2026-08-23",
+  "compatibility_date": "2026-08-24",
   "compatibility_flags": ["nodejs_compat"],
 
   // Production secrets and variables are managed in Cloudflare and must survive deploys.
