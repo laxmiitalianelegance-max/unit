@@ -28,8 +28,8 @@ import {
   validateTranslation,
 } from "./ui-translations.js";
 
-export const APP_VERSION = "2026.08.23.8";
-const HEALTH_CACHE_KEY = `ai-health-${APP_VERSION}`;
+export const APP_VERSION = "2026.08.24.1";
+const HEALTH_CACHE_KEY = `native-intelligence-health-${APP_VERSION}`;
 const TRANSLATION_CACHE_VERSION = "ui-v6";
 
 const QUOTAS = Object.freeze({
@@ -198,7 +198,11 @@ async function translateUi(request, env) {
         content: `Translate this application dictionary naturally into ${language}. Keep Unit369, API, AI, SKU and BCP-47 unchanged. JSON: ${JSON.stringify(UI_BASE)}`,
       },
     ],
-    { purpose: "ui_translation", maxTokens: 2_500 },
+    {
+      purpose: "ui_translation",
+      maxTokens: 2_500,
+      nativeFallback: false,
+    },
   );
   const translated = validateTranslation(cleanJson(result.content));
   await putSharedCache(env, cacheKey, translated, 30 * 24 * 60 * 60 * 1000);
@@ -253,7 +257,11 @@ async function synthesize(request, env) {
         content: `Question:\n${question}\n\nAnswers:\n${answers.map(([provider, value]) => `[${provider}]\n${value}`).join("\n\n")}`,
       },
     ],
-    { purpose: "synthesis", maxTokens: 1_000 },
+    {
+      purpose: "synthesis",
+      maxTokens: 1_000,
+      nativeContext: { question, answers, mode, language },
+    },
   );
   return json(result);
 }
@@ -289,7 +297,11 @@ async function prepareProduct(request, env) {
         content: `Return JSON with keys title, description, productType, tags, suggestedSizes, skuBase. tags and suggestedSizes must be arrays. Never invent material, origin, dimensions, certifications, stock or claims not supplied. Write in ${language}. Raw title: ${title}. Raw notes: ${notes}`,
       },
     ],
-    { purpose: "product_prepare", maxTokens: 1_000 },
+    {
+      purpose: "product_prepare",
+      maxTokens: 1_000,
+      nativeContext: { title, notes, language },
+    },
   );
   const value = cleanJson(result.content);
   return json({
@@ -311,15 +323,23 @@ async function prepareProduct(request, env) {
 
 function integrationStatus(env) {
   const integrations = configuredProviders(env);
+  const externalAiConfigured =
+    integrations.workersAi ||
+    integrations.claude ||
+    integrations.openai ||
+    integrations.grok;
   return {
     version: APP_VERSION,
     core: {
       native: true,
-      ai_configured:
-        integrations.workersAi ||
-        integrations.claude ||
-        integrations.openai ||
-        integrations.grok,
+      ai_configured: true,
+      intelligence_mode: integrations.unit369Owned
+        ? "owned-model"
+        : externalAiConfigured
+          ? "hybrid-migration"
+          : "native-foundation",
+      generative_model_configured:
+        integrations.unit369Owned || externalAiConfigured,
       authentication_required: true,
       file_storage: env.FILES ? "r2" : "durable_object",
     },
@@ -328,6 +348,7 @@ function integrationStatus(env) {
       claude: integrations.claude,
       openai: integrations.openai,
       grok: integrations.grok,
+      workers_ai: integrations.workersAi,
       shopify: integrations.shopify,
     },
   };
@@ -347,6 +368,11 @@ async function healthCheck(name, check) {
 
 async function releaseHealth(env) {
   const providers = configuredProviders(env);
+  const externalAiConfigured =
+    providers.workersAi ||
+    providers.claude ||
+    providers.openai ||
+    providers.grok;
   const checks = {
     assets: await healthCheck("assets", async () => {
       if (!env.ASSETS) return false;
@@ -398,55 +424,71 @@ async function releaseHealth(env) {
     app_secret: !!env.APP_SECRET,
     encryption_key: !!(env.ENCRYPTION_KEY || env.APP_SECRET),
     google_oauth: !!(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET),
-    ai_configured:
-      providers.workersAi ||
-      providers.claude ||
-      providers.openai ||
-      providers.grok,
+    owned_inference_configured: providers.unit369Owned,
+    external_ai_configured: externalAiConfigured,
   };
-  const configured = Object.values(checks).every(Boolean);
   let ai = null;
-  if (checks.ai_configured) {
-    try {
-      ai = await getSharedCache(env, HEALTH_CACHE_KEY);
-      const checkedAt = Date.parse(ai?.checked_at || "");
-      if (
-        !ai ||
-        typeof ai !== "object" ||
-        typeof ai.operational !== "boolean" ||
-        !Number.isFinite(checkedAt) ||
-        Date.now() - checkedAt > 5 * 60 * 1000
-      ) {
-        ai = null;
-      }
-    } catch (error) {
-      logEvent("warn", "health_cache_read_failed", { error: safeError(error) });
+  try {
+    ai = await getSharedCache(env, HEALTH_CACHE_KEY);
+    const checkedAt = Date.parse(ai?.checked_at || "");
+    if (
+      !ai ||
+      typeof ai !== "object" ||
+      typeof ai.operational !== "boolean" ||
+      !Number.isFinite(checkedAt) ||
+      Date.now() - checkedAt > 5 * 60 * 1000
+    ) {
+      ai = null;
     }
-    if (!ai) {
-      ai = await probeAi(env);
-      try {
-        await putSharedCache(
-          env,
-          HEALTH_CACHE_KEY,
-          ai,
-          ai.operational ? 4 * 60 * 1000 : 20 * 1000,
-        );
-      } catch (error) {
-        logEvent("warn", "health_cache_write_failed", {
-          error: safeError(error),
-        });
-      }
+  } catch (error) {
+    logEvent("warn", "health_cache_read_failed", { error: safeError(error) });
+  }
+  if (!ai) {
+    ai = await probeAi(env);
+    try {
+      await putSharedCache(
+        env,
+        HEALTH_CACHE_KEY,
+        ai,
+        ai.operational ? 4 * 60 * 1000 : 20 * 1000,
+      );
+    } catch (error) {
+      logEvent("warn", "health_cache_write_failed", {
+        error: safeError(error),
+      });
     }
   }
-  const operational = configured && ai?.operational === true;
+  checks.native_intelligence = ai?.operational === true;
+  const requiredChecks = [
+    "assets",
+    "self",
+    "native_store",
+    "tool_store",
+    "files",
+    "app_secret",
+    "encryption_key",
+    "google_oauth",
+    "native_intelligence",
+  ];
+  const operational = requiredChecks.every((name) => checks[name] === true);
   return {
     status: operational ? "ready" : "not_ready",
     version: APP_VERSION,
     core_ready: operational,
     auth_ready: checks.google_oauth,
     ai_operational: ai?.operational === true,
-    ai: ai || { operational: false, error: "No AI provider is configured." },
+    intelligence_mode: providers.unit369Owned
+      ? "owned-model"
+      : externalAiConfigured
+        ? "hybrid-migration"
+        : "native-foundation",
+    generative_model_configured: providers.unit369Owned || externalAiConfigured,
+    ai: ai || {
+      operational: false,
+      error: "Unit369 native intelligence is unavailable.",
+    },
     file_storage: env.FILES ? "r2" : "durable_object",
+    required_checks: requiredChecks,
     checks,
   };
 }
