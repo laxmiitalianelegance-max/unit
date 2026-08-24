@@ -72,7 +72,9 @@ assert.ok(
   "Conversation IDs must use Web Crypto",
 );
 assert.ok(
-  !/(OPENAI_API_KEY|GROK_API_KEY|ANTHROPIC_API_KEY)/.test(html) &&
+  !/(OPENAI_API_KEY|GROK_API_KEY|ANTHROPIC_API_KEY|UNIT369_INFERENCE_TOKEN)/.test(
+    html,
+  ) &&
     !/fetch\s*\(\s*["'`]https:\/\/(?:api\.openai\.com|api\.anthropic\.com|api\.x\.ai)/.test(
       html,
     ),
