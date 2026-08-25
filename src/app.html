@@ -1159,7 +1159,7 @@
           CUR = "unit369-current-v1",
           LANG = "u369-lang-all-v4",
           PREF = "unit369-settings-v2",
-          CACHE = "unit369-ui-i18n-v6-";
+          CACHE = "unit369-ui-i18n-v7-";
         const RTL = new Set(["ar", "fa", "he", "ur"]);
         const LANGS = [
           ["auto", "Automatic"],
@@ -1289,6 +1289,10 @@
           translationSignInRequired:
             "Sign in with Google to translate the interface into this language.",
           requestFailed: "The request failed. Try again.",
+          requestTimeout:
+            "The model took too long to answer. Unit369 stopped waiting safely; try again.",
+          requestInterrupted:
+            "The previous request was interrupted. Please send it again.",
         };
         let D = { ...BASE },
           integrations = {},
@@ -1551,6 +1555,27 @@
             ""
           );
         }
+        function errorFor(x) {
+          return Object.values(x?.errors || {}).find(Boolean) || "";
+        }
+        function recoverInterruptedTurns() {
+          const all = sessions();
+          let changed = false;
+          all.forEach((session) =>
+            (session.turns || []).forEach((turn) => {
+              if (!turn.pending) return;
+              delete turn.pending;
+              if (!answerFor(turn)) turn.final = t("requestInterrupted");
+              changed = true;
+            }),
+          );
+          if (!changed) return;
+          const currentId = localStorage.getItem(CUR);
+          saveSessions(
+            all,
+            all.find((session) => session.id === currentId),
+          );
+        }
         function renderConversation() {
           const box = $("#u369-conversation"),
             { s } = currentSession(false),
@@ -1562,6 +1587,7 @@
           box.innerHTML = turns
             .map((tr, i) => {
               const ans = answerFor(tr),
+                failure = errorFor(tr),
                 names = {
                   unit369: "Unit369",
                   workers: "Workers AI",
@@ -1576,7 +1602,7 @@
                   keys.length > 1
                     ? `<details class="u369-details"><summary>${esc(t("aiTeamDetails"))}</summary>${keys.map((k) => `<div class="u369-detail-row"><b>${esc(names[k] || k)}</b>${esc(tr.answers[k])}</div>`).join("")}</details>`
                     : "";
-              return `<div class="u369-turn"><div class="u369-user-msg">${esc(tr.q)}</div><div class="u369-assistant-msg"><div class="u369-assistant-head"><img src="/app-icon-192.png" alt=""><span>Unit369</span></div><div class="u369-answer${tr.pending ? " u369-thinking" : ""}">${esc(ans || (tr.pending ? t("thinking") : t("noAnswer")))}</div>${details}${ans ? `<button class="u369-msg-action" data-copy="${i}">${esc(t("copy"))}</button>` : ""}</div></div>`;
+              return `<div class="u369-turn"><div class="u369-user-msg">${esc(tr.q)}</div><div class="u369-assistant-msg"><div class="u369-assistant-head"><img src="/app-icon-192.png" alt=""><span>Unit369</span></div><div class="u369-answer${tr.pending ? " u369-thinking" : ""}">${esc(ans || (tr.pending ? t("thinking") : failure || t("noAnswer")))}</div>${details}${ans ? `<button class="u369-msg-action" data-copy="${i}">${esc(t("copy"))}</button>` : ""}</div></div>`;
             })
             .join("");
           $$("[data-copy]").forEach(
@@ -1595,11 +1621,14 @@
         }
         function historyMessages(s, p) {
           const o = [];
-          (s.turns || []).slice(-8).forEach((x) => {
-            if (x.q) o.push({ role: "user", content: x.q });
-            const a = x.answers?.[p] || x.final;
-            if (a) o.push({ role: "assistant", content: a });
-          });
+          (s.turns || [])
+            .filter((x) => !x.pending)
+            .slice(-8)
+            .forEach((x) => {
+              if (x.q) o.push({ role: "user", content: x.q });
+              const a = x.answers?.[p] || x.final;
+              if (a) o.push({ role: "assistant", content: a });
+            });
           return o;
         }
         function languageInstruction() {
@@ -1632,19 +1661,35 @@
                     max_tokens: 1500,
                     ...(prefs.models?.[p] ? { model: prefs.models[p] } : {}),
                   };
-          const r = await fetch(url, {
-              method: "POST",
-              headers: { "content-type": "application/json" },
-              body: JSON.stringify(body),
-            }),
-            d = await r.json().catch(() => ({}));
-          if (!r.ok || d.error) {
-            const error = new Error(d.error || t("requestFailed"));
-            error.status = r.status;
-            error.code = d.code || "request_failed";
+          const controller = new AbortController(),
+            timer = setTimeout(() => controller.abort(), 50_000);
+          try {
+            const r = await fetch(url, {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify(body),
+                signal: controller.signal,
+              }),
+              d = await r.json().catch(() => ({}));
+            if (!r.ok || d.error) {
+              const error = new Error(d.error || t("requestFailed"));
+              error.status = r.status;
+              error.code = d.code || "request_failed";
+              throw error;
+            }
+            if (!d.content) throw new Error(d.error || t("requestFailed"));
+            return d.content;
+          } catch (error) {
+            if (error?.name === "AbortError") {
+              const timeout = new Error(t("requestTimeout"));
+              timeout.status = 504;
+              timeout.code = "client_timeout";
+              throw timeout;
+            }
             throw error;
+          } finally {
+            clearTimeout(timer);
           }
-          return d.content || "";
         }
         async function sendMessage() {
           if (sending) return;
@@ -2102,6 +2147,9 @@
           networkState();
           await refreshStatus();
           await loadLanguage();
+          recoverInterruptedTurns();
+          renderConversation();
+          renderHistory();
           if ("serviceWorker" in navigator)
             navigator.serviceWorker.register("/sw.js").catch(() => {});
         }

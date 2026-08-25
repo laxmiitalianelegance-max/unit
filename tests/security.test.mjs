@@ -232,6 +232,63 @@ test("owner-controlled inference is preferred through the bounded HTTPS contract
   assert.equal(result.external_required, false);
 });
 
+test("Unit369 RunPod alias resolves to the deployed Hugging Face model", async (t) => {
+  t.mock.method(globalThis, "fetch", async (_input, init) => {
+    const body = JSON.parse(init.body);
+    assert.equal(body.model, "Qwen/Qwen3.6-35B-A3B-FP8");
+    return Response.json({
+      choices: [{ message: { content: "RunPod model is ready." } }],
+    });
+  });
+
+  const result = await runOwnedModel(
+    {
+      UNIT369_INFERENCE_URL:
+        "https://api.runpod.ai/v2/test/openai/v1/chat/completions",
+      UNIT369_INFERENCE_MODEL: "unit369-qwen36",
+      UNIT369_INFERENCE_TOKEN: "test-owned-token",
+    },
+    [{ role: "user", content: "Hello" }],
+  );
+  assert.equal(result.model, "Qwen/Qwen3.6-35B-A3B-FP8");
+  assert.equal(result.content, "RunPod model is ready.");
+});
+
+test("owned chat failure falls directly back to Unit369 Native when external fallback is disabled", async (t) => {
+  let workersAiCalled = false;
+  t.mock.method(globalThis, "fetch", async () =>
+    Response.json(
+      { error: { message: "The requested model does not exist." } },
+      { status: 400 },
+    ),
+  );
+
+  const result = await runPreferredAi(
+    {
+      UNIT369_INFERENCE_URL:
+        "https://api.runpod.ai/v2/test/openai/v1/chat/completions",
+      UNIT369_INFERENCE_MODEL: "unit369-test-model",
+      UNIT369_INFERENCE_TOKEN: "test-owned-token",
+      AI: {
+        async run() {
+          workersAiCalled = true;
+          return { response: "External response" };
+        },
+      },
+    },
+    [
+      { role: "system", content: "Reply in Serbian." },
+      { role: "user", content: "Sta ima" },
+    ],
+    { purpose: "chat", externalFallback: false },
+  );
+
+  assert.equal(workersAiCalled, false);
+  assert.equal(result.provider, "unit369-native");
+  assert.equal(result.content, "Tu sam i radim. Šta želiš da uradim?");
+  assert.deepEqual(result.fallback_from, ["unit369-owned"]);
+});
+
 test("owner-controlled inference rejects an unfinished private reasoning block", async (t) => {
   t.mock.method(globalThis, "fetch", async () =>
     Response.json({
