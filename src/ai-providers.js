@@ -9,6 +9,7 @@ import {
   probeNativeIntelligence,
   runNativeIntelligence,
   runOwnedModel,
+  shouldUseNativeChatFastPath,
 } from "./owned-inference.js";
 
 const MAX_MESSAGES = 20;
@@ -297,12 +298,17 @@ export async function runPreferredAi(env, messages, options = {}) {
   const normalized = normalizeMessages(messages);
   const configured = configuredProviders(env);
   const externalFallback = options.externalFallback !== false;
-  const candidates = [
-    [
-      "unit369-owned",
-      () => runOwnedModel(env, normalized, options),
-      configured.unit369Owned,
-    ],
+  const ownedCandidate = [
+    "unit369-owned",
+    () => runOwnedModel(env, normalized, options),
+    configured.unit369Owned,
+  ];
+  const nativeCandidate = [
+    "unit369-native",
+    () => runNativeIntelligence(normalized, options),
+    options.nativeFallback !== false,
+  ];
+  const externalCandidates = [
     [
       "workers",
       () =>
@@ -329,16 +335,21 @@ export async function runPreferredAi(env, messages, options = {}) {
       () => runGrok(env, normalized, { ...options, model: options.grokModel }),
       externalFallback && configured.grok,
     ],
-    [
-      "unit369-native",
-      () => runNativeIntelligence(normalized, options),
-      options.nativeFallback !== false,
-    ],
   ];
+  const nativeFastPath =
+    options.purpose === "chat" &&
+    options.nativeFastPath !== false &&
+    shouldUseNativeChatFastPath(normalized);
+  const candidates = nativeFastPath
+    ? [nativeCandidate, ownedCandidate, ...externalCandidates]
+    : [ownedCandidate, ...externalCandidates, nativeCandidate];
   for (const [provider, run, available] of candidates) {
     if (!available) continue;
     try {
       const result = await run();
+      if (nativeFastPath && provider === "unit369-native") {
+        result.fast_path = true;
+      }
       if (attempts.length)
         result.fallback_from = attempts.map((entry) => entry.provider);
       return result;

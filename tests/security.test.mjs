@@ -15,7 +15,10 @@ import {
   resolveAccount,
 } from "../src/accounts.js";
 import { planNativeIntent } from "../src/native-capabilities.js";
-import { runOwnedModel } from "../src/owned-inference.js";
+import {
+  runOwnedModel,
+  shouldUseNativeChatFastPath,
+} from "../src/owned-inference.js";
 import {
   HttpError,
   readJsonLimited,
@@ -254,6 +257,53 @@ test("Unit369 RunPod alias resolves to the deployed Hugging Face model", async (
   assert.equal(result.content, "RunPod model is ready.");
 });
 
+test("short conversational messages use the instant Unit369 Native path", async (t) => {
+  let ownedCalled = false;
+  t.mock.method(globalThis, "fetch", async () => {
+    ownedCalled = true;
+    return Response.json({
+      choices: [{ message: { content: "Slow owned response" } }],
+    });
+  });
+
+  assert.equal(
+    shouldUseNativeChatFastPath([{ role: "user", content: "Šta ima?" }]),
+    true,
+  );
+  assert.equal(
+    shouldUseNativeChatFastPath([{ role: "user", content: "." }]),
+    true,
+  );
+  assert.equal(
+    shouldUseNativeChatFastPath([
+      {
+        role: "user",
+        content: "Napravi detaljan plan prodaje za sledeći mesec.",
+      },
+    ]),
+    false,
+  );
+
+  const result = await runPreferredAi(
+    {
+      UNIT369_INFERENCE_URL:
+        "https://api.runpod.ai/v2/test/openai/v1/chat/completions",
+      UNIT369_INFERENCE_MODEL: "unit369-qwen36",
+      UNIT369_INFERENCE_TOKEN: "test-owned-token",
+    },
+    [
+      { role: "system", content: "Reply in Serbian." },
+      { role: "user", content: "Šta ima?" },
+    ],
+    { purpose: "chat", externalFallback: false },
+  );
+
+  assert.equal(ownedCalled, false);
+  assert.equal(result.provider, "unit369-native");
+  assert.equal(result.fast_path, true);
+  assert.equal(result.content, "Tu sam i radim. Šta želiš da uradim?");
+});
+
 test("owned chat failure falls directly back to Unit369 Native when external fallback is disabled", async (t) => {
   let workersAiCalled = false;
   t.mock.method(globalThis, "fetch", async () =>
@@ -278,14 +328,17 @@ test("owned chat failure falls directly back to Unit369 Native when external fal
     },
     [
       { role: "system", content: "Reply in Serbian." },
-      { role: "user", content: "Sta ima" },
+      {
+        role: "user",
+        content: "Napravi detaljan plan prodaje za sledeći mesec.",
+      },
     ],
     { purpose: "chat", externalFallback: false },
   );
 
   assert.equal(workersAiCalled, false);
   assert.equal(result.provider, "unit369-native");
-  assert.equal(result.content, "Tu sam i radim. Šta želiš da uradim?");
+  assert.match(result.content, /Nativni plan:/);
   assert.deepEqual(result.fallback_from, ["unit369-owned"]);
 });
 
