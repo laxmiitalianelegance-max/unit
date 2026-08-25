@@ -1,5 +1,9 @@
 import APP_HTML from "./app.html";
-import { resolveAccount } from "./accounts.js";
+import {
+  googleOAuthConfigured,
+  ownerAuthConfigured,
+  resolveAccount,
+} from "./accounts.js";
 import {
   configuredProviders,
   normalizeMessages,
@@ -28,7 +32,7 @@ import {
   validateTranslation,
 } from "./ui-translations.js";
 
-export const APP_VERSION = "2026.08.24.1";
+export const APP_VERSION = "2026.08.25.1";
 const HEALTH_CACHE_KEY = `native-intelligence-health-${APP_VERSION}`;
 const TRANSLATION_CACHE_VERSION = "ui-v6";
 
@@ -71,7 +75,7 @@ async function requireAccount(request, env) {
   if (!account) {
     throw new HttpError(
       401,
-      "Sign in with Google to continue.",
+      "Sign in to Unit369 to continue.",
       "authentication_required",
     );
   }
@@ -423,10 +427,12 @@ async function releaseHealth(env) {
     }),
     app_secret: !!env.APP_SECRET,
     encryption_key: !!(env.ENCRYPTION_KEY || env.APP_SECRET),
-    google_oauth: !!(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET),
+    owner_auth: ownerAuthConfigured(env),
+    google_oauth: googleOAuthConfigured(env),
     owned_inference_configured: providers.unit369Owned,
     external_ai_configured: externalAiConfigured,
   };
+  checks.authentication = checks.owner_auth || checks.google_oauth;
   let ai = null;
   try {
     ai = await getSharedCache(env, HEALTH_CACHE_KEY);
@@ -467,7 +473,7 @@ async function releaseHealth(env) {
     "files",
     "app_secret",
     "encryption_key",
-    "google_oauth",
+    "authentication",
     "native_intelligence",
   ];
   const operational = requiredChecks.every((name) => checks[name] === true);
@@ -475,7 +481,7 @@ async function releaseHealth(env) {
     status: operational ? "ready" : "not_ready",
     version: APP_VERSION,
     core_ready: operational,
-    auth_ready: checks.google_oauth,
+    auth_ready: checks.authentication,
     ai_operational: ai?.operational === true,
     intelligence_mode: providers.unit369Owned
       ? "owned-model"

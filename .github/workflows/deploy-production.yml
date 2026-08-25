@@ -132,30 +132,30 @@ jobs:
           const h=JSON.parse(fs.readFileSync('/tmp/release-health.json','utf8'));
           if(h.version!==process.env.EXPECTED_VERSION)throw Error(`Expected ${process.env.EXPECTED_VERSION}, received ${h.version}`);
           if(h.status!=='ready'||h.core_ready!==true)throw Error('Unit369 Core is not production-ready: '+JSON.stringify(h));
-          const required=['assets','self','native_store','tool_store','files','app_secret','encryption_key','google_oauth','native_intelligence'];
+          const required=['assets','self','native_store','tool_store','files','app_secret','encryption_key','authentication','native_intelligence'];
           for(const k of required)if(h.checks?.[k]!==true)throw Error('Missing production requirement: '+k);
-          if(h.auth_ready!==true)throw Error('Google OAuth is not configured in production.');
+          if(h.auth_ready!==true)throw Error('Unit369 authentication is not configured in production.');
+          if(h.checks?.owner_auth!==true)throw Error('Unit369 owner authentication is not configured in production.');
           if(h.ai?.provider!=='unit369-native'||h.ai?.external_required!==false)throw Error('Unit369 Native intelligence probe did not pass.');
           console.log('Unit369 production health passed',h.version);
           JS
           echo health_verified > /tmp/deploy-stage
-      - name: Verify Google OAuth start route
+      - name: Verify Unit369 owner authentication route
         run: |
           set -euo pipefail
-          echo oauth_start > /tmp/deploy-stage
+          echo auth_start > /tmp/deploy-stage
           BASE="${UNIT369_PRODUCTION_URL%/}"
-          headers=$(curl -sS -D - -o /dev/null "$BASE/api/auth/google/start?return_to=/" )
-          echo oauth_headers > /tmp/deploy-stage
-          echo "$headers" | grep -qE '^HTTP/.* 302'
-          location=$(printf '%s\n' "$headers" | awk 'BEGIN{IGNORECASE=1}/^location:/{sub(/^[^:]*:[[:space:]]*/,""); sub(/\r$/,""); print; exit}')
-          test -n "$location"
-          node - "$location" "$BASE" <<'JS'
-          const [loc,base]=process.argv.slice(2);const u=new URL(loc);const redirect=u.searchParams.get('redirect_uri');
-          const expected=base.replace(/\/$/,'')+'/api/auth/google/callback';
-          if(redirect!==expected)throw Error(`Google redirect mismatch: ${redirect} != ${expected}`);
-          console.log('Google OAuth callback verified:',expected);
+          curl -fsS "$BASE/api/auth/me" -o /tmp/auth-status.json
+          node <<'JS'
+          const fs=require('fs');
+          const auth=JSON.parse(fs.readFileSync('/tmp/auth-status.json','utf8'));
+          if(auth.authenticated!==false)throw Error('Anonymous production request unexpectedly has an account.');
+          if(auth.owner_available!==true)throw Error('Unit369 owner sign-in is unavailable.');
+          console.log('Unit369 owner sign-in route verified.');
           JS
-          echo oauth_verified > /tmp/deploy-stage
+          curl -fsS "$BASE/account" -o /tmp/account.html
+          grep -q 'id="owner-form"' /tmp/account.html
+          echo auth_verified > /tmp/deploy-stage
       - name: Verify security and PWA contract
         run: |
           set -euo pipefail

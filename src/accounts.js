@@ -1,14 +1,20 @@
 import {
   HttpError,
   errorResponse,
+  readJsonLimited,
   readResponseJsonLimited,
 } from "./runtime-utils.js";
+import { enforceQuota } from "./state-services.js";
 
 const enc = new TextEncoder(),
   dec = new TextDecoder();
 const ACCOUNT_COOKIE = "__Host-u369_account";
 const LEGACY_ACCOUNT_COOKIE = "u369_account";
 const OAUTH_FLOW_COOKIE = "__Host-u369_oauth_flow";
+const OWNER_LOGIN_WINDOWS = Object.freeze([
+  { window_ms: 15 * 60 * 1000, limit: 8 },
+  { window_ms: 24 * 60 * 60 * 1000, limit: 30 },
+]);
 function json(data, status = 200, headers = {}) {
   return new Response(JSON.stringify(data), {
     status,
@@ -51,9 +57,25 @@ async function safeEqual(a, b) {
   ]);
   const aa = new Uint8Array(left),
     bb = new Uint8Array(right);
+  if (typeof crypto.subtle.timingSafeEqual === "function") {
+    return crypto.subtle.timingSafeEqual(aa, bb);
+  }
   let n = 0;
   for (let i = 0; i < aa.length; i++) n |= aa[i] ^ bb[i];
   return n === 0;
+}
+
+export function googleOAuthConfigured(env) {
+  const clientId = String(env.GOOGLE_CLIENT_ID || "").trim();
+  const clientSecret = String(env.GOOGLE_CLIENT_SECRET || "").trim();
+  return (
+    /^[A-Za-z0-9._-]+\.apps\.googleusercontent\.com$/.test(clientId) &&
+    clientSecret.length >= 16
+  );
+}
+
+export function ownerAuthConfigured(env) {
+  return String(env.UNIT369_OWNER_ACCESS_CODE || "").length >= 16;
 }
 function cookieValue(request, name) {
   const c = request.headers.get("cookie") || "";
@@ -128,14 +150,14 @@ export async function resolveAccount(request, env) {
       email: String(p.email || "").slice(0, 320),
       name: String(p.name || "").slice(0, 200),
       picture: String(p.picture || "").slice(0, 2_048),
-      provider: "google",
+      provider: p.provider === "owner" ? "owner" : "google",
     };
   } catch {
     return null;
   }
 }
 async function startGoogle(url, env) {
-  if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET)
+  if (!googleOAuthConfigured(env))
     return json({ error: "Google Sign-In is not configured." }, 503);
   const callback = `${url.origin}/api/auth/google/callback`,
     returnTo = sanitizeReturnTo(
@@ -173,6 +195,63 @@ async function startGoogle(url, env) {
   });
   headers.append("set-cookie", oauthFlowCookie(flow));
   return new Response(null, { status: 302, headers });
+}
+
+async function ownerLoginKey(request) {
+  const address = String(request.headers.get("cf-connecting-ip") || "unknown");
+  const digest = new Uint8Array(
+    await crypto.subtle.digest("SHA-256", enc.encode(`owner-login:${address}`)),
+  );
+  return `login_${b64url(digest).slice(0, 32)}`;
+}
+
+async function ownerLogin(request, env) {
+  if (!ownerAuthConfigured(env)) {
+    return json({ error: "Unit369 owner sign-in is not configured." }, 503);
+  }
+  await enforceQuota(
+    env,
+    await ownerLoginKey(request),
+    "owner-login",
+    OWNER_LOGIN_WINDOWS,
+  );
+  const body = await readJsonLimited(request, 4 * 1024);
+  const provided = typeof body.access_code === "string" ? body.access_code : "";
+  if (
+    provided.length > 512 ||
+    !(await safeEqual(provided, env.UNIT369_OWNER_ACCESS_CODE))
+  ) {
+    return json({ error: "Access code is not valid." }, 401);
+  }
+  const account = {
+      uid: "unit369_owner",
+      email: "",
+      name: "Unit369 Owner",
+      picture: "",
+      provider: "owner",
+      iat: Date.now(),
+      exp: Date.now() + 30 * 24 * 60 * 60 * 1000,
+    },
+    token = await signed(env, account),
+    headers = new Headers({
+      "content-type": "application/json; charset=utf-8",
+      "cache-control": "no-store",
+    });
+  headers.append("set-cookie", accountCookie(token));
+  headers.append("set-cookie", secureCookie(LEGACY_ACCOUNT_COOKIE, "", 0));
+  return new Response(
+    JSON.stringify({
+      authenticated: true,
+      user: {
+        uid: account.uid,
+        email: account.email,
+        name: account.name,
+        picture: account.picture,
+        provider: account.provider,
+      },
+    }),
+    { headers },
+  );
 }
 async function googleCallback(request, url, env) {
   const rawState = url.searchParams.get("state") || "",
@@ -250,9 +329,17 @@ async function googleCallback(request, url, env) {
   h.append("set-cookie", secureCookie(LEGACY_ACCOUNT_COOKIE, "", 0));
   return new Response(null, { status: 302, headers: h });
 }
-function accountPage() {
+function accountPage(env) {
+  const ownerAvailable = ownerAuthConfigured(env);
+  const googleAvailable = googleOAuthConfigured(env);
+  const ownerPanel = ownerAvailable
+    ? `<form id="owner-form"><label for="access-code">Privatni Unit369 kod</label><input id="access-code" name="access_code" type="password" autocomplete="current-password" minlength="16" maxlength="512" required><button class="btn owner" type="submit">Prijavi se u Unit369</button><div id="message" role="status" aria-live="polite"></div></form>`
+    : `<div class="notice">Unit369 privatna prijava još nije aktivirana.</div>`;
+  const googlePanel = googleAvailable
+    ? `<div class="or"><span>ili</span></div><a class="btn google" href="/api/auth/google/start?return_to=/">Continue with Google</a>`
+    : "";
   return new Response(
-    `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#05070c"><title>Unit369 Account</title><style>html,body{margin:0;min-height:100%;background:#05070c;color:#f5f8fc;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}body{min-height:100dvh;display:grid;place-items:center;background:radial-gradient(700px 420px at 50% 0,rgba(40,167,255,.16),transparent 60%),#05070c}.box{width:min(92vw,420px);text-align:center}.logo{width:72px;height:72px;border-radius:20px;object-fit:cover;box-shadow:0 12px 35px rgba(40,167,255,.22)}h1{font-size:27px;margin:18px 0 8px}.sub{color:#95a3b8;font-size:14px;line-height:1.5;margin-bottom:22px}.btn{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;border-radius:14px;padding:13px 18px;font-weight:800;background:#f5f8fc;color:#111923}.back{display:block;margin-top:16px;color:#69c8ff;text-decoration:none;font-size:13px}</style></head><body><div class="box"><img class="logo" src="/app-icon-192.png" alt="Unit369"><h1>Unit369</h1><div class="sub">Sign in to keep your integrations private and connected to your own account.</div><a class="btn" href="/api/auth/google/start?return_to=/">Continue with Google</a><a class="back" href="/">Back to Unit369</a></div></body></html>`,
+    `<!doctype html><html lang="sr-Latn"><head><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#05070c"><title>Unit369 nalog</title><style>html,body{margin:0;min-height:100%;background:#05070c;color:#f5f8fc;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}body{min-height:100dvh;display:grid;place-items:center;background:radial-gradient(700px 420px at 50% 0,rgba(40,167,255,.16),transparent 60%),#05070c}.box{width:min(92vw,420px);text-align:center}.logo{width:72px;height:72px;border-radius:20px;object-fit:cover;box-shadow:0 12px 35px rgba(40,167,255,.22)}h1{font-size:27px;margin:18px 0 8px}.sub{color:#95a3b8;font-size:14px;line-height:1.5;margin-bottom:22px}form{display:grid;gap:12px;text-align:left}label{font-size:13px;font-weight:800;color:#c7d5e5}input{width:100%;box-sizing:border-box;border:1px solid #27415c;border-radius:14px;background:#08111b;color:#f5f8fc;padding:14px 15px;font-size:16px;outline:none}input:focus{border-color:#35c5ff;box-shadow:0 0 0 3px rgba(53,197,255,.14)}.btn{width:100%;box-sizing:border-box;border:0;display:flex;align-items:center;justify-content:center;text-decoration:none;border-radius:14px;padding:13px 18px;font-weight:800;font-size:15px;cursor:pointer}.btn.owner{background:linear-gradient(135deg,#35c5ff,#167cef);color:#fff}.btn.google{background:#f5f8fc;color:#111923}.btn:disabled{opacity:.65;cursor:wait}.notice{padding:14px;border:1px solid #3a4654;border-radius:14px;color:#b8c5d5;background:#0b121b}.or{display:flex;align-items:center;gap:10px;color:#63758b;font-size:12px;margin:16px 0}.or:before,.or:after{content:"";height:1px;flex:1;background:#1b2d40}#message{min-height:18px;color:#ff9aaa;text-align:center;font-size:12px}.back{display:block;margin-top:16px;color:#69c8ff;text-decoration:none;font-size:13px}</style></head><body><main class="box"><img class="logo" src="/app-icon-192.png" alt="Unit369"><h1>Unit369</h1><div class="sub">Privatna prijava u tvoj Unit369 nalog. Kod ostaje samo u Cloudflare Secret-u.</div>${ownerPanel}${googlePanel}<a class="back" href="/">Nazad u Unit369</a></main><script>(()=>{const form=document.getElementById('owner-form');if(!form)return;const message=document.getElementById('message'),button=form.querySelector('button');form.addEventListener('submit',async event=>{event.preventDefault();message.textContent='';button.disabled=true;try{const response=await fetch('/api/auth/owner/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({access_code:form.access_code.value})});const data=await response.json();if(!response.ok)throw new Error(data.error||'Prijava nije uspela.');location.replace('/')}catch(error){message.textContent=error.message||'Prijava nije uspela.';form.access_code.select()}finally{button.disabled=false}})})();</script></body></html>`,
     {
       headers: {
         "content-type": "text/html; charset=utf-8",
@@ -265,15 +352,18 @@ export async function handleAuth(request, env) {
   const url = new URL(request.url);
   try {
     if (url.pathname === "/account" && request.method === "GET")
-      return accountPage();
+      return accountPage(env);
     if (url.pathname === "/api/auth/me" && request.method === "GET") {
       const a = await resolveAccount(request, env);
       return json({
         authenticated: !!a,
         user: a || null,
-        google_available: !!(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET),
+        owner_available: ownerAuthConfigured(env),
+        google_available: googleOAuthConfigured(env),
       });
     }
+    if (url.pathname === "/api/auth/owner/login" && request.method === "POST")
+      return ownerLogin(request, env);
     if (url.pathname === "/api/auth/google/start" && request.method === "GET")
       return startGoogle(url, env);
     if (

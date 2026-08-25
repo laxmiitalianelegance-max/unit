@@ -29,9 +29,7 @@ const child = spawn(
     "--var",
     "ENCRYPTION_KEY:local-smoke-encryption-key-369",
     "--var",
-    "GOOGLE_CLIENT_ID:local-google-client",
-    "--var",
-    "GOOGLE_CLIENT_SECRET:local-google-secret",
+    "UNIT369_OWNER_ACCESS_CODE:local-unit369-owner-access-code-2026",
   ],
   { cwd: root, stdio: ["ignore", "pipe", "pipe"] },
 );
@@ -94,6 +92,9 @@ try {
   assert.equal(releaseHealthBody.core_ready, true);
   assert.equal(releaseHealthBody.ai.provider, "unit369-native");
   assert.equal(releaseHealthBody.checks.external_ai_configured, false);
+  assert.equal(releaseHealthBody.checks.owner_auth, true);
+  assert.equal(releaseHealthBody.checks.google_oauth, false);
+  assert.equal(releaseHealthBody.checks.authentication, true);
 
   const crossSite = await fetch(`${origin}/api/free-ai`, {
     method: "POST",
@@ -109,12 +110,32 @@ try {
   });
   assert.equal(unauthenticated.status, 401);
 
+  const ownerLogin = await fetch(`${origin}/api/auth/owner/login`, {
+    method: "POST",
+    headers: { "content-type": "application/json", origin },
+    body: JSON.stringify({
+      access_code: "local-unit369-owner-access-code-2026",
+    }),
+  });
+  assert.equal(ownerLogin.status, 200, await ownerLogin.clone().text());
+  const ownerCookie = ownerLogin.headers.get("set-cookie").split(";")[0];
+  assert.match(ownerCookie, /^__Host-u369_account=/);
+
+  const ownerStatus = await fetch(`${origin}/api/auth/me`, {
+    headers: { cookie: ownerCookie },
+  });
+  const ownerStatusBody = await ownerStatus.json();
+  assert.equal(ownerStatusBody.authenticated, true);
+  assert.equal(ownerStatusBody.owner_available, true);
+  assert.equal(ownerStatusBody.google_available, false);
+  assert.equal(ownerStatusBody.user.provider, "owner");
+
   const nativeChat = await fetch(`${origin}/api/free-ai`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
       origin,
-      cookie: sessionCookie("native-chat-user"),
+      cookie: ownerCookie,
     },
     body: JSON.stringify({
       messages: [{ role: "user", content: "Napravi projekat i dokument" }],
@@ -169,10 +190,12 @@ try {
     `${origin}/api/auth/google/start?return_to=/settings`,
     { redirect: "manual" },
   );
-  assert.equal(oauth.status, 302);
-  assert.match(oauth.headers.get("set-cookie"), /__Host-u369_oauth_flow=/);
-  const oauthLocation = new URL(oauth.headers.get("location"));
-  assert.equal(oauthLocation.searchParams.get("code_challenge_method"), "S256");
+  assert.equal(oauth.status, 503);
+  assert.equal(oauth.headers.get("location"), null);
+
+  const accountPage = await fetch(`${origin}/account`);
+  assert.equal(accountPage.status, 200);
+  assert.match(await accountPage.text(), /id="owner-form"/);
 
   const manifest = await fetch(`${origin}/manifest.json`);
   assert.equal(manifest.status, 200);

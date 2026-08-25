@@ -8,7 +8,7 @@ Equal unrestricted language, image, speech and code-model quality is a separate 
 
 ## Phase 1: provider-independent foundation
 
-Implemented in version `2026.08.24.1`:
+Implemented through version `2026.08.25.1`:
 
 - `unit369-native` is always available and has no provider credential.
 - The default UI route is Unit369, not a named external model.
@@ -17,6 +17,8 @@ Implemented in version `2026.08.24.1`:
 - Native product preparation preserves supplied facts and does not invent tags, sizes or claims.
 - Release health probes Unit369 Native and reports external model configuration separately.
 - Unit and Wrangler smoke tests prove a healthy chat response with no AI binding or provider key.
+- Unit369 owner authentication works without Google or another identity provider. The private access code stays in a Cloudflare Secret and login attempts are rate-limited in a Durable Object.
+- Optional Google OAuth is accepted only when the client ID has the Google OAuth client format.
 
 ## Owned generative inference contract
 
@@ -37,7 +39,7 @@ Leading `<think>...</think>` reasoning blocks are removed before a response reac
 2. Provision an owner-controlled inference host, private access path, monitoring, backups and a cost ceiling.
 3. Attach that host through the owned inference contract and pass quality, latency and failure tests.
 4. Add native retrieval/research indexing, isolated code execution and durable scheduled automation.
-5. Replace Google-only sign-in with a Unit369-owned authentication option so Core also works without a third-party identity provider.
-6. Run provider-removal end-to-end tests with every external credential and binding disabled.
+5. Add recovery codes and hardware passkeys so the owner access code has an independent recovery path.
+6. Run provider-removal end-to-end tests with every optional external credential and binding disabled.
 
 Infrastructure provisioning is intentionally not part of Phase 1 because it can create recurring GPU and operations cost. It requires a separate owner decision after model and budget evaluation.
