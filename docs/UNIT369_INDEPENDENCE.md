@@ -25,8 +25,11 @@ Unit369 accepts an owner-controlled, OpenAI-compatible chat-completions endpoint
 - `UNIT369_INFERENCE_URL`: full HTTPS endpoint URL.
 - `UNIT369_INFERENCE_MODEL`: optional model identifier; defaults to `unit369`.
 - `UNIT369_INFERENCE_TOKEN`: optional bearer token stored only as a Worker secret.
+- `UNIT369_INFERENCE_THINKING`: optional boolean chat-template switch for compatible vLLM/Qwen deployments.
 
 Requests and responses are bounded, requests time out, URL credentials are rejected, and the endpoint must use HTTPS. This contract allows the model server and GPU host to change without changing the Unit369 product APIs or browser client.
+
+Leading `<think>...</think>` reasoning blocks are removed before a response reaches the browser. Unit369 exposes the final answer, not private model scratch work.
 
 ## Remaining work before full model independence
 

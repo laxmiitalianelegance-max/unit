@@ -11,6 +11,16 @@ const MAX_OWNED_RESPONSE_BYTES = 768 * 1024;
 export const UNIT369_NATIVE_MODEL = "unit369-native-foundation-v1";
 export const UNIT369_OWNED_DEFAULT_MODEL = "unit369";
 
+function optionalBoolean(value) {
+  if (value === true || value === false) return value;
+  const normalized = String(value ?? "")
+    .trim()
+    .toLowerCase();
+  if (["1", "true", "yes", "on"].includes(normalized)) return true;
+  if (["0", "false", "no", "off"].includes(normalized)) return false;
+  return undefined;
+}
+
 function cleanModel(value, fallback = UNIT369_OWNED_DEFAULT_MODEL) {
   const model = String(value || "").trim();
   return /^[A-Za-z0-9@._:/-]{1,120}$/.test(model) ? model : fallback;
@@ -135,10 +145,12 @@ function nativeSynthesis(messages, context) {
 }
 
 export function ownedInferenceConfiguration(env = {}) {
+  const thinking = optionalBoolean(env.UNIT369_INFERENCE_THINKING);
   return {
     native: true,
     endpoint_configured: !!String(env.UNIT369_INFERENCE_URL || "").trim(),
     model: cleanModel(env.UNIT369_INFERENCE_MODEL),
+    ...(thinking === undefined ? {} : { thinking }),
   };
 }
 
@@ -178,12 +190,23 @@ export function runNativeIntelligence(messages, options = {}) {
 
 function ownedText(data) {
   const chat = data?.choices?.[0]?.message?.content;
-  if (typeof chat === "string" && chat.trim()) return chat.trim();
-  if (typeof data?.response === "string" && data.response.trim())
-    return data.response.trim();
-  if (typeof data?.output_text === "string" && data.output_text.trim())
-    return data.output_text.trim();
-  return "";
+  const raw =
+    typeof chat === "string"
+      ? chat
+      : typeof data?.response === "string"
+        ? data.response
+        : typeof data?.output_text === "string"
+          ? data.output_text
+          : "";
+  const text = raw.trim();
+  if (!text) return "";
+  let finalText = text;
+  while (/^<think>/i.test(finalText)) {
+    const closingTag = finalText.search(/<\/think>/i);
+    if (closingTag < 0) return "";
+    finalText = finalText.slice(closingTag + "</think>".length).trim();
+  }
+  return finalText;
 }
 
 export async function runOwnedModel(env, messages, options = {}) {
@@ -203,6 +226,11 @@ export async function runOwnedModel(env, messages, options = {}) {
   const timer = setTimeout(() => controller.abort(), OWNED_TIMEOUT_MS);
   try {
     const token = String(env.UNIT369_INFERENCE_TOKEN || "").trim();
+    const thinking = optionalBoolean(env.UNIT369_INFERENCE_THINKING);
+    const sampling =
+      thinking === false
+        ? { temperature: 0.7, top_p: 0.8, presence_penalty: 1.5 }
+        : {};
     const response = await fetch(endpoint, {
       method: "POST",
       headers: {
@@ -217,6 +245,10 @@ export async function runOwnedModel(env, messages, options = {}) {
           Math.min(2_500, Number(options.maxTokens) || 900),
         ),
         stream: false,
+        ...sampling,
+        ...(thinking === undefined
+          ? {}
+          : { chat_template_kwargs: { enable_thinking: thinking } }),
       }),
       signal: controller.signal,
     });

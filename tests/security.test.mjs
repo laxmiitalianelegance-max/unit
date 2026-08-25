@@ -10,6 +10,7 @@ import {
 } from "../src/ai-providers.js";
 import { handleAuth } from "../src/accounts.js";
 import { planNativeIntent } from "../src/native-capabilities.js";
+import { runOwnedModel } from "../src/owned-inference.js";
 import {
   HttpError,
   readJsonLimited,
@@ -174,9 +175,19 @@ test("owner-controlled inference is preferred through the bounded HTTPS contract
     const body = JSON.parse(init.body);
     assert.equal(body.model, "unit369-test-model");
     assert.equal(body.stream, false);
+    assert.equal(body.temperature, 0.7);
+    assert.equal(body.top_p, 0.8);
+    assert.equal(body.presence_penalty, 1.5);
+    assert.deepEqual(body.chat_template_kwargs, { enable_thinking: false });
     assert.deepEqual(body.messages, [{ role: "user", content: "Hello" }]);
     return Response.json({
-      choices: [{ message: { content: "Owned response" } }],
+      choices: [
+        {
+          message: {
+            content: "<think>Private model reasoning</think>\n\nOwned response",
+          },
+        },
+      ],
     });
   });
 
@@ -186,12 +197,36 @@ test("owner-controlled inference is preferred through the bounded HTTPS contract
         "https://inference.unit369.example/v1/chat/completions",
       UNIT369_INFERENCE_MODEL: "unit369-test-model",
       UNIT369_INFERENCE_TOKEN: "test-owned-token",
+      UNIT369_INFERENCE_THINKING: "false",
     },
     [{ role: "user", content: "Hello" }],
   );
   assert.equal(result.provider, "unit369-owned");
   assert.equal(result.content, "Owned response");
   assert.equal(result.external_required, false);
+});
+
+test("owner-controlled inference rejects an unfinished private reasoning block", async (t) => {
+  t.mock.method(globalThis, "fetch", async () =>
+    Response.json({
+      choices: [
+        { message: { content: "<think>Unfinished private reasoning" } },
+      ],
+    }),
+  );
+
+  await assert.rejects(
+    runOwnedModel(
+      {
+        UNIT369_INFERENCE_URL:
+          "https://inference.unit369.example/v1/chat/completions",
+        UNIT369_INFERENCE_MODEL: "unit369-test-model",
+      },
+      [{ role: "user", content: "Hello" }],
+    ),
+    (error) =>
+      error instanceof HttpError && error.code === "owned_inference_empty",
+  );
 });
 
 test("Unit369 intelligence remains available with every provider removed", async () => {

@@ -50,8 +50,11 @@ Optional owner-controlled Unit369 generative model:
 - `UNIT369_INFERENCE_URL` — full HTTPS URL of an OpenAI-compatible chat-completions endpoint
 - `UNIT369_INFERENCE_MODEL` — model identifier exposed by that endpoint
 - `UNIT369_INFERENCE_TOKEN` — bearer token stored as a Cloudflare secret, never in source or browser storage
+- `UNIT369_INFERENCE_THINKING` — optional `true`/`false` switch forwarded as vLLM/Qwen chat-template configuration; omit it for models that do not support this option
 
 No AI provider key is required for the native foundation. The current independence boundary and the remaining work for a fully owner-operated generative model are documented in `docs/UNIT369_INDEPENDENCE.md`.
+
+The bounded Runpod/vLLM deployment profile and cost controls for the first owner-operated model are documented in `docs/UNIT369_RUNPOD_DEPLOYMENT.md`.
 
 Optional external adapters use their corresponding OAuth client secrets or manually encrypted server-side credentials.
 
