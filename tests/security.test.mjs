@@ -275,6 +275,10 @@ test("short conversational messages use the instant Unit369 Native path", async 
     true,
   );
   assert.equal(
+    shouldUseNativeChatFastPath([{ role: "user", content: "Jesi cuo?" }]),
+    true,
+  );
+  assert.equal(
     shouldUseNativeChatFastPath([
       {
         role: "user",
@@ -302,6 +306,32 @@ test("short conversational messages use the instant Unit369 Native path", async 
   assert.equal(result.provider, "unit369-native");
   assert.equal(result.fast_path, true);
   assert.equal(result.content, "Tu sam i radim. Šta želiš da uradim?");
+});
+
+test("Serbian hearing check gets an immediate natural response", async (t) => {
+  let ownedCalled = false;
+  t.mock.method(globalThis, "fetch", async () => {
+    ownedCalled = true;
+    return Response.json({
+      choices: [{ message: { content: "Slow owned response" } }],
+    });
+  });
+
+  const result = await runPreferredAi(
+    {
+      UNIT369_INFERENCE_URL:
+        "https://api.runpod.ai/v2/test/openai/v1/chat/completions",
+      UNIT369_INFERENCE_MODEL: "unit369-qwen36",
+      UNIT369_INFERENCE_TOKEN: "test-owned-token",
+    },
+    [{ role: "user", content: "Jesi cuo?" }],
+    { purpose: "chat", externalFallback: false },
+  );
+
+  assert.equal(ownedCalled, false);
+  assert.equal(result.provider, "unit369-native");
+  assert.equal(result.fast_path, true);
+  assert.equal(result.content, "Jesam. Reci šta treba.");
 });
 
 test("owned chat failure falls directly back to Unit369 Native when external fallback is disabled", async (t) => {
@@ -338,7 +368,11 @@ test("owned chat failure falls directly back to Unit369 Native when external fal
 
   assert.equal(workersAiCalled, false);
   assert.equal(result.provider, "unit369-native");
-  assert.match(result.content, /Nativni plan:/);
+  assert.match(result.content, /Glavni model se trenutno pokreće/);
+  assert.doesNotMatch(
+    result.content,
+    /Cloudflare|Claude|OpenAI|Grok|owned-inference|intelligence\.plan|Nativni plan/i,
+  );
   assert.deepEqual(result.fallback_from, ["unit369-owned"]);
 });
 

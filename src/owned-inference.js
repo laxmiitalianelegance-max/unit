@@ -63,12 +63,18 @@ function userMessage(messages) {
   );
 }
 
+const SERBIAN_HEARING_PATTERN =
+  /^(?:(?:jesi|jel(?:\s+si)?|je\s+li(?:\s+si)?)\s+(?:čuo|cuo)(?:\s+me)?|(?:čuješ|cujes)(?:\s+me)?)[?.!…]*$/i;
+
+const QUICK_CHAT_PATTERN =
+  /^(?:(?:ć|c)ao|zdravo|hej|pozdrav|hello|hi|hey|sta ima|šta ima|tu si|jesi tu|jel si tu|radiš|radis|radi li|hvala|thanks|thank you)[?.!…]*$/i;
+
 export function shouldUseNativeChatFastPath(messages) {
   const request = userMessage(messages).replace(/\s+/g, " ").trim();
   if (!request || /^[.?!…]+$/.test(request)) return true;
   if (request.length > 80) return false;
-  return /^(?:(?:ć|c)ao|zdravo|hej|pozdrav|hello|hi|hey|sta ima|šta ima|tu si|jesi tu|jel si tu|radiš|radis|radi li|hvala|thanks|thank you)[?.!…]*$/i.test(
-    request,
+  return (
+    QUICK_CHAT_PATTERN.test(request) || SERBIAN_HEARING_PATTERN.test(request)
   );
 }
 
@@ -76,7 +82,7 @@ function usesSerbian(messages, context = {}) {
   const language = String(context.language || "").toLowerCase();
   if (language === "sr" || language.startsWith("sr-")) return true;
   return messages.some((message) =>
-    /\bserbian\b|\bsr-(?:latn|cyrl)\b|[čćžšđ]|\b(?:napravi|uradi|projekat|zadatak|poruka|proizvod|pomozi|možeš|mozes|sta ima|tu si|jesi tu|jel si tu|radis)\b/i.test(
+    /\bserbian\b|\bsr-(?:latn|cyrl)\b|[čćžšđ]|\b(?:napravi|uradi|projekat|zadatak|poruka|proizvod|pomozi|možeš|mozes|sta ima|tu si|jesi tu|jel si tu|jesi cuo|jel si cuo|cujes|radis)\b/i.test(
       String(message?.content || ""),
     ),
   );
@@ -85,12 +91,13 @@ function usesSerbian(messages, context = {}) {
 function nativeChat(messages, context) {
   const request = userMessage(messages).replace(/\s+/g, " ").trim();
   const serbian = usesSerbian(messages, context);
+  if (SERBIAN_HEARING_PATTERN.test(request)) {
+    return { content: "Jesam. Reci šta treba." };
+  }
   if (
     !request ||
     /^[.?!…]+$/.test(request) ||
-    /^(?:(?:ć|c)ao|zdravo|hej|sta ima|šta ima|tu si|jesi tu)[?.!…]*$/i.test(
-      request,
-    )
+    QUICK_CHAT_PATTERN.test(request)
   ) {
     return {
       content: serbian
@@ -99,31 +106,9 @@ function nativeChat(messages, context) {
     };
   }
   const plan = planNativeIntent(request);
-  const numbered = plan.steps
-    .map(
-      (step, index) =>
-        `${index + 1}. ${step.reason} (${step.capability}.${step.operation})`,
-    )
-    .join("\n");
   const content = serbian
-    ? [
-        "Unit369 Native radi bez Cloudflare AI, Claude, OpenAI ili Grok servisa.",
-        request
-          ? `Razumeo sam zahtev: ${request.slice(0, 700)}`
-          : "Zahtev je primljen.",
-        "Nativni plan:",
-        numbered,
-        "Ovo je deterministički osnovni režim: može samostalno da planira i koristi Unit369 podatke, fajlove i alate. Slobodno generativno rezonovanje biće potpuno nezavisno kada se priključi Unit369 model preko owned-inference ugovora.",
-      ].join("\n\n")
-    : [
-        "Unit369 Native is running without Cloudflare AI, Claude, OpenAI or Grok.",
-        request
-          ? `I understood the request: ${request.slice(0, 700)}`
-          : "The request was received.",
-        "Native plan:",
-        numbered,
-        "This is the deterministic foundation mode: it can plan and use Unit369 data, files and tools independently. Unrestricted generative reasoning becomes fully independent when the Unit369 model is attached through the owned-inference contract.",
-      ].join("\n\n");
+    ? "Razumeo sam. Glavni model se trenutno pokreće, pa puni odgovor još nije spreman. Pokušaj ponovo za nekoliko sekundi."
+    : "I understand. The main model is starting, so the full answer is not ready yet. Please try again in a few seconds.";
   return { content, plan };
 }
 
