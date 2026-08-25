@@ -8,7 +8,12 @@ import {
   runWorkersAi,
   WORKERS_AI_DEFAULT_MODEL,
 } from "../src/ai-providers.js";
-import { handleAuth } from "../src/accounts.js";
+import {
+  googleOAuthConfigured,
+  handleAuth,
+  ownerAuthConfigured,
+  resolveAccount,
+} from "../src/accounts.js";
 import { planNativeIntent } from "../src/native-capabilities.js";
 import { runOwnedModel } from "../src/owned-inference.js";
 import {
@@ -61,6 +66,27 @@ class MemoryStorage {
   async transaction(callback) {
     return callback(this);
   }
+}
+
+function toolStoreNamespace() {
+  const stores = new Map();
+  return {
+    idFromName(name) {
+      return String(name);
+    },
+    get(id) {
+      if (!stores.has(id)) {
+        stores.set(id, new ToolStore({ storage: new MemoryStorage() }));
+      }
+      const store = stores.get(id);
+      return {
+        fetch: (input, init) =>
+          store.fetch(
+            input instanceof Request ? input : new Request(input, init),
+          ),
+      };
+    },
+  };
 }
 
 function request(path, body, headers = {}) {
@@ -325,8 +351,8 @@ test("Google OAuth start binds state to an HttpOnly flow cookie and PKCE", async
     new Request("https://unit.test/api/auth/google/start?return_to=/settings"),
     {
       APP_SECRET: "test-app-secret-with-sufficient-entropy",
-      GOOGLE_CLIENT_ID: "google-client",
-      GOOGLE_CLIENT_SECRET: "google-secret",
+      GOOGLE_CLIENT_ID: "unit369-test.apps.googleusercontent.com",
+      GOOGLE_CLIENT_SECRET: "google-secret-with-sufficient-entropy",
     },
   );
   assert.equal(response.status, 302);
@@ -338,6 +364,68 @@ test("Google OAuth start binds state to an HttpOnly flow cookie and PKCE", async
     response.headers.get("set-cookie"),
     /__Host-u369_oauth_flow=.*HttpOnly.*Secure.*SameSite=Lax/,
   );
+});
+
+test("invalid Google credentials are never sent to Google", async () => {
+  const env = {
+    APP_SECRET: "test-app-secret-with-sufficient-entropy",
+    GOOGLE_CLIENT_ID: "shpss_not_a_google_client_id",
+    GOOGLE_CLIENT_SECRET: "not-a-google-client-secret",
+  };
+  assert.equal(googleOAuthConfigured(env), false);
+  const response = await handleAuth(
+    new Request("https://unit.test/api/auth/google/start?return_to=/"),
+    env,
+  );
+  assert.equal(response.status, 503);
+  assert.equal(response.headers.get("location"), null);
+});
+
+test("Unit369 owner access code creates a signed private session", async () => {
+  const env = {
+    APP_SECRET: "test-app-secret-with-sufficient-entropy",
+    UNIT369_OWNER_ACCESS_CODE: "unit369-private-access-code-2026",
+    TOOL_STORE: toolStoreNamespace(),
+  };
+  assert.equal(ownerAuthConfigured(env), true);
+  const response = await handleAuth(
+    new Request("https://unit.test/api/auth/owner/login", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "cf-connecting-ip": "203.0.113.10",
+      },
+      body: JSON.stringify({
+        access_code: "unit369-private-access-code-2026",
+      }),
+    }),
+    env,
+  );
+  assert.equal(response.status, 200, await response.clone().text());
+  const cookie = response.headers.get("set-cookie").split(";")[0];
+  assert.match(
+    response.headers.get("set-cookie"),
+    /__Host-u369_account=.*HttpOnly.*Secure.*SameSite=Lax/,
+  );
+  const account = await resolveAccount(
+    new Request("https://unit.test/api/auth/me", { headers: { cookie } }),
+    env,
+  );
+  assert.equal(account.uid, "unit369_owner");
+  assert.equal(account.provider, "owner");
+
+  const rejected = await handleAuth(
+    new Request("https://unit.test/api/auth/owner/login", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "cf-connecting-ip": "203.0.113.10",
+      },
+      body: JSON.stringify({ access_code: "wrong-access-code" }),
+    }),
+    env,
+  );
+  assert.equal(rejected.status, 401);
 });
 
 test("native planner identifies independent capability domains", () => {
