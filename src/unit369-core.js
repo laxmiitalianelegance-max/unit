@@ -32,9 +32,9 @@ import {
   validateTranslation,
 } from "./ui-translations.js";
 
-export const APP_VERSION = "2026.08.25.1";
+export const APP_VERSION = "2026.08.25.2";
 const HEALTH_CACHE_KEY = `native-intelligence-health-${APP_VERSION}`;
-const TRANSLATION_CACHE_VERSION = "ui-v6";
+const TRANSLATION_CACHE_VERSION = "ui-v7";
 
 const QUOTAS = Object.freeze({
   chat: [
@@ -132,6 +132,7 @@ async function freeAi(request, env) {
   const result = await runPreferredAi(env, messages, {
     purpose: "chat",
     maxTokens: 900,
+    externalFallback: false,
   });
   return json(result);
 }

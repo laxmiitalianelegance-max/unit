@@ -74,6 +74,10 @@ export const UI_BASE = Object.freeze({
   translationSignInRequired:
     "Sign in with Google to translate the interface into this language.",
   requestFailed: "The request failed. Try again.",
+  requestTimeout:
+    "The model took too long to answer. Unit369 stopped waiting safely; try again.",
+  requestInterrupted:
+    "The previous request was interrupted. Please send it again.",
 });
 
 const UI_SR = Object.freeze({
@@ -154,6 +158,9 @@ const UI_SR = Object.freeze({
   translationSignInRequired:
     "Prijavite se Google nalogom da biste preveli interfejs na ovaj jezik.",
   requestFailed: "Zahtev nije uspeo. Pokušajte ponovo.",
+  requestTimeout:
+    "Modelu je trebalo predugo da odgovori. Unit369 je bezbedno prekinuo čekanje; pokušajte ponovo.",
+  requestInterrupted: "Prethodni zahtev je prekinut. Pošaljite ga ponovo.",
 });
 
 export function normalizeLanguage(value) {

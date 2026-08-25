@@ -6,10 +6,14 @@ import {
   safeError,
 } from "./runtime-utils.js";
 
-const OWNED_TIMEOUT_MS = 35_000;
+const OWNED_TIMEOUT_MS = 25_000;
 const MAX_OWNED_RESPONSE_BYTES = 768 * 1024;
 export const UNIT369_NATIVE_MODEL = "unit369-native-foundation-v1";
-export const UNIT369_OWNED_DEFAULT_MODEL = "unit369";
+export const UNIT369_OWNED_DEFAULT_MODEL = "Qwen/Qwen3.6-35B-A3B-FP8";
+
+const KNOWN_MODEL_ALIASES = Object.freeze({
+  "unit369-qwen36": UNIT369_OWNED_DEFAULT_MODEL,
+});
 
 function optionalBoolean(value) {
   if (value === true || value === false) return value;
@@ -24,6 +28,11 @@ function optionalBoolean(value) {
 function cleanModel(value, fallback = UNIT369_OWNED_DEFAULT_MODEL) {
   const model = String(value || "").trim();
   return /^[A-Za-z0-9@._:/-]{1,120}$/.test(model) ? model : fallback;
+}
+
+function ownedModel(value) {
+  const configured = cleanModel(value);
+  return KNOWN_MODEL_ALIASES[configured.toLowerCase()] || configured;
 }
 
 function ownedEndpoint(value) {
@@ -66,8 +75,21 @@ function usesSerbian(messages, context = {}) {
 
 function nativeChat(messages, context) {
   const request = userMessage(messages).replace(/\s+/g, " ").trim();
-  const plan = planNativeIntent(request);
   const serbian = usesSerbian(messages, context);
+  if (
+    !request ||
+    /^[.?!…]+$/.test(request) ||
+    /^(?:(?:ć|c)ao|zdravo|hej|sta ima|šta ima|tu si|jesi tu)[?.!…]*$/i.test(
+      request,
+    )
+  ) {
+    return {
+      content: serbian
+        ? "Tu sam i radim. Šta želiš da uradim?"
+        : "I'm here and ready. What would you like me to do?",
+    };
+  }
+  const plan = planNativeIntent(request);
   const numbered = plan.steps
     .map(
       (step, index) =>
@@ -149,7 +171,7 @@ export function ownedInferenceConfiguration(env = {}) {
   return {
     native: true,
     endpoint_configured: !!String(env.UNIT369_INFERENCE_URL || "").trim(),
-    model: cleanModel(env.UNIT369_INFERENCE_MODEL),
+    model: ownedModel(env.UNIT369_INFERENCE_MODEL),
     ...(thinking === undefined ? {} : { thinking }),
   };
 }
@@ -218,10 +240,7 @@ export async function runOwnedModel(env, messages, options = {}) {
     );
   }
   const endpoint = ownedEndpoint(env.UNIT369_INFERENCE_URL);
-  const model = cleanModel(
-    options.model || env.UNIT369_INFERENCE_MODEL,
-    UNIT369_OWNED_DEFAULT_MODEL,
-  );
+  const model = ownedModel(options.model || env.UNIT369_INFERENCE_MODEL);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), OWNED_TIMEOUT_MS);
   try {

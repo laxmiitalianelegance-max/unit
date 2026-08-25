@@ -63,8 +63,13 @@ for (const match of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)) {
 }
 assert.ok(html.includes('data-mode="auto"'), "Auto fallback mode is missing");
 assert.ok(
-  html.includes("unit369-ui-i18n-v6-"),
+  html.includes("unit369-ui-i18n-v7-"),
   "Translation cache version is stale",
+);
+assert.ok(
+  html.includes("recoverInterruptedTurns") &&
+    html.includes("controller.abort()"),
+  "Chat recovery and request timeout safeguards are missing",
 );
 assert.ok(!html.includes(".jpg"), "The UI still references legacy JPG icons");
 assert.ok(

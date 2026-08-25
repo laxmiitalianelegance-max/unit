@@ -296,6 +296,7 @@ export async function runPreferredAi(env, messages, options = {}) {
   const attempts = [];
   const normalized = normalizeMessages(messages);
   const configured = configuredProviders(env);
+  const externalFallback = options.externalFallback !== false;
   const candidates = [
     [
       "unit369-owned",
@@ -309,24 +310,24 @@ export async function runPreferredAi(env, messages, options = {}) {
           ...options,
           model: options.workersModel || options.model,
         }),
-      configured.workersAi,
+      externalFallback && configured.workersAi,
     ],
     [
       "claude",
       () =>
         runClaude(env, normalized, { ...options, model: options.claudeModel }),
-      configured.claude,
+      externalFallback && configured.claude,
     ],
     [
       "openai",
       () =>
         runOpenAi(env, normalized, { ...options, model: options.openaiModel }),
-      configured.openai,
+      externalFallback && configured.openai,
     ],
     [
       "grok",
       () => runGrok(env, normalized, { ...options, model: options.grokModel }),
-      configured.grok,
+      externalFallback && configured.grok,
     ],
     [
       "unit369-native",
