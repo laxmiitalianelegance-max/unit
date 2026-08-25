@@ -6,7 +6,7 @@ import {
   safeError,
 } from "./runtime-utils.js";
 
-const OWNED_TIMEOUT_MS = 25_000;
+const OWNED_TIMEOUT_MS = 10_000;
 const MAX_OWNED_RESPONSE_BYTES = 768 * 1024;
 export const UNIT369_NATIVE_MODEL = "unit369-native-foundation-v1";
 export const UNIT369_OWNED_DEFAULT_MODEL = "Qwen/Qwen3.6-35B-A3B-FP8";
@@ -63,11 +63,20 @@ function userMessage(messages) {
   );
 }
 
+export function shouldUseNativeChatFastPath(messages) {
+  const request = userMessage(messages).replace(/\s+/g, " ").trim();
+  if (!request || /^[.?!…]+$/.test(request)) return true;
+  if (request.length > 80) return false;
+  return /^(?:(?:ć|c)ao|zdravo|hej|pozdrav|hello|hi|hey|sta ima|šta ima|tu si|jesi tu|jel si tu|radiš|radis|radi li|hvala|thanks|thank you)[?.!…]*$/i.test(
+    request,
+  );
+}
+
 function usesSerbian(messages, context = {}) {
   const language = String(context.language || "").toLowerCase();
   if (language === "sr" || language.startsWith("sr-")) return true;
   return messages.some((message) =>
-    /\bserbian\b|\bsr-(?:latn|cyrl)\b|[čćžšđ]|\b(?:napravi|uradi|projekat|zadatak|poruka|proizvod|pomozi|možeš|mozes)\b/i.test(
+    /\bserbian\b|\bsr-(?:latn|cyrl)\b|[čćžšđ]|\b(?:napravi|uradi|projekat|zadatak|poruka|proizvod|pomozi|možeš|mozes|sta ima|tu si|jesi tu|jel si tu|radis)\b/i.test(
       String(message?.content || ""),
     ),
   );
