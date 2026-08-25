@@ -66,6 +66,12 @@ function userMessage(messages) {
 const SERBIAN_HEARING_PATTERN =
   /^(?:(?:jesi|jel(?:\s+si)?|je\s+li(?:\s+si)?)\s+(?:čuo|cuo)(?:\s+me)?|(?:čuješ|cujes)(?:\s+me)?)[?.!…]*$/i;
 
+const SERBIAN_HELP_PATTERN =
+  /^(?:treba\s+mi\s+(?:pomoć|pomoc)|(?:pomozi|pomogni)\s+mi|(?:možeš|mozes)\s+li\s+(?:da\s+)?mi\s+(?:pomoći|pomoci|pomogneš|pomognes)|možeš\s+mi\s+(?:pomoći|pomoci|pomogneš|pomognes))[?.!…]*$/i;
+
+const SERBIAN_QUESTION_PATTERN =
+  /^(?:imam\s+(?:jedno\s+)?pitanje|mogu\s+li\s+(?:nešto|nesto)\s+da\s+(?:te\s+)?pitam|mogu\s+(?:nešto|nesto)\s+da\s+(?:te\s+)?pitam)[?.!…]*$/i;
+
 const QUICK_CHAT_PATTERN =
   /^(?:(?:ć|c)ao|zdravo|hej|pozdrav|hello|hi|hey|sta ima|šta ima|tu si|jesi tu|jel si tu|radiš|radis|radi li|hvala|thanks|thank you)[?.!…]*$/i;
 
@@ -74,7 +80,10 @@ export function shouldUseNativeChatFastPath(messages) {
   if (!request || /^[.?!…]+$/.test(request)) return true;
   if (request.length > 80) return false;
   return (
-    QUICK_CHAT_PATTERN.test(request) || SERBIAN_HEARING_PATTERN.test(request)
+    QUICK_CHAT_PATTERN.test(request) ||
+    SERBIAN_HEARING_PATTERN.test(request) ||
+    SERBIAN_HELP_PATTERN.test(request) ||
+    SERBIAN_QUESTION_PATTERN.test(request)
   );
 }
 
@@ -82,7 +91,7 @@ function usesSerbian(messages, context = {}) {
   const language = String(context.language || "").toLowerCase();
   if (language === "sr" || language.startsWith("sr-")) return true;
   return messages.some((message) =>
-    /\bserbian\b|\bsr-(?:latn|cyrl)\b|[čćžšđ]|\b(?:napravi|uradi|projekat|zadatak|poruka|proizvod|pomozi|možeš|mozes|sta ima|tu si|jesi tu|jel si tu|jesi cuo|jel si cuo|cujes|radis)\b/i.test(
+    /\bserbian\b|\bsr-(?:latn|cyrl)\b|[čćžšđ]|\b(?:napravi|uradi|projekat|zadatak|poruka|proizvod|pomozi|pomogni|pomoć|pomoc|treba|pitanje|pitam|možeš|mozes|sta ima|tu si|jesi tu|jel si tu|jesi cuo|jel si cuo|cujes|radis)\b/i.test(
       String(message?.content || ""),
     ),
   );
@@ -93,6 +102,12 @@ function nativeChat(messages, context) {
   const serbian = usesSerbian(messages, context);
   if (SERBIAN_HEARING_PATTERN.test(request)) {
     return { content: "Jesam. Reci šta treba." };
+  }
+  if (SERBIAN_HELP_PATTERN.test(request)) {
+    return { content: "Naravno. Reci mi konkretno šta treba da rešimo." };
+  }
+  if (SERBIAN_QUESTION_PATTERN.test(request)) {
+    return { content: "Slobodno, pitaj." };
   }
   if (
     !request ||
