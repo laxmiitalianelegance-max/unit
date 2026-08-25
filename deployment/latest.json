@@ -1,53 +1,9 @@
 {
-  "sha": "779f57a335f3ff3ec3a96f0af278d691375d9be2",
-  "status": "success",
-  "stage": "auth_verified",
+  "sha": "5fb6ce9b232d3670b167ed639d51e4885fc61759",
+  "status": "failure",
+  "stage": "deploy_failed",
   "url": "https://unit.laxmiitalianelegance.workers.dev",
-  "health": {
-    "status": "ready",
-    "version": "2026.08.25.4",
-    "core_ready": true,
-    "auth_ready": true,
-    "ai_operational": true,
-    "intelligence_mode": "owned-model",
-    "generative_model_configured": true,
-    "ai": {
-      "operational": true,
-      "provider": "unit369-native",
-      "model": "unit369-native-foundation-v1",
-      "capability_level": "deterministic-foundation",
-      "external_required": false,
-      "latency_ms": 0,
-      "checked_at": "2026-08-25T21:36:58.188Z"
-    },
-    "file_storage": "durable_object",
-    "required_checks": [
-      "assets",
-      "self",
-      "native_store",
-      "tool_store",
-      "files",
-      "app_secret",
-      "encryption_key",
-      "authentication",
-      "native_intelligence"
-    ],
-    "checks": {
-      "assets": true,
-      "self": true,
-      "native_store": true,
-      "tool_store": true,
-      "files": true,
-      "app_secret": true,
-      "encryption_key": true,
-      "owner_auth": true,
-      "google_oauth": false,
-      "owned_inference_configured": true,
-      "external_ai_configured": true,
-      "authentication": true,
-      "native_intelligence": true
-    }
-  },
-  "error": null,
-  "recorded_at": "2026-08-25T21:37:05.795Z"
+  "health": null,
+  "error": " ⛅️ wrangler 4.125.0 (update available 4.126.0)\n───────────────────────────────────────────────\n🌀 Building list of assets...\n✨ Read 6 files from the assets directory /home/runner/work/unit/unit/public\n🌀 Starting asset upload...\n\u001b[31m✘ \u001b[41;31m[\u001b[41;97mERROR\u001b[41;31m]\u001b[0m \u001b[1mA request to the Cloudflare API (/accounts/43d065736d2b5a0ecc8999e8b86ec68e/workers/scripts/unit/assets-upload-session) failed.\u001b[0m\n  An unknown error has occurred. If this error persists, please file a report in workers-sdk (\u001b[4mhttps://github.com/cloudflare/workers-sdk/issues\u001b[0m) or reach out to your account team. [code: 10013]\n  \n  If you think this is a bug, please open an issue at: \u001b[4mhttps://github.com/cloudflare/workers-sdk/issues/new/choose\u001b[0m\n🪵  Logs were written to \"/home/runner/.config/.wrangler/logs/wrangler-2026-08-25_22-21-24_298.log\"",
+  "recorded_at": "2026-08-25T22:21:45.445Z"
 }
