@@ -1419,6 +1419,11 @@
             return [];
           }
         }
+        const OBSOLETE_TECHNICAL_RESPONSE =
+          /Unit369 Native radi bez Cloudflare AI|Nativni plan:|deterministički osnovni režim|owned-inference ugovora|intelligence\.plan/i;
+        function isObsoleteTechnicalResponse(value) {
+          return OBSOLETE_TECHNICAL_RESPONSE.test(String(value || ""));
+        }
         function boundedText(value, max) {
           return String(value ?? "").slice(0, max);
         }
@@ -1483,6 +1488,30 @@
             localStorage.removeItem(STORE);
             localStorage.removeItem(CUR);
           }
+        }
+        function removeObsoleteTechnicalResponses() {
+          const all = sessions();
+          let changed = false;
+          all.forEach((session) =>
+            (session.turns || []).forEach((turn) => {
+              if (isObsoleteTechnicalResponse(turn.final)) {
+                turn.final = "";
+                changed = true;
+              }
+              Object.keys(turn.answers || {}).forEach((provider) => {
+                if (!isObsoleteTechnicalResponse(turn.answers[provider]))
+                  return;
+                delete turn.answers[provider];
+                changed = true;
+              });
+            }),
+          );
+          if (!changed) return;
+          const currentId = localStorage.getItem(CUR);
+          saveSessions(
+            all,
+            all.find((session) => session.id === currentId),
+          );
         }
         function sessionId() {
           return `s${crypto.randomUUID()}`;
@@ -1602,7 +1631,11 @@
                   keys.length > 1
                     ? `<details class="u369-details"><summary>${esc(t("aiTeamDetails"))}</summary>${keys.map((k) => `<div class="u369-detail-row"><b>${esc(names[k] || k)}</b>${esc(tr.answers[k])}</div>`).join("")}</details>`
                     : "";
-              return `<div class="u369-turn"><div class="u369-user-msg">${esc(tr.q)}</div><div class="u369-assistant-msg"><div class="u369-assistant-head"><img src="/app-icon-192.png" alt=""><span>Unit369</span></div><div class="u369-answer${tr.pending ? " u369-thinking" : ""}">${esc(ans || (tr.pending ? t("thinking") : failure || t("noAnswer")))}</div>${details}${ans ? `<button class="u369-msg-action" data-copy="${i}">${esc(t("copy"))}</button>` : ""}</div></div>`;
+              const assistant =
+                ans || tr.pending || failure
+                  ? `<div class="u369-assistant-msg"><div class="u369-assistant-head"><img src="/app-icon-192.png" alt=""><span>Unit369</span></div><div class="u369-answer${tr.pending ? " u369-thinking" : ""}">${esc(ans || (tr.pending ? t("thinking") : failure))}</div>${details}${ans ? `<button class="u369-msg-action" data-copy="${i}">${esc(t("copy"))}</button>` : ""}</div>`
+                  : "";
+              return `<div class="u369-turn"><div class="u369-user-msg">${esc(tr.q)}</div>${assistant}</div>`;
             })
             .join("");
           $$("[data-copy]").forEach(
@@ -2141,6 +2174,7 @@
         async function boot() {
           bind();
           savePrefs();
+          removeObsoleteTechnicalResponses();
           renderSettings();
           renderHistory();
           renderConversation();

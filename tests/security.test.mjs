@@ -334,6 +334,72 @@ test("Serbian hearing check gets an immediate natural response", async (t) => {
   assert.equal(result.content, "Jesam. Reci šta treba.");
 });
 
+test("Serbian requests for help get an immediate useful response", async (t) => {
+  let ownedCalled = false;
+  t.mock.method(globalThis, "fetch", async () => {
+    ownedCalled = true;
+    return Response.json({
+      choices: [{ message: { content: "Slow owned response" } }],
+    });
+  });
+
+  for (const message of [
+    "Treba mi pomoć",
+    "Pomozi mi.",
+    "Možeš li da mi pomogneš?",
+  ]) {
+    assert.equal(
+      shouldUseNativeChatFastPath([{ role: "user", content: message }]),
+      true,
+    );
+  }
+
+  const result = await runPreferredAi(
+    {
+      UNIT369_INFERENCE_URL:
+        "https://api.runpod.ai/v2/test/openai/v1/chat/completions",
+      UNIT369_INFERENCE_MODEL: "unit369-qwen36",
+      UNIT369_INFERENCE_TOKEN: "test-owned-token",
+    },
+    [{ role: "user", content: "Treba mi pomoc" }],
+    { purpose: "chat", externalFallback: false },
+  );
+
+  assert.equal(ownedCalled, false);
+  assert.equal(result.provider, "unit369-native");
+  assert.equal(result.fast_path, true);
+  assert.equal(
+    result.content,
+    "Naravno. Reci mi konkretno šta treba da rešimo.",
+  );
+});
+
+test("Serbian question openers get an immediate natural response", async (t) => {
+  let ownedCalled = false;
+  t.mock.method(globalThis, "fetch", async () => {
+    ownedCalled = true;
+    return Response.json({
+      choices: [{ message: { content: "Slow owned response" } }],
+    });
+  });
+
+  const result = await runPreferredAi(
+    {
+      UNIT369_INFERENCE_URL:
+        "https://api.runpod.ai/v2/test/openai/v1/chat/completions",
+      UNIT369_INFERENCE_MODEL: "unit369-qwen36",
+      UNIT369_INFERENCE_TOKEN: "test-owned-token",
+    },
+    [{ role: "user", content: "Imam pitanje" }],
+    { purpose: "chat", externalFallback: false },
+  );
+
+  assert.equal(ownedCalled, false);
+  assert.equal(result.provider, "unit369-native");
+  assert.equal(result.fast_path, true);
+  assert.equal(result.content, "Slobodno, pitaj.");
+});
+
 test("owned chat failure falls directly back to Unit369 Native when external fallback is disabled", async (t) => {
   let workersAiCalled = false;
   t.mock.method(globalThis, "fetch", async () =>
