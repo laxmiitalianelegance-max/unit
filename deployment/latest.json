@@ -1,11 +1,11 @@
 {
-  "sha": "5a4e6685595b3e8398f4183ae44add912f8922eb",
+  "sha": "779f57a335f3ff3ec3a96f0af278d691375d9be2",
   "status": "success",
   "stage": "auth_verified",
   "url": "https://unit.laxmiitalianelegance.workers.dev",
   "health": {
     "status": "ready",
-    "version": "2026.08.25.3",
+    "version": "2026.08.25.4",
     "core_ready": true,
     "auth_ready": true,
     "ai_operational": true,
@@ -18,7 +18,7 @@
       "capability_level": "deterministic-foundation",
       "external_required": false,
       "latency_ms": 0,
-      "checked_at": "2026-08-25T07:57:52.441Z"
+      "checked_at": "2026-08-25T21:36:58.188Z"
     },
     "file_storage": "durable_object",
     "required_checks": [
@@ -49,5 +49,5 @@
     }
   },
   "error": null,
-  "recorded_at": "2026-08-25T07:57:53.769Z"
+  "recorded_at": "2026-08-25T21:37:05.795Z"
 }
