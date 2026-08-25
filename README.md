@@ -17,7 +17,8 @@ There is one active runtime graph. Historical wrappers and branch-specific valid
 
 ## Security and AI behavior
 
-- Google OAuth uses signed state, browser-bound flow state and PKCE.
+- Unit369 owner sign-in uses a private access code stored only as a Cloudflare Secret, constant-time verification, a Durable Object attempt limit and a signed HttpOnly session.
+- Google OAuth is optional. When configured, it uses signed state, browser-bound flow state and PKCE; malformed non-Google client IDs are rejected before redirect.
 - AI and product routes require an authenticated Unit369 account.
 - Unsafe same-origin requests require a matching `Origin` header.
 - The Unit369 route is primary in the UI. It uses the owner-controlled Unit369 model when configured, optional server-side AI accelerators during migration, and the native deterministic foundation as the final no-provider path.
@@ -34,8 +35,7 @@ Bindings are declared in `wrangler.jsonc`: `AI`, `ASSETS`, `SELF`, `TOOL_STORE` 
 Required secrets/variables:
 
 - `APP_SECRET`
-- `GOOGLE_CLIENT_ID`
-- `GOOGLE_CLIENT_SECRET`
+- `UNIT369_OWNER_ACCESS_CODE` — a new private passphrase of at least 16 characters, stored as a Cloudflare Secret
 
 `ENCRYPTION_KEY` is an optional dedicated credential-encryption secret. When it is absent, Unit369 derives a domain-separated encryption key from `APP_SECRET`.
 
@@ -44,6 +44,11 @@ Optional provider fallback:
 - `ANTHROPIC_API_KEY` and optional `ANTHROPIC_MODEL`
 - `OPENAI_API_KEY` and optional `OPENAI_MODEL`
 - `GROK_API_KEY` or `XAI_API_KEY`, and optional `GROK_MODEL`
+
+Optional identity adapter:
+
+- `GOOGLE_CLIENT_ID` — must end in `.apps.googleusercontent.com`
+- `GOOGLE_CLIENT_SECRET`
 
 Optional owner-controlled Unit369 generative model:
 
@@ -67,8 +72,8 @@ npm run ci
 npm run test:smoke
 ```
 
-`npm run ci` checks formatting, validates the complete import graph and PWA assets, runs unit/security tests, and performs a Wrangler production dry-run. The smoke test starts the Worker locally and verifies CSP, authentication gates, native planning, OAuth PKCE, manifest and icons.
+`npm run ci` checks formatting, validates the complete import graph and PWA assets, runs unit/security tests, and performs a Wrangler production dry-run. The smoke test starts the Worker locally and verifies CSP, Unit369 owner authentication, authentication gates, native planning, manifest and icons. Unit tests verify optional Google OAuth PKCE and reject malformed Google credentials.
 
 ## Deployment
 
-`.github/workflows/deploy-production.yml` deploys only an explicitly confirmed `main` commit. It verifies the locked source and subscription-free storage contract, performs a dry-run, deploys the exact tested commit, then checks release health, Google OAuth, CSP and PWA assets.
+`.github/workflows/deploy-production.yml` deploys only an explicitly confirmed `main` commit. It verifies the locked source and subscription-free storage contract, performs a dry-run, deploys the exact tested commit, then checks release health, Unit369 owner authentication, CSP and PWA assets.
