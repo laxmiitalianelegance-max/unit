@@ -1,11 +1,11 @@
 {
-  "sha": "1031e9bc233bb9f4a7ce365efd137da55189d9ec",
+  "sha": "6012566fece2fc49d53a385f3552fc4458e1c443",
   "status": "success",
-  "stage": "oauth_verified",
+  "stage": "auth_verified",
   "url": "https://unit.laxmiitalianelegance.workers.dev",
   "health": {
     "status": "ready",
-    "version": "2026.08.24.1",
+    "version": "2026.08.25.1",
     "core_ready": true,
     "auth_ready": true,
     "ai_operational": true,
@@ -18,7 +18,7 @@
       "capability_level": "deterministic-foundation",
       "external_required": false,
       "latency_ms": 0,
-      "checked_at": "2026-08-25T06:25:16.464Z"
+      "checked_at": "2026-08-25T07:00:05.674Z"
     },
     "file_storage": "durable_object",
     "required_checks": [
@@ -29,7 +29,7 @@
       "files",
       "app_secret",
       "encryption_key",
-      "google_oauth",
+      "authentication",
       "native_intelligence"
     ],
     "checks": {
@@ -40,12 +40,14 @@
       "files": true,
       "app_secret": true,
       "encryption_key": true,
-      "google_oauth": true,
+      "owner_auth": true,
+      "google_oauth": false,
       "owned_inference_configured": true,
       "external_ai_configured": true,
+      "authentication": true,
       "native_intelligence": true
     }
   },
   "error": null,
-  "recorded_at": "2026-08-25T06:25:17.879Z"
+  "recorded_at": "2026-08-25T07:00:07.280Z"
 }
