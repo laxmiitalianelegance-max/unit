@@ -36,6 +36,19 @@ Content-Type: application/json
 }
 ```
 
+The chat UI creates the same approval only for an explicit slash command. Ordinary
+messages and pasted code remain normal chat content:
+
+```text
+/run python
+print(2 + 2)
+```
+
+`/run javascript` and `/run typescript` are also supported. The code and its
+digest, language, size and timeout are displayed before the owner chooses
+**Approve and run** or **Cancel**. The one-time token remains in memory and is never
+written to browser storage.
+
 The response contains `approval.id` and `approval.token`. Confirm exactly that approved payload:
 
 ```http
@@ -49,6 +62,22 @@ Content-Type: application/json
 ```
 
 The token expires after ten minutes and cannot be replayed. A successful response includes bounded logs, typed results, a code digest and execution timing.
+
+Cancel without executing:
+
+```http
+POST /api/native/code/cancel
+Content-Type: application/json
+
+{
+  "approval_id": "approval_...",
+  "approval_token": "..."
+}
+```
+
+A cancelled approval cannot be confirmed later. If the browser loses the result
+of a confirm request, the UI reports an unknown outcome and does not retry the
+execution automatically.
 
 ## Runtime and cost boundary
 

@@ -75,7 +75,12 @@ export const NATIVE_CAPABILITIES = Object.freeze({
   code: {
     name: "Isolated Code Execution",
     version: 1,
-    operations: ["code.capabilities", "code.plan", "code.confirm"],
+    operations: [
+      "code.capabilities",
+      "code.plan",
+      "code.confirm",
+      "code.cancel",
+    ],
     native: true,
   },
   work: {

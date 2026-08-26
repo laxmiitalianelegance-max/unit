@@ -1,4 +1,5 @@
 import {
+  cancelApproval,
   consumeApproval,
   enforceQuota,
   requestApproval,
@@ -29,6 +30,15 @@ const EXECUTION_WINDOWS = Object.freeze([
   { window_ms: 60 * 60 * 1000, limit: 20 },
   { window_ms: 24 * 60 * 60 * 1000, limit: 100 },
 ]);
+const CHAT_CODE_COMMAND = /^\/(?:run|execute|izvrsi|izvrši)\b/i;
+const LANGUAGE_ALIASES = Object.freeze({
+  py: "python",
+  python: "python",
+  js: "javascript",
+  javascript: "javascript",
+  ts: "typescript",
+  typescript: "typescript",
+});
 
 function clip(value, max) {
   const text = String(value ?? "");
@@ -142,6 +152,75 @@ export function normalizeCodeRequest(input) {
   };
 }
 
+export function isCodeChatCommand(value) {
+  return CHAT_CODE_COMMAND.test(String(value || "").trim());
+}
+
+export function parseCodeChatCommand(value) {
+  const message = String(value || "").trim();
+  if (!isCodeChatCommand(message)) {
+    throw new HttpError(
+      400,
+      "Code execution chat commands must start with /run or /izvrsi.",
+      "invalid_code_chat_command",
+    );
+  }
+  const firstBreak = message.indexOf("\n");
+  if (firstBreak < 0) {
+    throw new HttpError(
+      400,
+      "Put the code on a new line after /run <language>.",
+      "code_required",
+    );
+  }
+  const commandLine = message.slice(0, firstBreak).trim();
+  const commandMatch = commandLine.match(
+    /^\/(?:run|execute|izvrsi|izvrši)(?:\s+([A-Za-z]+))?\s*$/i,
+  );
+  if (!commandMatch) {
+    throw new HttpError(
+      400,
+      "Use /run <python|javascript|typescript> followed by code on a new line.",
+      "invalid_code_chat_command",
+    );
+  }
+
+  let language = commandMatch[1]
+    ? LANGUAGE_ALIASES[commandMatch[1].toLowerCase()]
+    : "";
+  let code = message.slice(firstBreak + 1).trim();
+  const fenced = code.match(/^```([A-Za-z]+)?\s*\n([\s\S]*?)\n?```\s*$/);
+  if (fenced) {
+    const fencedLanguage = fenced[1]
+      ? LANGUAGE_ALIASES[fenced[1].toLowerCase()]
+      : "";
+    if (fenced[1] && !fencedLanguage) {
+      throw new HttpError(
+        400,
+        "Language must be python, javascript, or typescript.",
+        "unsupported_code_language",
+      );
+    }
+    if (language && fencedLanguage && language !== fencedLanguage) {
+      throw new HttpError(
+        400,
+        "The command language and fenced-code language must match.",
+        "code_language_mismatch",
+      );
+    }
+    language ||= fencedLanguage;
+    code = fenced[2].trim();
+  }
+  if (commandMatch[1] && !language) {
+    throw new HttpError(
+      400,
+      "Language must be python, javascript, or typescript.",
+      "unsupported_code_language",
+    );
+  }
+  return normalizeCodeRequest({ language: language || "python", code });
+}
+
 export function normalizeExecutionResult(execution) {
   const raw =
     execution && typeof execution.toJSON === "function"
@@ -195,6 +274,7 @@ export function codeExecutionCapabilities(configured = false) {
       "matplotlib",
       "scikit-learn",
     ],
+    chat_command: "/run <python|javascript|typescript>\\n<code>",
   };
 }
 
@@ -303,7 +383,9 @@ export async function handleNativeCodeExecution(
         );
       }
       const body = await readJsonLimited(request, 48 * 1024);
-      const action = normalizeCodeRequest(body);
+      const action = body.message
+        ? parseCodeChatCommand(body.message)
+        : normalizeCodeRequest(body);
       const codeHash = await sha256(action.code);
       const approval = await requestApproval(env, account.uid, APPROVAL_KIND, {
         ...action,
@@ -343,6 +425,18 @@ export async function handleNativeCodeExecution(
         String(body.approval_token || ""),
       );
       return executeApproved(env, account, consumed.action, runtime);
+    }
+
+    if (request.method === "POST" && path === "cancel") {
+      const body = await readJsonLimited(request, 8 * 1024);
+      const cancelled = await cancelApproval(
+        env,
+        account.uid,
+        APPROVAL_KIND,
+        String(body.approval_id || ""),
+        String(body.approval_token || ""),
+      );
+      return json({ cancelled: cancelled.cancelled === true });
     }
 
     return json({ error: "Native code execution route not found." }, 404);

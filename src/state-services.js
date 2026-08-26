@@ -92,3 +92,15 @@ export async function consumeApproval(env, ownerId, kind, id, token) {
   );
   return internalJson(response);
 }
+
+export async function cancelApproval(env, ownerId, kind, id, token) {
+  const response = await toolStore(env, ownerId).fetch(
+    `https://store/approvals/${encodeURIComponent(id)}/cancel`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ kind, token }),
+    },
+  );
+  return internalJson(response);
+}

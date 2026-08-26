@@ -50,7 +50,7 @@ An optional adapter is considered complete only after OAuth or server-side crede
 ## Delivery order
 
 1. Isolated interpreter and approval contract — implemented in this release.
-2. Chat-to-tool confirmation UI and execution result cards.
+2. Chat-to-tool confirmation UI and bounded execution result cards — implemented.
 3. Multi-file workspace sync, dependency allowlist, builds and tests.
 4. Native data-analysis and visualization artifact flows.
 5. OpenCV/NLP specialized image after size and cold-start tests.
