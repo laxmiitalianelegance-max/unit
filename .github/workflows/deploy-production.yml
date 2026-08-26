@@ -19,7 +19,7 @@ jobs:
   deploy:
     if: github.ref == 'refs/heads/main' && ((github.event_name == 'workflow_dispatch' && inputs.confirm == 'DEPLOY') || github.event_name == 'push')
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 30
     environment: production
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -132,7 +132,7 @@ jobs:
           const h=JSON.parse(fs.readFileSync('/tmp/release-health.json','utf8'));
           if(h.version!==process.env.EXPECTED_VERSION)throw Error(`Expected ${process.env.EXPECTED_VERSION}, received ${h.version}`);
           if(h.status!=='ready'||h.core_ready!==true)throw Error('Unit369 Core is not production-ready: '+JSON.stringify(h));
-          const required=['assets','self','native_store','tool_store','files','app_secret','encryption_key','authentication','native_intelligence'];
+          const required=['assets','self','native_store','tool_store','files','app_secret','encryption_key','authentication','native_intelligence','sandbox_binding'];
           for(const k of required)if(h.checks?.[k]!==true)throw Error('Missing production requirement: '+k);
           if(h.auth_ready!==true)throw Error('Unit369 authentication is not configured in production.');
           if(h.checks?.owner_auth!==true)throw Error('Unit369 owner authentication is not configured in production.');

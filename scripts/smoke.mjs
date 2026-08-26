@@ -86,15 +86,16 @@ try {
   assert.equal(statusBody.integrations.workersAi, false);
 
   const releaseHealth = await fetch(`${origin}/api/health/release`);
-  assert.equal(releaseHealth.status, 200);
+  assert.equal(releaseHealth.status, 503);
   const releaseHealthBody = await releaseHealth.json();
-  assert.equal(releaseHealthBody.status, "ready");
-  assert.equal(releaseHealthBody.core_ready, true);
+  assert.equal(releaseHealthBody.status, "not_ready");
+  assert.equal(releaseHealthBody.core_ready, false);
   assert.equal(releaseHealthBody.ai.provider, "unit369-native");
   assert.equal(releaseHealthBody.checks.external_ai_configured, false);
   assert.equal(releaseHealthBody.checks.owner_auth, true);
   assert.equal(releaseHealthBody.checks.google_oauth, false);
   assert.equal(releaseHealthBody.checks.authentication, true);
+  assert.equal(releaseHealthBody.checks.sandbox_binding, false);
 
   const crossSite = await fetch(`${origin}/api/free-ai`, {
     method: "POST",

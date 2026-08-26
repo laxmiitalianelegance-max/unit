@@ -250,7 +250,11 @@ export class ToolStore {
 
     const id = cleanSegment(parts[0], 180);
     if (!id) return json({ error: "Approval id is required." }, 400);
-    if (parts[1] !== "consume" || request.method !== "POST") {
+    const operation = parts[1];
+    if (
+      !["consume", "cancel"].includes(operation) ||
+      request.method !== "POST"
+    ) {
       return json({ error: "Approval route not found." }, 404);
     }
     const body = await readJsonLimited(request, 8 * 1024);
@@ -270,16 +274,26 @@ export class ToolStore {
         return { error: "Approval token is invalid.", status: 403 };
       if (body.kind && entry.kind !== body.kind)
         return { error: "Approval kind does not match.", status: 409 };
-      const consumedAt = Date.now();
+      const resolvedAt = Date.now();
       await transaction.put(key, {
         id: entry.id,
         kind: entry.kind,
         digest: entry.digest,
-        status: "consumed",
+        status: operation === "cancel" ? "cancelled" : "consumed",
         created_at: entry.created_at,
-        consumed_at: consumedAt,
-        purge_at: consumedAt + 24 * 60 * 60 * 1000,
+        ...(operation === "cancel"
+          ? { cancelled_at: resolvedAt }
+          : { consumed_at: resolvedAt }),
+        purge_at: resolvedAt + 24 * 60 * 60 * 1000,
       });
+      if (operation === "cancel") {
+        return {
+          ok: true,
+          cancelled: true,
+          kind: entry.kind,
+          digest: entry.digest,
+        };
+      }
       return {
         ok: true,
         kind: entry.kind,

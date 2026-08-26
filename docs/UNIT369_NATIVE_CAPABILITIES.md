@@ -90,6 +90,15 @@ Unit369 Core must remain useful without any third-party account connection. Exte
 - result verification
 - audit trail
 
+### 11. Execute code
+
+- isolated Python, JavaScript and TypeScript execution
+- NumPy, Pandas, Matplotlib and scikit-learn in the first pinned image
+- bounded runtime, output and per-owner quotas
+- immutable one-time approval before every execution
+- owner-scoped containers with no Worker secrets forwarded
+- future workspace build/test runners reuse this contract instead of exposing a general shell endpoint
+
 ## External connections
 
 External connections are adapters only. Examples: Google Drive for a user's existing Drive files, GitHub for publishing to an existing GitHub repository, Shopify for an existing Shopify store, Slack for an existing Slack workspace, and payment processors for card-network payment execution.
@@ -125,6 +134,8 @@ No external adapter may become a required dependency for a native Unit369 capabi
 8. Native internal communication.
 9. Native visual/content creation.
 10. Reduce third-party catalog to optional External Connections.
+
+The isolated interpreter is the first completed part of migration step 5. Repository checkout, package installation and multi-file build/test execution remain separate follow-up work because they need narrower permission and supply-chain controls than a single code cell.
 
 ## Definition of done for a third-party replacement
 

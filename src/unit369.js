@@ -1,3 +1,4 @@
+import { getSandbox } from "@cloudflare/sandbox";
 import core from "./unit369-core.js";
 import { handleOrchestrator } from "./orchestrator.js";
 import { handleAuth } from "./accounts.js";
@@ -12,6 +13,7 @@ import {
   secureResponse,
 } from "./runtime-utils.js";
 
+export { Sandbox } from "@cloudflare/sandbox";
 export { ToolStore, NativeStore };
 
 export default {
@@ -31,7 +33,9 @@ export default {
       ) {
         response = await handleProductApi(request, env, ctx);
       } else if (url.pathname.startsWith("/api/native/")) {
-        response = await handleNativeCapabilities(request, env, ctx);
+        response = await handleNativeCapabilities(request, env, ctx, {
+          getSandbox,
+        });
       } else if (url.pathname.startsWith("/api/orchestrator/")) {
         response = await handleOrchestrator(request, env, ctx);
       }

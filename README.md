@@ -11,6 +11,7 @@ Unit369 is a Cloudflare Worker/PWA with authenticated AI chat, native workspaces
 - Static assets: `public/`
 - Per-user structured state: `NativeStore` Durable Object
 - Quotas, connection secrets, shared cache and approvals: `ToolStore` Durable Object
+- Isolated Python/JavaScript/TypeScript execution: owner-scoped Cloudflare Sandbox container
 - User files and product media: built-in `NATIVE_STORE`; optional R2 is used automatically when a `FILES` binding is added later
 
 There is one active runtime graph. Historical wrappers and branch-specific validation workflows have been removed so CI validates the code that is actually deployed.
@@ -26,11 +27,12 @@ There is one active runtime graph. Historical wrappers and branch-specific valid
 - The default **Auto fallback** chat mode makes one logical AI request. Parallel provider and synthesis calls occur only in explicitly selected team modes.
 - AI routes have per-account Durable Object quotas.
 - Native and external mutations use short-lived, immutable, one-time approval tokens.
+- Code execution additionally forbids arbitrary shell access, forwards no Worker secrets and bounds code, time, rate and output.
 - Provider credentials never enter the browser bundle or local storage.
 
 ## Required production bindings and secrets
 
-Bindings are declared in `wrangler.jsonc`: `AI`, `ASSETS`, `SELF`, `TOOL_STORE` and `NATIVE_STORE`.
+Bindings are declared in `wrangler.jsonc`: `AI`, `ASSETS`, `SELF`, `TOOL_STORE`, `NATIVE_STORE` and `UNIT369_SANDBOX`.
 
 Required secrets/variables:
 
@@ -61,12 +63,17 @@ No AI provider key is required for the native foundation. The current independen
 
 The bounded Runpod/vLLM deployment profile and cost controls for the first owner-operated model are documented in `docs/UNIT369_RUNPOD_DEPLOYMENT.md`.
 
+The isolated execution API, approval flow and safety limits are documented in `docs/UNIT369_CODE_EXECUTION.md`. Cloudflare Containers require Workers Paid and are not a subscription-free feature.
+
+The implementation status of the tools requested for Unit369 is tracked in `docs/UNIT369_TOOL_CAPABILITY_MATRIX.md`; it distinguishes native features, open-source execution engines and optional third-party adapters.
+
 Optional external adapters use their corresponding OAuth client secrets or manually encrypted server-side credentials.
 
 ## Local verification
 
 ```sh
 # Node.js 22 or newer
+# Docker is also required for the Sandbox image dry-run.
 npm ci
 npm run ci
 npm run test:smoke
@@ -76,4 +83,4 @@ npm run test:smoke
 
 ## Deployment
 
-`.github/workflows/deploy-production.yml` deploys only an explicitly confirmed `main` commit. It verifies the locked source and subscription-free storage contract, performs a dry-run, deploys the exact tested commit, then checks release health, Unit369 owner authentication, CSP and PWA assets.
+`.github/workflows/deploy-production.yml` deploys only an explicitly confirmed `main` commit. It verifies the locked source and R2-free storage contract, builds the pinned Sandbox image, performs a dry-run, deploys the exact tested commit, then checks release health, Unit369 owner authentication, CSP and PWA assets.

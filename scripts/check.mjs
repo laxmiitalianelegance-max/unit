@@ -63,13 +63,21 @@ for (const match of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)) {
 }
 assert.ok(html.includes('data-mode="auto"'), "Auto fallback mode is missing");
 assert.ok(
-  html.includes("unit369-ui-i18n-v7-"),
+  html.includes("unit369-ui-i18n-v8-"),
   "Translation cache version is stale",
 );
 assert.ok(
   html.includes("recoverInterruptedTurns") &&
     html.includes("controller.abort()"),
   "Chat recovery and request timeout safeguards are missing",
+);
+assert.ok(
+  html.includes("isExplicitCodeCommand") &&
+    html.includes("/api/native/code/${path}") &&
+    html.includes("data-code-approve") &&
+    html.includes("data-code-cancel") &&
+    html.includes("const codeApprovals = new Map()"),
+  "Explicit code approval UI or in-memory approval storage is missing",
 );
 assert.ok(!html.includes(".jpg"), "The UI still references legacy JPG icons");
 assert.ok(
@@ -94,6 +102,9 @@ for (const required of [
   '"binding": "SELF"',
   '"name": "TOOL_STORE"',
   '"name": "NATIVE_STORE"',
+  '"name": "UNIT369_SANDBOX"',
+  '"class_name": "Sandbox"',
+  '"image": "./Dockerfile"',
   '"observability"',
 ]) {
   assert.ok(config.includes(required), `wrangler.jsonc is missing ${required}`);
@@ -109,6 +120,24 @@ assert.ok(
 assert.ok(
   existsSync(join(root, "package-lock.json")),
   "package-lock.json is missing",
+);
+assert.ok(
+  existsSync(join(root, "Dockerfile")),
+  "Sandbox Dockerfile is missing",
+);
+const packageJson = JSON.parse(
+  readFileSync(join(root, "package.json"), "utf8"),
+);
+assert.equal(
+  packageJson.dependencies?.["@cloudflare/sandbox"],
+  "0.12.8",
+  "Sandbox SDK and container image must stay version-pinned",
+);
+assert.ok(
+  readFileSync(join(root, "Dockerfile"), "utf8").includes(
+    "cloudflare/sandbox:0.12.8-python",
+  ),
+  "Sandbox Docker image must match the SDK version",
 );
 
 function assertPng(path, width, height) {

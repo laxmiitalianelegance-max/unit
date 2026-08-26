@@ -6,6 +6,10 @@ import { handleNativeBusiness } from "./native-business.js";
 import { handleNativeCommunicate } from "./native-communicate.js";
 import { handleNativeCreate } from "./native-create.js";
 import { handleNativeExecution } from "./native-execution.js";
+import {
+  codeExecutionCapabilities,
+  handleNativeCodeExecution,
+} from "./native-code-execution.js";
 import { handleNativeFiles } from "./native-files.js";
 import { HttpError, errorResponse, readJsonLimited } from "./runtime-utils.js";
 
@@ -48,7 +52,7 @@ export const NATIVE_CAPABILITIES = Object.freeze({
   },
   build: {
     name: "Build",
-    version: 2,
+    version: 3,
     operations: [
       "workspace.create",
       "workspace.read",
@@ -65,6 +69,17 @@ export const NATIVE_CAPABILITIES = Object.freeze({
       "snapshot.list",
       "diff.read",
       "test.plan",
+    ],
+    native: true,
+  },
+  code: {
+    name: "Isolated Code Execution",
+    version: 1,
+    operations: [
+      "code.capabilities",
+      "code.plan",
+      "code.confirm",
+      "code.cancel",
     ],
     native: true,
   },
@@ -198,8 +213,14 @@ function json(data, status = 200) {
     },
   });
 }
-export function capabilityList() {
-  return Object.entries(NATIVE_CAPABILITIES).map(([id, c]) => ({ id, ...c }));
+export function capabilityList(env = {}) {
+  return Object.entries(NATIVE_CAPABILITIES).map(([id, c]) => ({
+    id,
+    ...c,
+    ...(id === "code"
+      ? { runtime: codeExecutionCapabilities(!!env.UNIT369_SANDBOX) }
+      : {}),
+  }));
 }
 export function hasOperation(capability, operation) {
   const c = NATIVE_CAPABILITIES[capability];
@@ -246,6 +267,8 @@ export function planNativeIntent(text) {
       "workspace.create",
       "Create or modify a native Unit369 code workspace",
     );
+  if (/execute|run|compile|test|izvrš|izvrs|pokren|kompajl|testir/.test(q))
+    add("code", "code.plan", "Run code in an isolated Unit369 sandbox");
   if (/project|projekat|projekt/.test(q))
     add("work", "project.create", "Create or manage a native Unit369 project");
   if (/task|milestone|plan|zadat/.test(q))
@@ -344,7 +367,12 @@ async function proxyNative(request, env, account, url) {
   );
 }
 
-export async function handleNativeCapabilities(request, env) {
+export async function handleNativeCapabilities(
+  request,
+  env,
+  _ctx,
+  runtime = {},
+) {
   const url = new URL(request.url);
   if (!url.pathname.startsWith("/api/native/")) return null;
   const account = await resolveAccount(request, env);
@@ -355,7 +383,7 @@ export async function handleNativeCapabilities(request, env) {
       url.pathname === "/api/native/capabilities" &&
       request.method === "GET"
     ) {
-      return json({ native: true, capabilities: capabilityList() });
+      return json({ native: true, capabilities: capabilityList(env) });
     }
 
     if (url.pathname === "/api/native/plan" && request.method === "POST") {
@@ -365,6 +393,8 @@ export async function handleNativeCapabilities(request, env) {
 
     if (/^\/api\/native\/execute(\/|$)/.test(url.pathname))
       return handleNativeExecution(request, env, account, planNativeIntent);
+    if (/^\/api\/native\/code(\/|$)/.test(url.pathname))
+      return handleNativeCodeExecution(request, env, account, runtime);
     if (/^\/api\/native\/create(\/|$)/.test(url.pathname))
       return handleNativeCreate(request, env, account);
     if (/^\/api\/native\/communicate(\/|$)/.test(url.pathname))

@@ -2,7 +2,7 @@
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "unit",
   "main": "src/unit369.js",
-  "compatibility_date": "2026-08-24",
+  "compatibility_date": "2026-08-26",
   "compatibility_flags": ["nodejs_compat"],
 
   // Production secrets and variables are managed in Cloudflare and must survive deploys.
@@ -25,6 +25,15 @@
     },
   ],
 
+  "containers": [
+    {
+      "class_name": "Sandbox",
+      "image": "./Dockerfile",
+      "instance_type": "basic",
+      "max_instances": 1,
+    },
+  ],
+
   "durable_objects": {
     "bindings": [
       {
@@ -34,6 +43,10 @@
       {
         "name": "NATIVE_STORE",
         "class_name": "NativeStore",
+      },
+      {
+        "name": "UNIT369_SANDBOX",
+        "class_name": "Sandbox",
       },
     ],
   },
@@ -46,6 +59,10 @@
     {
       "tag": "native-core-v1",
       "new_sqlite_classes": ["NativeStore"],
+    },
+    {
+      "tag": "sandbox-execution-v1",
+      "new_sqlite_classes": ["Sandbox"],
     },
   ],
 

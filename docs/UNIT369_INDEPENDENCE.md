@@ -19,6 +19,7 @@ Implemented through version `2026.08.25.1`:
 - Unit and Wrangler smoke tests prove a healthy chat response with no AI binding or provider key.
 - Unit369 owner authentication works without Google or another identity provider. The private access code stays in a Cloudflare Secret and login attempts are rate-limited in a Durable Object.
 - Optional Google OAuth is accepted only when the client ID has the Google OAuth client format.
+- Owner-approved Python, JavaScript and TypeScript now run inside a bounded, owner-scoped Cloudflare Sandbox without forwarding Worker secrets.
 
 ## Owned generative inference contract
 
@@ -38,7 +39,7 @@ Leading `<think>...</think>` reasoning blocks are removed before a response reac
 1. Select and evaluate open-weight text, embedding, image, speech and code models against Unit369 tasks.
 2. Provision an owner-controlled inference host, private access path, monitoring, backups and a cost ceiling.
 3. Attach that host through the owned inference contract and pass quality, latency and failure tests.
-4. Add native retrieval/research indexing, isolated code execution and durable scheduled automation.
+4. Add native retrieval/research indexing, durable scheduled automation and workspace-aware build/test execution on top of the isolated interpreter.
 5. Add recovery codes and hardware passkeys so the owner access code has an independent recovery path.
 6. Run provider-removal end-to-end tests with every optional external credential and binding disabled.
 

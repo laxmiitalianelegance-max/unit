@@ -347,6 +347,180 @@
         line-height: 1.55;
         color: #cbd5df;
       }
+      .u369-code-hint {
+        max-width: 520px;
+        margin: 18px auto 0;
+        color: #7f91a8;
+        font-size: 12px;
+        line-height: 1.6;
+      }
+      .u369-code-hint code,
+      .u369-code-card code,
+      .u369-code-output pre {
+        font-family:
+          "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      }
+      .u369-code-card {
+        margin-top: 10px;
+        border: 1px solid #263a52;
+        border-radius: 16px;
+        background: linear-gradient(180deg, #0d1723, #09111a);
+        overflow: hidden;
+        white-space: normal;
+      }
+      .u369-code-card-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 13px 14px;
+        border-bottom: 1px solid #1d2c3e;
+      }
+      .u369-code-card-title {
+        font-size: 13px;
+        font-weight: 850;
+        color: #f4f8fc;
+      }
+      .u369-code-badge {
+        flex: 0 0 auto;
+        border: 1px solid #355171;
+        border-radius: 999px;
+        padding: 3px 8px;
+        color: #a9c3df;
+        background: #101e2d;
+        font-size: 10px;
+        font-weight: 800;
+      }
+      .u369-code-badge.completed {
+        border-color: rgba(82, 215, 165, 0.45);
+        color: var(--ok);
+      }
+      .u369-code-badge.failed,
+      .u369-code-badge.unknown {
+        border-color: rgba(255, 102, 122, 0.42);
+        color: var(--bad);
+      }
+      .u369-code-badge.cancelled,
+      .u369-code-badge.expired {
+        color: #9ca9b8;
+      }
+      .u369-code-card-body {
+        padding: 14px;
+      }
+      .u369-code-summary {
+        color: #c8d4e1;
+        font-size: 13px;
+        line-height: 1.55;
+      }
+      .u369-code-meta {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+        margin-top: 12px;
+      }
+      .u369-code-meta-row {
+        min-width: 0;
+        border: 1px solid #1b2b3e;
+        border-radius: 10px;
+        padding: 8px 9px;
+        background: #08101a;
+      }
+      .u369-code-meta-label {
+        display: block;
+        margin-bottom: 3px;
+        color: #72849a;
+        font-size: 9px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+      .u369-code-meta-value {
+        display: block;
+        color: #d7e2ee;
+        font-size: 11px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .u369-code-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 14px;
+      }
+      .u369-code-btn {
+        border: 1px solid #304762;
+        border-radius: 10px;
+        padding: 9px 12px;
+        background: #111f2e;
+        color: #d8e4f0;
+        font-size: 12px;
+        font-weight: 800;
+      }
+      .u369-code-btn.primary {
+        border-color: #1e8fe0;
+        background: #1476c8;
+        color: #fff;
+      }
+      .u369-code-btn.danger {
+        border-color: rgba(255, 102, 122, 0.32);
+        color: #ff9aaa;
+      }
+      .u369-code-btn:disabled {
+        cursor: wait;
+        opacity: 0.5;
+      }
+      .u369-code-note {
+        margin-top: 12px;
+        color: #8fa0b4;
+        font-size: 11px;
+        line-height: 1.55;
+      }
+      .u369-code-output {
+        margin-top: 13px;
+        border-top: 1px solid #1d2c3e;
+        padding-top: 12px;
+      }
+      .u369-code-output-title {
+        margin: 0 0 7px;
+        color: #8ea0b5;
+        font-size: 10px;
+        font-weight: 850;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+      .u369-code-output pre {
+        max-height: 360px;
+        margin: 0 0 10px;
+        overflow: auto;
+        border: 1px solid #172638;
+        border-radius: 10px;
+        padding: 10px;
+        background: #050a11;
+        color: #d7e7f7;
+        font-size: 11px;
+        line-height: 1.55;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+      .u369-code-output pre.err {
+        color: #ff9aaa;
+      }
+      .u369-code-image {
+        display: block;
+        max-width: 100%;
+        max-height: 420px;
+        margin: 8px 0;
+        border: 1px solid #20334a;
+        border-radius: 10px;
+        background: #fff;
+        object-fit: contain;
+      }
+      @media (max-width: 520px) {
+        .u369-code-meta {
+          grid-template-columns: minmax(0, 1fr);
+        }
+      }
       .u369-chat-composer {
         max-width: 780px;
         margin: 0 auto;
@@ -1159,7 +1333,7 @@
           CUR = "unit369-current-v1",
           LANG = "u369-lang-all-v4",
           PREF = "unit369-settings-v2",
-          CACHE = "unit369-ui-i18n-v7-";
+          CACHE = "unit369-ui-i18n-v8-";
         const RTL = new Set(["ar", "fa", "he", "ur"]);
         const LANGS = [
           ["auto", "Automatic"],
@@ -1293,6 +1467,41 @@
             "The model took too long to answer. Unit369 stopped waiting safely; try again.",
           requestInterrupted:
             "The previous request was interrupted. Please send it again.",
+          codeCommandHint:
+            "To execute isolated code, send /run python, /run javascript or /run typescript, then put the code on the next line.",
+          codeApprovalTitle: "Isolated code execution",
+          codeApprovalRequired:
+            "Review the execution details. Nothing runs until you approve it.",
+          codeLanguage: "Language",
+          codeTimeout: "Time limit",
+          codeFingerprint: "Code fingerprint",
+          codeSize: "Code size",
+          codeApprove: "Approve and run",
+          codeCancel: "Cancel",
+          codeCancelling: "Cancelling approval…",
+          codeRunning: "Running in an isolated sandbox…",
+          codeCompleted: "Execution completed.",
+          codeFailed: "Execution failed.",
+          codeCancelled: "Execution was cancelled. No code was run.",
+          codeApprovalExpired:
+            "This approval is no longer available. Send the command again to create a new one.",
+          codeUnknown:
+            "The connection ended before the result was confirmed. Unit369 will not run it again automatically.",
+          codeOutput: "Standard output",
+          codeErrors: "Standard error",
+          codeResult: "Result",
+          codeNoOutput: "The code completed without text output.",
+          codeCopyOutput: "Copy output",
+          codeCancelFailed:
+            "Cancellation could not be confirmed. This approval was removed from this device and cannot be run here.",
+          codeStatusApproval: "Awaiting approval",
+          codeStatusCancelling: "Cancelling",
+          codeStatusRunning: "Running",
+          codeStatusCompleted: "Completed",
+          codeStatusFailed: "Failed",
+          codeStatusCancelled: "Cancelled",
+          codeStatusExpired: "Expired",
+          codeStatusUnknown: "Unknown",
         };
         let D = { ...BASE },
           integrations = {},
@@ -1304,6 +1513,7 @@
             compact: false,
             models: { claude: "", openai: "", grok: "" },
           });
+        const codeApprovals = new Map();
         function loadJson(k, f) {
           try {
             return { ...f, ...JSON.parse(localStorage.getItem(k) || "{}") };
@@ -1427,6 +1637,113 @@
         function boundedText(value, max) {
           return String(value ?? "").slice(0, max);
         }
+        function compactCodeLines(value, maxCharacters) {
+          const lines = Array.isArray(value) ? value.slice(0, 100) : [];
+          const result = [];
+          let used = 0;
+          for (const value of lines) {
+            const line = boundedText(value, 4_000);
+            if (used + line.length > maxCharacters) break;
+            result.push(line);
+            used += line.length;
+          }
+          return result;
+        }
+        function compactCodeJson(value) {
+          try {
+            return boundedText(
+              typeof value === "string" ? value : JSON.stringify(value),
+              12_000,
+            );
+          } catch {
+            return "";
+          }
+        }
+        function compactCodeImage(value) {
+          if (typeof value !== "string" || value.length > 128_000) return "";
+          const image = value.trim();
+          if (
+            /^data:image\/(?:png|jpeg);base64,[A-Za-z0-9+/=\s]+$/i.test(
+              image,
+            ) ||
+            /^[A-Za-z0-9+/=\s]+$/.test(image)
+          )
+            return image;
+          return "";
+        }
+        function compactCodeResult(value) {
+          if (!value || typeof value !== "object") return {};
+          const result = {};
+          for (const key of [
+            "text",
+            "markdown",
+            "latex",
+            "svg_as_text",
+            "html_as_text",
+          ]) {
+            if (value[key] !== undefined)
+              result[key] = boundedText(value[key], 12_000);
+          }
+          for (const key of ["json", "data", "chart"]) {
+            if (value[key] !== undefined)
+              result[key] = compactCodeJson(value[key]);
+          }
+          for (const key of ["png", "jpeg"]) {
+            const image = compactCodeImage(value[key]);
+            if (image) result[key] = image;
+          }
+          return result;
+        }
+        function compactCodeTool(value) {
+          if (!value || value.kind !== "code") return null;
+          const allowedStatuses = new Set([
+            "approval_required",
+            "cancelling",
+            "running",
+            "completed",
+            "failed",
+            "cancelled",
+            "expired",
+            "unknown",
+          ]);
+          const error =
+            value.error && typeof value.error === "object"
+              ? {
+                  name: boundedText(value.error.name, 160),
+                  message: boundedText(
+                    value.error.message || value.error.value,
+                    2_000,
+                  ),
+                  traceback: compactCodeLines(value.error.traceback, 12_000),
+                }
+              : null;
+          return {
+            kind: "code",
+            status: allowedStatuses.has(value.status)
+              ? value.status
+              : "unknown",
+            language: boundedText(value.language, 24),
+            timeout_ms: Math.max(0, Number(value.timeout_ms) || 0),
+            code_hash: boundedText(value.code_hash, 64),
+            code_characters: Math.max(0, Number(value.code_characters) || 0),
+            approval_expires_at: Math.max(
+              0,
+              Number(value.approval_expires_at) || 0,
+            ),
+            run_id: boundedText(value.run_id, 100),
+            execution_count: Number.isFinite(value.execution_count)
+              ? value.execution_count
+              : null,
+            logs: {
+              stdout: compactCodeLines(value.logs?.stdout, 16_000),
+              stderr: compactCodeLines(value.logs?.stderr, 12_000),
+            },
+            error,
+            results: (Array.isArray(value.results) ? value.results : [])
+              .slice(0, 6)
+              .map(compactCodeResult),
+          };
+        }
         function compactSession(session) {
           const providerKeys = [
             "unit369",
@@ -1443,7 +1760,10 @@
             turns: (Array.isArray(session?.turns) ? session.turns : [])
               .slice(-30)
               .map((turn) => ({
-                q: boundedText(turn?.q, 8_000),
+                q: boundedText(
+                  turn?.q,
+                  isExplicitCodeCommand(turn?.q) ? 33_000 : 8_000,
+                ),
                 at: Number(turn?.at) || Date.now(),
                 answers: Object.fromEntries(
                   providerKeys
@@ -1466,6 +1786,9 @@
                 ),
                 final: boundedText(turn?.final, 12_000),
                 ...(turn?.pending ? { pending: true } : {}),
+                ...(turn?.tool?.kind === "code"
+                  ? { tool: compactCodeTool(turn.tool) }
+                  : {}),
               })),
           };
         }
@@ -1587,15 +1910,207 @@
         function errorFor(x) {
           return Object.values(x?.errors || {}).find(Boolean) || "";
         }
+        function codeTurnKey(session, turn) {
+          return `${boundedText(session?.id, 100)}:${Number(turn?.at) || 0}`;
+        }
+        function isExplicitCodeCommand(value) {
+          return /^\/(?:run|execute|izvrsi|izvrši)\b/i.test(
+            String(value || "").trim(),
+          );
+        }
+        function codeStatusText(status) {
+          return (
+            {
+              approval_required: t("codeApprovalRequired"),
+              cancelling: t("codeCancelling"),
+              running: t("codeRunning"),
+              completed: t("codeCompleted"),
+              failed: t("codeFailed"),
+              cancelled: t("codeCancelled"),
+              expired: t("codeApprovalExpired"),
+              unknown: t("codeUnknown"),
+            }[status] || t("codeUnknown")
+          );
+        }
+        function codeStatusLabel(status) {
+          return (
+            {
+              approval_required: t("codeStatusApproval"),
+              cancelling: t("codeStatusCancelling"),
+              running: t("codeStatusRunning"),
+              completed: t("codeStatusCompleted"),
+              failed: t("codeStatusFailed"),
+              cancelled: t("codeStatusCancelled"),
+              expired: t("codeStatusExpired"),
+              unknown: t("codeStatusUnknown"),
+            }[status] || t("codeStatusUnknown")
+          );
+        }
+        function codeImageSource(value, type) {
+          const image = compactCodeImage(value);
+          if (!image) return "";
+          return image.startsWith("data:image/")
+            ? image
+            : `data:image/${type};base64,${image.replace(/\s+/g, "")}`;
+        }
+        function codeOutputText(tool) {
+          const parts = [];
+          if (tool?.logs?.stdout?.length)
+            parts.push(tool.logs.stdout.join("\n"));
+          for (const result of tool?.results || []) {
+            for (const key of [
+              "text",
+              "markdown",
+              "latex",
+              "json",
+              "data",
+              "chart",
+              "svg_as_text",
+              "html_as_text",
+            ]) {
+              if (result?.[key]) parts.push(String(result[key]));
+            }
+          }
+          if (tool?.logs?.stderr?.length)
+            parts.push(tool.logs.stderr.join("\n"));
+          if (tool?.error?.message) parts.push(tool.error.message);
+          return parts.filter(Boolean).join("\n\n");
+        }
+        function renderCodeOutput(tool) {
+          const blocks = [];
+          const stdout = (tool?.logs?.stdout || []).join("\n");
+          const stderr = (tool?.logs?.stderr || []).join("\n");
+          if (stdout)
+            blocks.push(
+              `<div class="u369-code-output-title">${esc(t("codeOutput"))}</div><pre>${esc(stdout)}</pre>`,
+            );
+          if (stderr)
+            blocks.push(
+              `<div class="u369-code-output-title">${esc(t("codeErrors"))}</div><pre class="err">${esc(stderr)}</pre>`,
+            );
+          if (tool?.error?.message) {
+            const traceback = (tool.error.traceback || []).join("\n");
+            blocks.push(
+              `<div class="u369-code-output-title">${esc(tool.error.name || t("codeFailed"))}</div><pre class="err">${esc([tool.error.message, traceback].filter(Boolean).join("\n"))}</pre>`,
+            );
+          }
+          for (const result of tool?.results || []) {
+            const entries = [
+              ["text", ""],
+              ["markdown", "Markdown"],
+              ["latex", "LaTeX"],
+              ["json", "JSON"],
+              ["data", "Data"],
+              ["chart", "Chart data"],
+              ["svg_as_text", "SVG (text)"],
+              ["html_as_text", "HTML (text)"],
+            ];
+            for (const [key, suffix] of entries) {
+              if (!result?.[key]) continue;
+              blocks.push(
+                `<div class="u369-code-output-title">${esc([t("codeResult"), suffix].filter(Boolean).join(" · "))}</div><pre>${esc(result[key])}</pre>`,
+              );
+            }
+            for (const [key, mime] of [
+              ["png", "png"],
+              ["jpeg", "jpeg"],
+            ]) {
+              const source = codeImageSource(result?.[key], mime);
+              if (source)
+                blocks.push(
+                  `<div class="u369-code-output-title">${esc(t("codeResult"))}</div><img class="u369-code-image" src="${esc(source)}" alt="${esc(t("codeResult"))}" loading="lazy">`,
+                );
+            }
+          }
+          if (!blocks.length && tool?.status === "completed")
+            blocks.push(
+              `<div class="u369-code-note">${esc(t("codeNoOutput"))}</div>`,
+            );
+          if (!blocks.length) return "";
+          return `<div class="u369-code-output">${blocks.join("")}</div>`;
+        }
+        function renderCodeCard(session, turn, index) {
+          const tool = compactCodeTool(turn.tool) || {
+              kind: "code",
+              status: "unknown",
+              logs: { stdout: [], stderr: [] },
+              results: [],
+            },
+            key = codeTurnKey(session, turn);
+          let approval = codeApprovals.get(key);
+          if (
+            approval &&
+            Number(approval.expiresAt || 0) > 0 &&
+            Number(approval.expiresAt) <= Date.now()
+          ) {
+            codeApprovals.delete(key);
+            approval = null;
+          }
+          const approvalReady =
+              tool.status === "approval_required" && !!approval,
+            displayStatus =
+              tool.status === "approval_required" && !approvalReady
+                ? "expired"
+                : tool.status,
+            shortHash = tool.code_hash
+              ? `${tool.code_hash.slice(0, 16)}…`
+              : "—",
+            meta = [
+              [t("codeLanguage"), tool.language || "—"],
+              [
+                t("codeTimeout"),
+                tool.timeout_ms
+                  ? `${Math.round(tool.timeout_ms / 100) / 10} s`
+                  : "—",
+              ],
+              [t("codeFingerprint"), shortHash, tool.code_hash],
+              [t("codeSize"), String(tool.code_characters || 0)],
+            ]
+              .map(
+                ([label, value, title]) =>
+                  `<div class="u369-code-meta-row"><span class="u369-code-meta-label">${esc(label)}</span><code class="u369-code-meta-value"${title ? ` title="${esc(title)}"` : ""}>${esc(value)}</code></div>`,
+              )
+              .join("");
+          let controls = "";
+          if (approvalReady) {
+            controls = `<div class="u369-code-actions"><button type="button" class="u369-code-btn primary" data-code-approve="${index}">${esc(t("codeApprove"))}</button><button type="button" class="u369-code-btn danger" data-code-cancel="${index}">${esc(t("codeCancel"))}</button></div>`;
+          } else if (["running", "cancelling"].includes(displayStatus)) {
+            controls = `<div class="u369-code-note">${esc(codeStatusText(displayStatus))}</div>`;
+          } else if (
+            ["cancelled", "expired", "unknown"].includes(displayStatus)
+          ) {
+            controls = `<div class="u369-code-note">${esc(codeStatusText(displayStatus))}</div>`;
+          }
+          const output = ["completed", "failed", "unknown"].includes(
+            displayStatus,
+          )
+            ? renderCodeOutput(tool)
+            : "";
+          const copy = codeOutputText(tool)
+            ? `<div class="u369-code-actions"><button type="button" class="u369-code-btn" data-code-copy="${index}">${esc(t("codeCopyOutput"))}</button></div>`
+            : "";
+          return `<div class="u369-code-card"><div class="u369-code-card-top"><div class="u369-code-card-title">${esc(t("codeApprovalTitle"))}</div><span class="u369-code-badge ${esc(displayStatus)}">${esc(codeStatusLabel(displayStatus))}</span></div><div class="u369-code-card-body"><div class="u369-code-summary">${esc(codeStatusText(displayStatus))}</div><div class="u369-code-meta">${meta}</div>${controls}${output}${copy}</div></div>`;
+        }
         function recoverInterruptedTurns() {
           const all = sessions();
           let changed = false;
           all.forEach((session) =>
             (session.turns || []).forEach((turn) => {
-              if (!turn.pending) return;
-              delete turn.pending;
-              if (!answerFor(turn)) turn.final = t("requestInterrupted");
-              changed = true;
+              if (turn.pending) {
+                delete turn.pending;
+                if (!answerFor(turn)) turn.final = t("requestInterrupted");
+                changed = true;
+              }
+              if (turn.tool?.kind !== "code") return;
+              if (turn.tool.status === "approval_required") {
+                turn.tool.status = "expired";
+                turn.final = t("codeApprovalExpired");
+                changed = true;
+              } else if (["running", "cancelling"].includes(turn.tool.status)) {
+                turn.tool.status = "unknown";
+                turn.final = t("codeUnknown");
+                changed = true;
+              }
             }),
           );
           if (!changed) return;
@@ -1610,7 +2125,7 @@
             { s } = currentSession(false),
             turns = s?.turns || [];
           if (!turns.length) {
-            box.innerHTML = `<div class="u369-empty"><img src="/app-icon-192.png" alt=""><div class="u369-empty-title">${esc(t("howHelp"))}</div></div>`;
+            box.innerHTML = `<div class="u369-empty"><img src="/app-icon-192.png" alt=""><div class="u369-empty-title">${esc(t("howHelp"))}</div><div class="u369-code-hint">${esc(t("codeCommandHint"))}</div></div>`;
             return;
           }
           box.innerHTML = turns
@@ -1631,10 +2146,13 @@
                   keys.length > 1
                     ? `<details class="u369-details"><summary>${esc(t("aiTeamDetails"))}</summary>${keys.map((k) => `<div class="u369-detail-row"><b>${esc(names[k] || k)}</b>${esc(tr.answers[k])}</div>`).join("")}</details>`
                     : "";
-              const assistant =
-                ans || tr.pending || failure
-                  ? `<div class="u369-assistant-msg"><div class="u369-assistant-head"><img src="/app-icon-192.png" alt=""><span>Unit369</span></div><div class="u369-answer${tr.pending ? " u369-thinking" : ""}">${esc(ans || (tr.pending ? t("thinking") : failure))}</div>${details}${ans ? `<button class="u369-msg-action" data-copy="${i}">${esc(t("copy"))}</button>` : ""}</div>`
-                  : "";
+              const codeCard =
+                  tr.tool?.kind === "code" ? renderCodeCard(s, tr, i) : "",
+                assistant = codeCard
+                  ? `<div class="u369-assistant-msg"><div class="u369-assistant-head"><img src="/app-icon-192.png" alt=""><span>Unit369</span></div>${codeCard}</div>`
+                  : ans || tr.pending || failure
+                    ? `<div class="u369-assistant-msg"><div class="u369-assistant-head"><img src="/app-icon-192.png" alt=""><span>Unit369</span></div><div class="u369-answer${tr.pending ? " u369-thinking" : ""}">${esc(ans || (tr.pending ? t("thinking") : failure))}</div>${details}${ans ? `<button class="u369-msg-action" data-copy="${i}">${esc(t("copy"))}</button>` : ""}</div>`
+                    : "";
               return `<div class="u369-turn"><div class="u369-user-msg">${esc(tr.q)}</div>${assistant}</div>`;
             })
             .join("");
@@ -1643,6 +2161,23 @@
               (b.onclick = () =>
                 navigator.clipboard?.writeText(
                   answerFor(turns[+b.dataset.copy]) || "",
+                )),
+          );
+          $$("[data-code-approve]").forEach(
+            (button) =>
+              (button.onclick = () =>
+                confirmCodeExecution(+button.dataset.codeApprove)),
+          );
+          $$("[data-code-cancel]").forEach(
+            (button) =>
+              (button.onclick = () =>
+                cancelCodeExecution(+button.dataset.codeCancel)),
+          );
+          $$("[data-code-copy]").forEach(
+            (button) =>
+              (button.onclick = () =>
+                navigator.clipboard?.writeText(
+                  codeOutputText(turns[+button.dataset.codeCopy]?.tool),
                 )),
           );
           requestAnimationFrame(() =>
@@ -1655,7 +2190,7 @@
         function historyMessages(s, p) {
           const o = [];
           (s.turns || [])
-            .filter((x) => !x.pending)
+            .filter((x) => !x.pending && x.tool?.kind !== "code")
             .slice(-8)
             .forEach((x) => {
               if (x.q) o.push({ role: "user", content: x.q });
@@ -1724,6 +2259,231 @@
             clearTimeout(timer);
           }
         }
+        async function callCodeApi(path, body, timeoutMs) {
+          const controller = new AbortController(),
+            timer = setTimeout(() => controller.abort(), timeoutMs);
+          try {
+            const response = await fetch(`/api/native/code/${path}`, {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify(body),
+                signal: controller.signal,
+              }),
+              data = await response.json().catch(() => ({}));
+            if (!response.ok || data.error) {
+              const error = new Error(data.error || t("requestFailed"));
+              error.status = response.status;
+              error.code = data.code || "code_request_failed";
+              throw error;
+            }
+            return data;
+          } catch (error) {
+            if (error?.name === "AbortError") {
+              const timeout = new Error(t("requestTimeout"));
+              timeout.status = 504;
+              timeout.code = "client_timeout";
+              timeout.uncertain = path === "confirm";
+              throw timeout;
+            }
+            if (path === "confirm" && !Number(error?.status)) {
+              const uncertainError =
+                error instanceof Error
+                  ? error
+                  : new Error(String(error || t("requestFailed")));
+              uncertainError.uncertain = true;
+              throw uncertainError;
+            }
+            throw error;
+          } finally {
+            clearTimeout(timer);
+          }
+        }
+        async function planCodeExecution(session, turn, message) {
+          const data = await callCodeApi("plan", { message }, 25_000);
+          if (
+            data.approval_required !== true ||
+            !data.approval?.id ||
+            !data.approval?.token
+          )
+            throw new Error(t("requestFailed"));
+          const execution = data.execution || {},
+            key = codeTurnKey(session, turn);
+          codeApprovals.set(key, {
+            id: String(data.approval.id),
+            token: String(data.approval.token),
+            expiresAt: Number(data.approval.expires_at) || 0,
+          });
+          turn.tool = {
+            kind: "code",
+            status: "approval_required",
+            language: execution.language,
+            timeout_ms: execution.timeout_ms,
+            code_hash: execution.code_hash,
+            code_characters: execution.code_characters,
+            approval_expires_at: Number(data.approval.expires_at) || 0,
+            logs: { stdout: [], stderr: [] },
+            results: [],
+          };
+          turn.final = t("codeApprovalRequired");
+        }
+        function codeActionContext(index) {
+          const { a, s } = currentSession(false),
+            turn = s?.turns?.[index];
+          if (!s || !turn || turn.tool?.kind !== "code") return null;
+          return {
+            a,
+            s,
+            turn,
+            key: codeTurnKey(s, turn),
+          };
+        }
+        function saveActiveSession(all, session) {
+          session.updatedAt = Date.now();
+          saveSessions(
+            [session, ...all.filter((item) => item.id !== session.id)],
+            session,
+          );
+        }
+        async function confirmCodeExecution(index) {
+          if (sending) return;
+          const context = codeActionContext(index);
+          if (!context) return;
+          const { a, s, turn, key } = context,
+            approval = codeApprovals.get(key),
+            status = $("#u369-chat-status");
+          if (!approval || Number(approval.expiresAt || 0) <= Date.now()) {
+            codeApprovals.delete(key);
+            turn.tool.status = "expired";
+            turn.final = t("codeApprovalExpired");
+            saveActiveSession(a, s);
+            renderConversation();
+            return;
+          }
+          sending = true;
+          $("#u369-chat-send").disabled = true;
+          status.className = "u369-chat-status";
+          status.textContent = t("codeRunning");
+          turn.tool.status = "running";
+          turn.final = t("codeRunning");
+          saveActiveSession(a, s);
+          renderConversation();
+          try {
+            const data = await callCodeApi(
+              "confirm",
+              {
+                approval_id: approval.id,
+                approval_token: approval.token,
+              },
+              120_000,
+            );
+            const previous = turn.tool;
+            turn.tool = {
+              kind: "code",
+              status: data.status === "completed" ? "completed" : "failed",
+              language: data.language || previous.language,
+              timeout_ms: previous.timeout_ms,
+              code_hash: data.code_hash || previous.code_hash,
+              code_characters: previous.code_characters,
+              run_id: data.run_id,
+              execution_count: data.execution_count,
+              logs: data.logs,
+              error: data.error,
+              results: data.results,
+            };
+            turn.final =
+              turn.tool.status === "completed"
+                ? t("codeCompleted")
+                : t("codeFailed");
+            status.textContent = turn.final;
+          } catch (error) {
+            const uncertain =
+                error?.uncertain ||
+                Number(error?.status) >= 500 ||
+                error?.code === "sandbox_execution_unavailable",
+              expired = Number(error?.status) === 410;
+            turn.tool.status = expired
+              ? "expired"
+              : uncertain
+                ? "unknown"
+                : "failed";
+            turn.tool.error = {
+              name: boundedText(error?.code || "ExecutionError", 160),
+              message: boundedText(error?.message || t("codeFailed"), 2_000),
+              traceback: [],
+            };
+            turn.final = expired
+              ? t("codeApprovalExpired")
+              : uncertain
+                ? t("codeUnknown")
+                : t("codeFailed");
+            status.className = "u369-chat-status err";
+            status.textContent = turn.final;
+          } finally {
+            codeApprovals.delete(key);
+            saveActiveSession(a, s);
+            sending = false;
+            $("#u369-chat-send").disabled = false;
+            renderConversation();
+            renderHistory();
+          }
+        }
+        async function cancelCodeExecution(index) {
+          if (sending) return;
+          const context = codeActionContext(index);
+          if (!context) return;
+          const { a, s, turn, key } = context,
+            approval = codeApprovals.get(key),
+            status = $("#u369-chat-status");
+          if (!approval) {
+            turn.tool.status = "expired";
+            turn.final = t("codeApprovalExpired");
+            saveActiveSession(a, s);
+            renderConversation();
+            return;
+          }
+          sending = true;
+          $("#u369-chat-send").disabled = true;
+          status.className = "u369-chat-status";
+          status.textContent = t("codeCancelling");
+          turn.tool.status = "cancelling";
+          turn.final = t("codeCancelling");
+          saveActiveSession(a, s);
+          renderConversation();
+          try {
+            const data = await callCodeApi(
+              "cancel",
+              {
+                approval_id: approval.id,
+                approval_token: approval.token,
+              },
+              20_000,
+            );
+            if (data.cancelled !== true) throw new Error(t("requestFailed"));
+            turn.tool.status = "cancelled";
+            turn.final = t("codeCancelled");
+            status.textContent = turn.final;
+          } catch (error) {
+            turn.tool.status = "expired";
+            turn.tool.error = {
+              name: boundedText(error?.code || "CancellationError", 160),
+              message: boundedText(
+                error?.message || t("codeCancelFailed"),
+                2_000,
+              ),
+              traceback: [],
+            };
+            turn.final = t("codeApprovalExpired");
+            status.className = "u369-chat-status err";
+            status.textContent = t("codeCancelFailed");
+          } finally {
+            codeApprovals.delete(key);
+            saveActiveSession(a, s);
+            sending = false;
+            $("#u369-chat-send").disabled = false;
+            renderConversation();
+            renderHistory();
+          }
+        }
         async function sendMessage() {
           if (sending) return;
           const input = $("#u369-chat-input"),
@@ -1752,6 +2512,33 @@
           renderConversation();
           renderHistory();
           try {
+            if (isExplicitCodeCommand(q)) {
+              try {
+                await planCodeExecution(s, tr, q);
+              } catch (error) {
+                tr.tool = {
+                  kind: "code",
+                  status: "failed",
+                  error: {
+                    name: boundedText(error?.code || "CodePlanError", 160),
+                    message: boundedText(
+                      error?.message || t("requestFailed"),
+                      2_000,
+                    ),
+                    traceback: [],
+                  },
+                  logs: { stdout: [], stderr: [] },
+                  results: [],
+                };
+                tr.final = error?.message || t("requestFailed");
+                status.className = "u369-chat-status err";
+                status.textContent =
+                  Number(error?.status) === 401
+                    ? t("signInRequired")
+                    : tr.final;
+              }
+              return;
+            }
             const active =
               mode === "auto"
                 ? ["unit369"]

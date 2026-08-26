@@ -78,6 +78,41 @@ export const UI_BASE = Object.freeze({
     "The model took too long to answer. Unit369 stopped waiting safely; try again.",
   requestInterrupted:
     "The previous request was interrupted. Please send it again.",
+  codeCommandHint:
+    "To execute isolated code, send /run python, /run javascript or /run typescript, then put the code on the next line.",
+  codeApprovalTitle: "Isolated code execution",
+  codeApprovalRequired:
+    "Review the execution details. Nothing runs until you approve it.",
+  codeLanguage: "Language",
+  codeTimeout: "Time limit",
+  codeFingerprint: "Code fingerprint",
+  codeSize: "Code size",
+  codeApprove: "Approve and run",
+  codeCancel: "Cancel",
+  codeCancelling: "Cancelling approval…",
+  codeRunning: "Running in an isolated sandbox…",
+  codeCompleted: "Execution completed.",
+  codeFailed: "Execution failed.",
+  codeCancelled: "Execution was cancelled. No code was run.",
+  codeApprovalExpired:
+    "This approval is no longer available. Send the command again to create a new one.",
+  codeUnknown:
+    "The connection ended before the result was confirmed. Unit369 will not run it again automatically.",
+  codeOutput: "Standard output",
+  codeErrors: "Standard error",
+  codeResult: "Result",
+  codeNoOutput: "The code completed without text output.",
+  codeCopyOutput: "Copy output",
+  codeCancelFailed:
+    "Cancellation could not be confirmed. This approval was removed from this device and cannot be run here.",
+  codeStatusApproval: "Awaiting approval",
+  codeStatusCancelling: "Cancelling",
+  codeStatusRunning: "Running",
+  codeStatusCompleted: "Completed",
+  codeStatusFailed: "Failed",
+  codeStatusCancelled: "Cancelled",
+  codeStatusExpired: "Expired",
+  codeStatusUnknown: "Unknown",
 });
 
 const UI_SR = Object.freeze({
@@ -161,6 +196,41 @@ const UI_SR = Object.freeze({
   requestTimeout:
     "Modelu je trebalo predugo da odgovori. Unit369 je bezbedno prekinuo čekanje; pokušajte ponovo.",
   requestInterrupted: "Prethodni zahtev je prekinut. Pošaljite ga ponovo.",
+  codeCommandHint:
+    "Za izvršavanje izolovanog koda pošaljite /run python, /run javascript ili /run typescript, pa u sledećem redu unesite kod.",
+  codeApprovalTitle: "Izolovano izvršavanje koda",
+  codeApprovalRequired:
+    "Pregledajte detalje izvršavanja. Ništa se ne pokreće dok ne odobrite.",
+  codeLanguage: "Jezik",
+  codeTimeout: "Vremensko ograničenje",
+  codeFingerprint: "Otisak koda",
+  codeSize: "Veličina koda",
+  codeApprove: "Odobri i pokreni",
+  codeCancel: "Otkaži",
+  codeCancelling: "Otkazujem odobrenje…",
+  codeRunning: "Izvršavam u izolovanom sandboksu…",
+  codeCompleted: "Izvršavanje je završeno.",
+  codeFailed: "Izvršavanje nije uspelo.",
+  codeCancelled: "Izvršavanje je otkazano. Kod nije pokrenut.",
+  codeApprovalExpired:
+    "Ovo odobrenje više nije dostupno. Ponovo pošaljite komandu da napravite novo.",
+  codeUnknown:
+    "Veza je prekinuta pre potvrde rezultata. Unit369 neće automatski ponovo pokrenuti kod.",
+  codeOutput: "Standardni izlaz",
+  codeErrors: "Standardna greška",
+  codeResult: "Rezultat",
+  codeNoOutput: "Kod je završen bez tekstualnog izlaza.",
+  codeCopyOutput: "Kopiraj izlaz",
+  codeCancelFailed:
+    "Otkazivanje nije potvrđeno. Odobrenje je uklonjeno sa ovog uređaja i odavde više ne može da se pokrene.",
+  codeStatusApproval: "Čeka odobrenje",
+  codeStatusCancelling: "Otkazujem",
+  codeStatusRunning: "Izvršavam",
+  codeStatusCompleted: "Završeno",
+  codeStatusFailed: "Neuspešno",
+  codeStatusCancelled: "Otkazano",
+  codeStatusExpired: "Isteklo",
+  codeStatusUnknown: "Nepoznato",
 });
 
 export function normalizeLanguage(value) {
