@@ -393,10 +393,12 @@ export async function handleNativeBuild(request, env, account) {
       steps: [
         "Inspect project structure",
         "Validate syntax and configuration",
-        "Run user-approved build or test command in a future isolated execution sandbox",
+        "Submit code to the isolated execution plan endpoint",
+        "Require explicit owner approval before execution",
         "Capture logs and artifacts",
       ],
-      execution_available: false,
+      execution_available: !!env.UNIT369_SANDBOX,
+      execution_endpoint: "/api/native/code/plan",
     });
   }
   return json({ error: "Build route not found." }, 404);

@@ -16,6 +16,12 @@ import {
 } from "../src/accounts.js";
 import { planNativeIntent } from "../src/native-capabilities.js";
 import {
+  codeExecutionCapabilities,
+  handleNativeCodeExecution,
+  normalizeCodeRequest,
+  normalizeExecutionResult,
+} from "../src/native-code-execution.js";
+import {
   runOwnedModel,
   shouldUseNativeChatFastPath,
 } from "../src/owned-inference.js";
@@ -646,4 +652,117 @@ test("native planner identifies independent capability domains", () => {
     assert.ok(plan.steps.some((step) => step.capability === capability));
   }
   assert.equal(plan.external_required, false);
+});
+
+test("isolated code requests enforce language, size, and timeout boundaries", () => {
+  assert.deepEqual(
+    normalizeCodeRequest({
+      language: "PYTHON",
+      code: "print(2 + 2)",
+      timeout_ms: 90_000,
+    }),
+    {
+      language: "python",
+      code: "print(2 + 2)",
+      timeout_ms: 30_000,
+    },
+  );
+  assert.throws(
+    () => normalizeCodeRequest({ language: "bash", code: "echo unsafe" }),
+    (error) =>
+      error instanceof HttpError && error.code === "unsupported_code_language",
+  );
+  assert.throws(
+    () =>
+      normalizeCodeRequest({ language: "python", code: "x".repeat(32_001) }),
+    (error) => error instanceof HttpError && error.status === 413,
+  );
+  const capabilities = codeExecutionCapabilities(true);
+  assert.equal(capabilities.configured, true);
+  assert.equal(capabilities.arbitrary_shell_enabled, false);
+  assert.equal(capabilities.secrets_forwarded, false);
+});
+
+test("isolated execution output is bounded and marks untrusted HTML", () => {
+  const result = normalizeExecutionResult({
+    executionCount: 3,
+    logs: { stdout: ["ok"], stderr: [] },
+    results: [{ text: "4", html: "<script>bad()</script>" }],
+  });
+  assert.equal(result.status, "completed");
+  assert.equal(result.execution_count, 3);
+  assert.deepEqual(result.logs.stdout, ["ok"]);
+  assert.equal(result.results[0].text, "4");
+  assert.equal(result.results[0].html_is_untrusted, true);
+});
+
+test("isolated code executes only after immutable one-time approval", async () => {
+  const calls = [];
+  const env = {
+    UNIT369_SANDBOX: {},
+    TOOL_STORE: toolStoreNamespace(),
+  };
+  const runtime = {
+    getSandbox(_binding, id, options) {
+      calls.push({ type: "sandbox", id, options });
+      return {
+        async runCode(code, runOptions) {
+          calls.push({ type: "run", code, runOptions });
+          return {
+            executionCount: 1,
+            logs: { stdout: ["4"], stderr: [] },
+            results: [{ text: "4" }],
+          };
+        },
+      };
+    },
+  };
+  const account = { uid: "owner-test" };
+  const plannedResponse = await handleNativeCodeExecution(
+    request("/api/native/code/plan", {
+      language: "python",
+      code: "print(2 + 2)",
+      timeout_ms: 5_000,
+    }),
+    env,
+    account,
+    runtime,
+  );
+  assert.equal(plannedResponse.status, 202);
+  const planned = await plannedResponse.json();
+  assert.equal(planned.approval_required, true);
+  assert.equal(calls.length, 0);
+
+  const confirmedResponse = await handleNativeCodeExecution(
+    request("/api/native/code/confirm", {
+      approval_id: planned.approval.id,
+      approval_token: planned.approval.token,
+    }),
+    env,
+    account,
+    runtime,
+  );
+  assert.equal(
+    confirmedResponse.status,
+    200,
+    await confirmedResponse.clone().text(),
+  );
+  const confirmed = await confirmedResponse.json();
+  assert.equal(confirmed.status, "completed");
+  assert.deepEqual(confirmed.logs.stdout, ["4"]);
+  assert.equal(calls.filter((entry) => entry.type === "run").length, 1);
+  assert.equal(calls[1].runOptions.language, "python");
+  assert.equal(calls[1].runOptions.timeout, 5_000);
+
+  const replayResponse = await handleNativeCodeExecution(
+    request("/api/native/code/confirm", {
+      approval_id: planned.approval.id,
+      approval_token: planned.approval.token,
+    }),
+    env,
+    account,
+    runtime,
+  );
+  assert.equal(replayResponse.status, 409);
+  assert.equal(calls.filter((entry) => entry.type === "run").length, 1);
 });

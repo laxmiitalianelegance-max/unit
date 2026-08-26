@@ -32,7 +32,7 @@ import {
   validateTranslation,
 } from "./ui-translations.js";
 
-export const APP_VERSION = "2026.08.26.1";
+export const APP_VERSION = "2026.08.26.2";
 const HEALTH_CACHE_KEY = `native-intelligence-health-${APP_VERSION}`;
 const TRANSLATION_CACHE_VERSION = "ui-v7";
 
@@ -347,6 +347,7 @@ function integrationStatus(env) {
         integrations.unit369Owned || externalAiConfigured,
       authentication_required: true,
       file_storage: env.FILES ? "r2" : "durable_object",
+      isolated_code_execution: !!env.UNIT369_SANDBOX,
     },
     integrations,
     external_connections: {
@@ -355,6 +356,12 @@ function integrationStatus(env) {
       grok: integrations.grok,
       workers_ai: integrations.workersAi,
       shopify: integrations.shopify,
+    },
+    execution: {
+      engine: "unit369-cloudflare-sandbox",
+      configured: !!env.UNIT369_SANDBOX,
+      approval_required: true,
+      arbitrary_shell_enabled: false,
     },
   };
 }
@@ -432,6 +439,7 @@ async function releaseHealth(env) {
     google_oauth: googleOAuthConfigured(env),
     owned_inference_configured: providers.unit369Owned,
     external_ai_configured: externalAiConfigured,
+    sandbox_binding: !!env.UNIT369_SANDBOX,
   };
   checks.authentication = checks.owner_auth || checks.google_oauth;
   let ai = null;
@@ -476,6 +484,7 @@ async function releaseHealth(env) {
     "encryption_key",
     "authentication",
     "native_intelligence",
+    "sandbox_binding",
   ];
   const operational = requiredChecks.every((name) => checks[name] === true);
   return {

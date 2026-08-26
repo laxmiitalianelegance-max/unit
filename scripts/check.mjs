@@ -94,6 +94,9 @@ for (const required of [
   '"binding": "SELF"',
   '"name": "TOOL_STORE"',
   '"name": "NATIVE_STORE"',
+  '"name": "UNIT369_SANDBOX"',
+  '"class_name": "Sandbox"',
+  '"image": "./Dockerfile"',
   '"observability"',
 ]) {
   assert.ok(config.includes(required), `wrangler.jsonc is missing ${required}`);
@@ -109,6 +112,24 @@ assert.ok(
 assert.ok(
   existsSync(join(root, "package-lock.json")),
   "package-lock.json is missing",
+);
+assert.ok(
+  existsSync(join(root, "Dockerfile")),
+  "Sandbox Dockerfile is missing",
+);
+const packageJson = JSON.parse(
+  readFileSync(join(root, "package.json"), "utf8"),
+);
+assert.equal(
+  packageJson.dependencies?.["@cloudflare/sandbox"],
+  "0.12.8",
+  "Sandbox SDK and container image must stay version-pinned",
+);
+assert.ok(
+  readFileSync(join(root, "Dockerfile"), "utf8").includes(
+    "cloudflare/sandbox:0.12.8-python",
+  ),
+  "Sandbox Docker image must match the SDK version",
 );
 
 function assertPng(path, width, height) {
