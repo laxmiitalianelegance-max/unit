@@ -1,53 +1,9 @@
 {
-  "sha": "5fb6ce9b232d3670b167ed639d51e4885fc61759",
-  "status": "success",
-  "stage": "auth_verified",
+  "sha": "9a6b383e6ea91d7ddfb91d9cb505a2f4766022af",
+  "status": "failure",
+  "stage": "deploy_failed",
   "url": "https://unit.laxmiitalianelegance.workers.dev",
-  "health": {
-    "status": "ready",
-    "version": "2026.08.26.1",
-    "core_ready": true,
-    "auth_ready": true,
-    "ai_operational": true,
-    "intelligence_mode": "owned-model",
-    "generative_model_configured": true,
-    "ai": {
-      "operational": true,
-      "provider": "unit369-native",
-      "model": "unit369-native-foundation-v1",
-      "capability_level": "deterministic-foundation",
-      "external_required": false,
-      "latency_ms": 0,
-      "checked_at": "2026-08-25T22:22:28.488Z"
-    },
-    "file_storage": "durable_object",
-    "required_checks": [
-      "assets",
-      "self",
-      "native_store",
-      "tool_store",
-      "files",
-      "app_secret",
-      "encryption_key",
-      "authentication",
-      "native_intelligence"
-    ],
-    "checks": {
-      "assets": true,
-      "self": true,
-      "native_store": true,
-      "tool_store": true,
-      "files": true,
-      "app_secret": true,
-      "encryption_key": true,
-      "owner_auth": true,
-      "google_oauth": false,
-      "owned_inference_configured": true,
-      "external_ai_configured": true,
-      "authentication": true,
-      "native_intelligence": true
-    }
-  },
-  "error": null,
-  "recorded_at": "2026-08-25T22:22:30.154Z"
+  "health": null,
+  "error": " ⛅️ wrangler 4.125.0 (update available 4.126.0)\n───────────────────────────────────────────────\n🌀 Building list of assets...\n✨ Read 6 files from the assets directory /home/runner/work/unit/unit/public\n🌀 Starting asset upload...\nNo updated asset files to upload. Proceeding with deployment...\nTotal Upload: 963.70 KiB / gzip: 210.02 KiB\nWorker Startup Time: 10 ms\nYour Worker has access to the following bindings:\nBinding                                Resource            \nenv.TOOL_STORE (ToolStore)             Durable Object      \nenv.NATIVE_STORE (NativeStore)         Durable Object      \nenv.UNIT369_SANDBOX (Sandbox)          Durable Object      \nenv.SELF (unit)                        Worker              \nenv.AI                                 AI                  \nenv.ASSETS                             Assets              \nThe following containers are available:\n- unit-sandbox (/home/runner/work/unit/unit/Dockerfile)\nUploaded unit (2.66 sec)\nBuilding image unit-sandbox:197a5ad6\n#0 building with \"default\" instance using docker driver\n#1 [internal] load build definition from Dockerfile\n#1 transferring dockerfile: 290B done\n#1 DONE 0.0s\n#2 [internal] load metadata for docker.io/cloudflare/sandbox:0.12.8-python\n#2 DONE 0.1s\n#3 [internal] load .dockerignore\n#3 transferring context: 2B done\n#3 DONE 0.0s\n#4 [1/2] FROM docker.io/cloudflare/sandbox:0.12.8-python@sha256:869376df7b92edb7d6162e101a2fa654d388d38677912e9aab4180a34d3c86f5\n#4 DONE 0.0s\n#5 [2/2] RUN pip3 install --no-cache-dir scikit-learn==1.7.2\n#5 CACHED\n#6 exporting to image\n#6 exporting layers done\n#6 writing image sha256:87f26659bfe4f7dfec99c750c90b4d8e1fd90db6c2a07a6de02dd892ac34100a done\n#6 naming to docker.io/library/unit-sandbox:197a5ad6 done\n#6 DONE 0.0s\n\u001b[31m✘ \u001b[41;31m[\u001b[41;97mERROR\u001b[41;31m]\u001b[0m \u001b[1mUnauthorized\u001b[0m\n🪵  Logs were written to \"/home/runner/.config/.wrangler/logs/wrangler-2026-08-26_20-57-22_457.log\"",
+  "recorded_at": "2026-08-26T20:57:28.422Z"
 }
