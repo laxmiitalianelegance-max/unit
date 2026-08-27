@@ -1,9 +1,55 @@
 {
-  "sha": "adc3106cf1f4742380fb9286955b0d769a17467a",
-  "status": "failure",
-  "stage": "deploy_failed",
+  "sha": "caed0cea1d822b59bb9c36356515c8dc550e17c4",
+  "status": "success",
+  "stage": "auth_verified",
   "url": "https://unit.laxmiitalianelegance.workers.dev",
-  "health": null,
-  "error": " ⛅️ wrangler 4.125.0 (update available 4.127.0)\n───────────────────────────────────────────────\n🌀 Building list of assets...\n✨ Read 6 files from the assets directory /home/runner/work/unit/unit/public\n🌀 Starting asset upload...\nNo updated asset files to upload. Proceeding with deployment...\nTotal Upload: 963.70 KiB / gzip: 210.02 KiB\nWorker Startup Time: 8 ms\nYour Worker has access to the following bindings:\nBinding                                Resource            \nenv.TOOL_STORE (ToolStore)             Durable Object      \nenv.NATIVE_STORE (NativeStore)         Durable Object      \nenv.UNIT369_SANDBOX (Sandbox)          Durable Object      \nenv.SELF (unit)                        Worker              \nenv.AI                                 AI                  \nenv.ASSETS                             Assets              \nThe following containers are available:\n- unit-sandbox (/home/runner/work/unit/unit/Dockerfile)\nUploaded unit (3.01 sec)\nBuilding image unit-sandbox:eef4b172\n#0 building with \"default\" instance using docker driver\n#1 [internal] load build definition from Dockerfile\n#1 transferring dockerfile: 290B done\n#1 DONE 0.0s\n#2 [internal] load metadata for docker.io/cloudflare/sandbox:0.12.8-python\n#2 DONE 0.1s\n#3 [internal] load .dockerignore\n#3 transferring context: 2B done\n#3 DONE 0.0s\n#4 [1/2] FROM docker.io/cloudflare/sandbox:0.12.8-python@sha256:869376df7b92edb7d6162e101a2fa654d388d38677912e9aab4180a34d3c86f5\n#4 DONE 0.0s\n#5 [2/2] RUN pip3 install --no-cache-dir scikit-learn==1.7.2\n#5 CACHED\n#6 exporting to image\n#6 exporting layers done\n#6 writing image sha256:4f8a403a128281ba8ea92c076effcaccfa6874914e15f46b20403dbe1b80918a done\n#6 naming to docker.io/library/unit-sandbox:eef4b172 done\n#6 DONE 0.0s\n\u001b[31m✘ \u001b[41;31m[\u001b[41;97mERROR\u001b[41;31m]\u001b[0m \u001b[1mUnauthorized\u001b[0m\n🪵  Logs were written to \"/home/runner/.config/.wrangler/logs/wrangler-2026-08-27_16-25-38_063.log\"",
-  "recorded_at": "2026-08-27T16:25:44.033Z"
+  "health": {
+    "status": "ready",
+    "version": "2026.08.26.2",
+    "core_ready": true,
+    "auth_ready": true,
+    "ai_operational": true,
+    "intelligence_mode": "owned-model",
+    "generative_model_configured": true,
+    "ai": {
+      "operational": true,
+      "provider": "unit369-native",
+      "model": "unit369-native-foundation-v1",
+      "capability_level": "deterministic-foundation",
+      "external_required": false,
+      "latency_ms": 0,
+      "checked_at": "2026-08-27T16:33:35.595Z"
+    },
+    "file_storage": "durable_object",
+    "required_checks": [
+      "assets",
+      "self",
+      "native_store",
+      "tool_store",
+      "files",
+      "app_secret",
+      "encryption_key",
+      "authentication",
+      "native_intelligence",
+      "sandbox_binding"
+    ],
+    "checks": {
+      "assets": true,
+      "self": true,
+      "native_store": true,
+      "tool_store": true,
+      "files": true,
+      "app_secret": true,
+      "encryption_key": true,
+      "owner_auth": true,
+      "google_oauth": false,
+      "owned_inference_configured": true,
+      "external_ai_configured": true,
+      "sandbox_binding": true,
+      "authentication": true,
+      "native_intelligence": true
+    }
+  },
+  "error": null,
+  "recorded_at": "2026-08-27T16:33:39.157Z"
 }
