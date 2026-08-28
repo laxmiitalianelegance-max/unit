@@ -179,6 +179,9 @@ try {
   ]);
   assert.ok(dataCapabilitiesBody.operations.includes("predict"));
   assert.equal(dataCapabilitiesBody.prediction.model_persisted, false);
+  assert.ok(dataCapabilitiesBody.operations.includes("trend"));
+  assert.equal(dataCapabilitiesBody.trend.exploratory_only, true);
+  assert.equal(dataCapabilitiesBody.trend.max_series, 10);
   assert.equal(dataCapabilitiesBody.approval_required, true);
 
   const dataImport = await fetch(`${origin}/api/native/data-lab/import`, {

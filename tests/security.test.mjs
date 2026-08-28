@@ -1802,6 +1802,10 @@ test("Data Lab exposes only server-defined analysis operations", () => {
     normalizeDataLabRequest({ message: "Napravi grafikon" }).operation,
     "chart",
   );
+  assert.equal(
+    normalizeDataLabRequest({ message: "Pronađi trendove prodaje" }).operation,
+    "trend",
+  );
   const prediction = normalizeDataLabRequest({
     message: 'Predvidi ciljnu kolonu "total"',
   });
@@ -1839,17 +1843,23 @@ test("Data Lab exposes only server-defined analysis operations", () => {
   assert.equal(capabilities.arbitrary_code_enabled, false);
   assert.equal(capabilities.arbitrary_shell_enabled, false);
   assert.equal(capabilities.secrets_forwarded, false);
+  assert.equal(capabilities.trend.time_column_required, true);
+  assert.equal(capabilities.trend.exploratory_only, true);
+  assert.equal(capabilities.trend.max_series, 10);
   assert.deepEqual(capabilities.formats, ["csv", "tsv", "json", "xlsx"]);
   assert.deepEqual(capabilities.operations, [
     "profile",
     "clean",
     "chart",
+    "trend",
     "predict",
   ]);
   assert.equal(capabilities.prediction.custom_models_enabled, false);
   assert.equal(capabilities.prediction.model_persisted, false);
   assert.equal(capabilities.xlsx_archive_validation, true);
   assert.match(DATA_LAB_PYTHON_SOURCE, /def validate_xlsx\(path\):/);
+  assert.match(DATA_LAB_PYTHON_SOURCE, /def build_trends\(frame,/);
+  assert.match(DATA_LAB_PYTHON_SOURCE, /MAX_TREND_CHART_POINTS = 500/);
   assert.match(DATA_LAB_PYTHON_SOURCE, /LogisticRegression/);
   assert.match(DATA_LAB_PYTHON_SOURCE, /Ridge\(alpha=1\.0/);
 });
@@ -2167,6 +2177,26 @@ test("Data Lab report normalization bounds previews and statistics", () => {
           },
         ],
         preview: [{ value: "y".repeat(900) }],
+        trend: {
+          date_column: "date",
+          series: Array.from({ length: 15 }, (_, index) => ({
+            metric: `metric-${index}`,
+            direction: index === 0 ? "invalid" : "increasing",
+            periods: 12,
+            start_period: "2026-01-01T00:00:00+00:00",
+            end_period: "2026-12-01T00:00:00+00:00",
+            start_value: 10,
+            end_value: 20,
+            absolute_change: 10,
+            percent_change: 100,
+            slope_per_day: 0.03,
+            strength: index === 0 ? Infinity : 0.9,
+          })),
+          summary_artifact: "trend-summary.csv",
+          chart_artifact: "trend-chart.png",
+          exploratory: true,
+          warnings: ["t".repeat(700)],
+        },
         prediction: {
           target_column: "value",
           task_type: "regression",
@@ -2188,6 +2218,10 @@ test("Data Lab report normalization bounds previews and statistics", () => {
   assert.equal(normalized.warnings[0].length, 500);
   assert.equal(normalized.files[0].columns[0].numeric.mean, null);
   assert.equal(normalized.files[0].preview[0].value.length, 500);
+  assert.equal(normalized.files[0].trend.series.length, 10);
+  assert.equal(normalized.files[0].trend.series[0].direction, "stable");
+  assert.equal(normalized.files[0].trend.series[0].strength, null);
+  assert.equal(normalized.files[0].trend.warnings[0].length, 500);
   assert.equal(normalized.files[0].prediction.metrics.r2, null);
   assert.equal(normalized.files[0].prediction.features_used.length, 20);
   assert.equal(normalized.files[0].prediction.warnings[0].length, 500);

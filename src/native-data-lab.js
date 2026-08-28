@@ -28,9 +28,10 @@ const MAX_ARTIFACT_FILES = 8;
 const MAX_ARTIFACT_BYTES = 2 * 1024 * 1024;
 const MAX_ARTIFACT_TOTAL_BYTES = 4 * 1024 * 1024;
 const MAX_PREVIEW_IMAGE_CHARS = 384 * 1024;
+const MAX_TREND_SERIES = 10;
 const DATA_EXTENSIONS = new Set([".csv", ".tsv", ".json", ".xlsx"]);
 const TEXT_DATA_EXTENSIONS = new Set([".csv", ".tsv", ".json"]);
-const OPERATIONS = new Set(["profile", "clean", "chart", "predict"]);
+const OPERATIONS = new Set(["profile", "clean", "chart", "trend", "predict"]);
 const MAX_XLSX_UNCOMPRESSED_BYTES = 24 * 1024 * 1024;
 const DATA_WINDOWS = Object.freeze([
   { window_ms: 60 * 60 * 1000, limit: 10 },
@@ -47,6 +48,8 @@ export const DATA_LAB_PYTHON_SOURCE = String.raw`import json
 import math
 import os
 import re
+import unicodedata
+import warnings
 import zipfile
 from pathlib import Path
 
@@ -82,6 +85,8 @@ MAX_MODEL_ROWS = 5000
 MAX_MODEL_FEATURES = 20
 MAX_MODEL_CLASSES = 20
 MIN_MODEL_ROWS = 30
+MAX_TREND_SERIES = 10
+MAX_TREND_CHART_POINTS = 500
 
 INPUT_DIR = Path(os.environ["UNIT369_DATA_INPUT_DIR"])
 OUTPUT_DIR = Path(os.environ["UNIT369_DATA_OUTPUT_DIR"])
@@ -322,6 +327,221 @@ def choose_chart(frame, options, output_path):
     }
 
 
+MONTH_NAMES = {
+    "jan": 1, "january": 1, "januar": 1, "sijecanj": 1,
+    "feb": 2, "february": 2, "februar": 2, "veljaca": 2,
+    "mar": 3, "march": 3, "mart": 3, "ozujak": 3,
+    "apr": 4, "april": 4, "travanj": 4,
+    "may": 5, "maj": 5, "svibanj": 5,
+    "jun": 6, "june": 6, "lipanj": 6,
+    "jul": 7, "july": 7, "srpanj": 7,
+    "aug": 8, "august": 8, "avgust": 8, "kolovoz": 8,
+    "sep": 9, "sept": 9, "september": 9, "septembar": 9, "rujan": 9,
+    "oct": 10, "october": 10, "oktobar": 10, "listopad": 10,
+    "nov": 11, "november": 11, "novembar": 11, "studeni": 11,
+    "dec": 12, "december": 12, "decembar": 12, "prosinac": 12,
+}
+
+
+def normalized_word(value):
+    text = unicodedata.normalize("NFKD", str(value)).encode("ascii", "ignore").decode("ascii")
+    return re.sub(r"[^a-z]+", "", text.lower())
+
+
+def parse_time_candidate(series, name):
+    parsed = None
+    if pd.api.types.is_datetime64_any_dtype(series):
+        parsed = pd.to_datetime(series, errors="coerce", utc=True)
+    elif pd.api.types.is_numeric_dtype(series):
+        label = normalized_word(name)
+        if not re.search(r"date|time|datum|vreme|vrijeme|year|godin|month|mesec|mjesec|period", label):
+            return None
+        numeric = pd.to_numeric(series, errors="coerce")
+        clean = numeric.dropna()
+        if clean.empty:
+            return None
+        median = float(clean.median())
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            month_named = bool(re.search(r"month|mesec|mjesec", label))
+            month_ratio = float(clean.between(1, 12).mean())
+            if month_named and month_ratio >= 0.8:
+                parsed = pd.to_datetime(
+                    {"year": 2000, "month": numeric.where(numeric.between(1, 12)).round(), "day": 1},
+                    errors="coerce",
+                    utc=True,
+                )
+            elif 1900 <= median <= 2200:
+                parsed = pd.to_datetime(
+                    numeric.round().astype("Int64").astype(str),
+                    format="%Y",
+                    errors="coerce",
+                    utc=True,
+                )
+            elif 190001 <= median <= 220012:
+                parsed = pd.to_datetime(
+                    numeric.round().astype("Int64").astype(str),
+                    format="%Y%m",
+                    errors="coerce",
+                    utc=True,
+                )
+            elif 19000101 <= median <= 22001231:
+                parsed = pd.to_datetime(
+                    numeric.round().astype("Int64").astype(str),
+                    format="%Y%m%d",
+                    errors="coerce",
+                    utc=True,
+                )
+            elif median >= 100000000000:
+                parsed = pd.to_datetime(numeric, unit="ms", errors="coerce", utc=True)
+            elif median >= 1000000000:
+                parsed = pd.to_datetime(numeric, unit="s", errors="coerce", utc=True)
+            else:
+                return None
+    else:
+        text = series.map(
+            lambda value: None if pd.isna(value) else str(value).strip()[:200]
+        )
+        month_numbers = text.map(
+            lambda value: MONTH_NAMES.get(normalized_word(value)) if value else None
+        )
+        non_null = int(text.notna().sum())
+        if non_null and int(month_numbers.notna().sum()) >= max(3, math.ceil(non_null * 0.8)):
+            parsed = pd.to_datetime(
+                {"year": 2000, "month": month_numbers, "day": 1},
+                errors="coerce",
+                utc=True,
+            )
+        else:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                first = pd.to_datetime(text, errors="coerce", utc=True, dayfirst=False)
+                second = pd.to_datetime(text, errors="coerce", utc=True, dayfirst=True)
+            parsed = second if int(second.notna().sum()) > int(first.notna().sum()) else first
+    parsed = pd.Series(parsed, index=series.index)
+    source_count = max(1, int(series.notna().sum()))
+    valid_count = int(parsed.notna().sum())
+    if valid_count < 3 or valid_count / source_count < 0.6 or int(parsed.nunique()) < 3:
+        return None
+    return parsed
+
+
+def find_time_column(frame):
+    best = None
+    for position, name in enumerate(frame.columns):
+        parsed = parse_time_candidate(frame[name], name)
+        if parsed is None:
+            continue
+        label = normalized_word(name)
+        named = bool(re.search(r"date|time|datum|vreme|vrijeme|year|godin|month|mesec|mjesec|period", label))
+        score = (
+            1 if named else 0,
+            int(parsed.notna().sum()),
+            int(parsed.nunique()),
+            -position,
+        )
+        if best is None or score > best[0]:
+            best = (score, name, parsed)
+    if best is None:
+        raise ValueError("Trend analysis needs a date or time column with at least three valid periods.")
+    return best[1], best[2]
+
+
+def build_trends(frame, summary_path, chart_path=None):
+    time_name, time_values = find_time_column(frame)
+    numeric_columns = [
+        column
+        for column in frame.select_dtypes(include=[np.number]).columns
+        if column != time_name
+    ][:MAX_TREND_SERIES]
+    if not numeric_columns:
+        raise ValueError("Trend analysis needs at least one numeric metric column.")
+
+    series_reports = []
+    chart_series = []
+    summary_rows = []
+    for name in numeric_columns:
+        working = pd.DataFrame({
+            "period": time_values,
+            "value": pd.to_numeric(frame[name], errors="coerce"),
+        }).replace([np.inf, -np.inf], np.nan).dropna()
+        if working.empty:
+            continue
+        grouped = working.groupby("period", as_index=False)["value"].mean().sort_values("period")
+        if len(grouped.index) < 3:
+            continue
+        elapsed = (grouped["period"] - grouped["period"].iloc[0]).dt.total_seconds() / 86400.0
+        if float(elapsed.max()) <= 0:
+            continue
+        values = grouped["value"].astype(float)
+        slope = float(np.polyfit(elapsed.to_numpy(), values.to_numpy(), 1)[0])
+        fitted_change = slope * float(elapsed.max())
+        value_std = float(values.std(ddof=0))
+        tolerance = max(abs(float(values.mean())) * 0.01, value_std * 0.05, 1e-12)
+        direction = "increasing" if fitted_change > tolerance else "decreasing" if fitted_change < -tolerance else "stable"
+        start_value = float(values.iloc[0])
+        end_value = float(values.iloc[-1])
+        absolute_change = end_value - start_value
+        percent_change = None if start_value == 0 else (absolute_change / abs(start_value)) * 100.0
+        if value_std <= 1e-12:
+            strength = 0.0
+        else:
+            correlation = float(np.corrcoef(elapsed.to_numpy(), values.to_numpy())[0, 1])
+            strength = abs(correlation) if math.isfinite(correlation) else None
+        item = {
+            "metric": str(name)[:160],
+            "direction": direction,
+            "periods": int(len(grouped.index)),
+            "start_period": scalar(grouped["period"].iloc[0]),
+            "end_period": scalar(grouped["period"].iloc[-1]),
+            "start_value": scalar(start_value),
+            "end_value": scalar(end_value),
+            "absolute_change": scalar(absolute_change),
+            "percent_change": scalar(percent_change),
+            "slope_per_day": scalar(slope),
+            "strength": scalar(strength),
+        }
+        series_reports.append(item)
+        if len(grouped.index) > MAX_TREND_CHART_POINTS:
+            positions = np.linspace(0, len(grouped.index) - 1, MAX_TREND_CHART_POINTS).astype(int)
+            chart_series.append((str(name), grouped.iloc[np.unique(positions)]))
+        else:
+            chart_series.append((str(name), grouped))
+        summary_rows.append({
+            "date_column": spreadsheet_safe_scalar(str(time_name)),
+            **{key: spreadsheet_safe_scalar(value) for key, value in item.items()},
+        })
+    if not series_reports:
+        raise ValueError("No numeric metric had enough dated values for trend analysis.")
+
+    pd.DataFrame(summary_rows).to_csv(summary_path, index=False)
+    chart_artifact = ""
+    if chart_path is not None:
+        shown = chart_series[:4]
+        fig, axes = plt.subplots(len(shown), 1, figsize=(9, max(4.8, 3.2 * len(shown))), squeeze=False)
+        for axis, (name, grouped) in zip(axes[:, 0], shown):
+            axis.plot(grouped["period"], grouped["value"], marker="o", linewidth=1.8)
+            axis.set_title(str(name))
+            axis.set_xlabel(str(time_name))
+            axis.set_ylabel(str(name))
+            axis.grid(alpha=0.2)
+        fig.suptitle("Unit369 Data Lab — trends")
+        fig.tight_layout()
+        fig.savefig(chart_path, format="png", dpi=120, bbox_inches="tight")
+        plt.close(fig)
+        chart_artifact = chart_path.name
+    return {
+        "date_column": str(time_name)[:160],
+        "series": series_reports,
+        "summary_artifact": summary_path.name,
+        "chart_artifact": chart_artifact,
+        "exploratory": True,
+        "warnings": [
+            "Descriptive trend only: it does not establish causation or guarantee a future forecast."
+        ],
+    }
+
+
 def prediction_task(target):
     unique = int(target.nunique(dropna=True))
     if pd.api.types.is_bool_dtype(target):
@@ -512,7 +732,7 @@ def main():
     operation = config["operation"]
     options = config.get("options", {})
     report = {
-        "version": 2,
+        "version": 3,
         "operation": operation,
         "files": [],
         "warnings": [],
@@ -539,6 +759,13 @@ def main():
             file_report["cleaned_artifact"] = output_name
         if operation == "chart" and index == 0:
             file_report["chart"] = choose_chart(frame, options, OUTPUT_DIR / "chart.png")
+        if operation == "trend":
+            summary_name = "trend-summary-" + str(index + 1) + "-" + safe_stem(path) + ".csv"
+            chart_path = OUTPUT_DIR / "trend-chart.png" if index == 0 else None
+            file_report["trend"] = build_trends(
+                frame, OUTPUT_DIR / summary_name, chart_path
+            )
+            report["warnings"].extend(file_report["trend"].get("warnings", []))
         if operation == "predict" and index == 0:
             file_report["prediction"] = build_prediction(
                 frame, options, OUTPUT_DIR / "prediction-evaluation.csv"
@@ -807,6 +1034,12 @@ function inferredOperation(message) {
   const text = String(message || "").toLowerCase();
   if (/\b(predict|prediction|forecast|predvid|prognoz|model)\w*/i.test(text))
     return "predict";
+  if (
+    /\b(trend|trending|growth|decline|kretanj|trendov|rast|pad|promen|promjen)\w*/i.test(
+      text,
+    )
+  )
+    return "trend";
   if (/\b(clean|cleanup|deduplic|očist|ocist|duplik|sredi)\w*/i.test(text))
     return "clean";
   if (/\b(chart|graph|plot|grafik|grafikon|vizuel)\w*/i.test(text))
@@ -841,7 +1074,7 @@ export function normalizeDataLabRequest(input) {
   if (!OPERATIONS.has(operation)) {
     throw new HttpError(
       400,
-      "Data Lab operation must be profile, clean, chart, or predict.",
+      "Data Lab operation must be profile, clean, chart, trend, or predict.",
       "invalid_data_operation",
     );
   }
@@ -1019,6 +1252,46 @@ export function normalizeDataLabReport(value) {
                 x_column: clean(file.chart.x_column, 160),
                 y_column: clean(file.chart.y_column, 160),
                 artifact: clean(file.chart.artifact, 240),
+              },
+            }
+          : {}),
+        ...(file?.trend && typeof file.trend === "object"
+          ? {
+              trend: {
+                date_column: clean(file.trend.date_column, 160),
+                series: (Array.isArray(file.trend.series)
+                  ? file.trend.series
+                  : []
+                )
+                  .slice(0, MAX_TREND_SERIES)
+                  .map((item) => ({
+                    metric: clean(item?.metric, 160),
+                    direction: new Set([
+                      "increasing",
+                      "decreasing",
+                      "stable",
+                    ]).has(item?.direction)
+                      ? item.direction
+                      : "stable",
+                    periods: Math.max(0, Number(item?.periods) || 0),
+                    start_period: clean(item?.start_period, 80),
+                    end_period: clean(item?.end_period, 80),
+                    start_value: boundedScalar(item?.start_value),
+                    end_value: boundedScalar(item?.end_value),
+                    absolute_change: boundedScalar(item?.absolute_change),
+                    percent_change: boundedScalar(item?.percent_change),
+                    slope_per_day: boundedScalar(item?.slope_per_day),
+                    strength: boundedScalar(item?.strength),
+                  })),
+                summary_artifact: clean(file.trend.summary_artifact, 240),
+                chart_artifact: clean(file.trend.chart_artifact, 240),
+                exploratory: file.trend.exploratory === true,
+                warnings: (Array.isArray(file.trend.warnings)
+                  ? file.trend.warnings
+                  : []
+                )
+                  .slice(0, 10)
+                  .map((item) => clean(item, 500)),
               },
             }
           : {}),
@@ -1316,6 +1589,11 @@ export function dataLabCapabilities(configured = false) {
     secrets_forwarded: false,
     spreadsheet_formula_protection: true,
     xlsx_archive_validation: true,
+    trend: {
+      time_column_required: true,
+      exploratory_only: true,
+      max_series: MAX_TREND_SERIES,
+    },
     prediction: {
       target_required: true,
       custom_models_enabled: false,

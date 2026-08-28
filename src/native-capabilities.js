@@ -118,7 +118,7 @@ export const NATIVE_CAPABILITIES = Object.freeze({
   },
   data: {
     name: "Data",
-    version: 2,
+    version: 3,
     operations: [
       "collection.create",
       "record.create",
@@ -129,6 +129,7 @@ export const NATIVE_CAPABILITIES = Object.freeze({
       "data-lab.profile",
       "data-lab.clean",
       "data-lab.chart",
+      "data-lab.trend",
       "data-lab.predict",
       "data-lab.confirm",
       "data-lab.cancel",
