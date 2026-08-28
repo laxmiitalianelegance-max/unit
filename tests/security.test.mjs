@@ -317,6 +317,12 @@ test("short conversational messages use the instant Unit369 Native path", async 
     shouldUseNativeChatFastPath([{ role: "user", content: "Jesi cuo?" }]),
     true,
   );
+  for (const message of ["Kako ide?", "Ide li?", "Da li ide sada?"]) {
+    assert.equal(
+      shouldUseNativeChatFastPath([{ role: "user", content: message }]),
+      true,
+    );
+  }
   assert.equal(
     shouldUseNativeChatFastPath([
       {
@@ -439,6 +445,37 @@ test("Serbian question openers get an immediate natural response", async (t) => 
   assert.equal(result.content, "Slobodno, pitaj.");
 });
 
+test("Serbian status checks get an immediate natural response", async (t) => {
+  let ownedCalled = false;
+  t.mock.method(globalThis, "fetch", async () => {
+    ownedCalled = true;
+    return Response.json({
+      choices: [{ message: { content: "Slow owned response" } }],
+    });
+  });
+
+  for (const message of ["Kako ide", "Ide li"]) {
+    const result = await runPreferredAi(
+      {
+        UNIT369_INFERENCE_URL:
+          "https://api.runpod.ai/v2/test/openai/v1/chat/completions",
+        UNIT369_INFERENCE_MODEL: "unit369-qwen36",
+        UNIT369_INFERENCE_TOKEN: "test-owned-token",
+      },
+      [{ role: "user", content: message }],
+      { purpose: "chat", externalFallback: false },
+    );
+
+    assert.equal(result.provider, "unit369-native");
+    assert.equal(result.fast_path, true);
+    assert.equal(
+      result.content,
+      "Ide dobro — tu sam i spreman. Reci šta radimo dalje.",
+    );
+  }
+  assert.equal(ownedCalled, false);
+});
+
 test("owned chat failure falls directly back to Unit369 Native when external fallback is disabled", async (t) => {
   let workersAiCalled = false;
   t.mock.method(globalThis, "fetch", async () =>
@@ -473,10 +510,10 @@ test("owned chat failure falls directly back to Unit369 Native when external fal
 
   assert.equal(workersAiCalled, false);
   assert.equal(result.provider, "unit369-native");
-  assert.match(result.content, /Glavni model se trenutno pokreće/);
+  assert.match(result.content, /Nisam uspeo da pripremim potpun odgovor/);
   assert.doesNotMatch(
     result.content,
-    /Cloudflare|Claude|OpenAI|Grok|owned-inference|intelligence\.plan|Nativni plan/i,
+    /Cloudflare|Claude|OpenAI|Grok|owned-inference|intelligence\.plan|Nativni plan|model se trenutno pokreće/i,
   );
   assert.deepEqual(result.fallback_from, ["unit369-owned"]);
 });
