@@ -16,6 +16,7 @@ The screenshots mix three different things: capabilities Unit369 can own, open-s
 | JavaScript/TypeScript execution      | Owner-approved isolated execution                                    | Cloudflare Sandbox                                                 | No third-party SaaS account; Workers Paid runtime required |
 | Multi-file project checks and tests  | Owner-approved workspace execution                                   | Temporary Cloudflare Sandbox with downloadable artifacts           | No third-party SaaS account; Workers Paid runtime required |
 | Guided Data Lab                      | Owner-approved profiling, cleaning, charts and prediction evaluation | Temporary Sandbox with Pandas, openpyxl and scikit-learn           | No third-party SaaS account; Workers Paid runtime required |
+| Native document knowledge            | Approved TXT/Markdown import and ranked per-owner source retrieval   | Durable Object SQLite FTS5                                         | No                                                         |
 
 ## Native capability targets from the screenshots
 
@@ -23,7 +24,7 @@ These are product outcomes Unit369 can own without copying another company's ser
 
 | Requested area                  | Unit369-owned target                                                                                   | Status                                                                                                         |
 | ------------------------------- | ------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------- |
-| Natural-language processing     | classification, extraction, summarization and semantic search through owned models and local libraries | Partial                                                                                                        |
+| Natural-language processing     | classification, extraction, summarization and semantic search through owned models and local libraries | Ranked Unicode FTS5 document retrieval ready; classification, extraction and semantic embeddings pending       |
 | Machine learning                | dataset preparation and bounded scikit-learn training/evaluation                                       | Guided logistic/ridge evaluation with explicit target, test split and baseline ready; persisted models pending |
 | Data analysis and visualization | NumPy/Pandas analysis plus Matplotlib and browser-native charts                                        | Guided CSV/TSV/JSON/XLSX profiling, cleaning, in-chat charts and artifacts ready                               |
 | Web application development     | native code workspaces, file editing, snapshots, preview, build and tests                              | Workspace import and isolated Python/JavaScript multi-file runner ready; preview pending                       |
@@ -31,7 +32,7 @@ These are product outcomes Unit369 can own without copying another company's ser
 | Deployment                      | build artifact, approval, deploy and rollback contracts                                                | Pending                                                                                                        |
 | Data protection                 | encryption, secret isolation, permissions and audit trail                                              | Partial                                                                                                        |
 | Collaboration                   | native projects, threads, messages and notifications                                                   | Core APIs implemented; real-time/team UX pending                                                               |
-| Chatbots                        | Unit369-owned conversational agents and knowledge                                                      | Partial                                                                                                        |
+| Chatbots                        | Unit369-owned conversational agents and knowledge                                                      | Approved knowledge import and cited retrieval ready; autonomous agent memory pending                           |
 | Audio/video                     | transcription, generation and editing pipeline                                                         | Pending                                                                                                        |
 | Virtual environments/simulation | sandboxed simulation workloads and rendered artifacts                                                  | Pending                                                                                                        |
 | Network analysis                | approved diagnostic jobs and reports                                                                   | Pending; privileged network control is intentionally excluded                                                  |
@@ -56,8 +57,9 @@ An optional adapter is considered complete only after OAuth or server-side crede
 3. Multi-file workspace sync, dependency allowlist, builds and tests — implemented.
 4. Native data-analysis and visualization artifact flows — implemented.
 5. Guided prediction/evaluation with explicit target-column approval — implemented.
-6. Persisted model registry and inference contract — pending separate lifecycle and drift controls.
-7. OpenCV/NLP specialized image after size and cold-start tests.
-8. Scheduled automation and deploy/rollback contracts.
-9. Audio/video and GPU framework images under separate cost ceilings.
-10. Optional third-party adapters only when an existing external account must be operated.
+6. Approved native TXT/Markdown knowledge with ranked source retrieval — implemented.
+7. Persisted model registry and inference contract — pending separate lifecycle and drift controls.
+8. OpenCV/NLP specialized image after size and cold-start tests.
+9. Scheduled automation and deploy/rollback contracts.
+10. Audio/video and GPU framework images under separate cost ceilings.
+11. Optional third-party adapters only when an existing external account must be operated.

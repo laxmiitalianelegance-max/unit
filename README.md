@@ -13,6 +13,7 @@ Unit369 is a Cloudflare Worker/PWA with authenticated AI chat, native workspaces
 - Quotas, connection secrets, shared cache and approvals: `ToolStore` Durable Object
 - Isolated Python/JavaScript/TypeScript execution: owner-scoped Cloudflare Sandbox container
 - Guided CSV/TSV/JSON/XLSX analysis, cleaning, charts and prediction evaluation: owner-approved Unit369 Data Lab in a temporary Sandbox
+- Owner-scoped TXT/Markdown knowledge: staged import with one-time approval and ranked SQLite FTS5 retrieval in `NativeStore`
 - User files and product media: built-in `NATIVE_STORE`; optional R2 is used automatically when a `FILES` binding is added later
 
 There is one active runtime graph. Historical wrappers and branch-specific validation workflows have been removed so CI validates the code that is actually deployed.
@@ -30,6 +31,7 @@ There is one active runtime graph. Historical wrappers and branch-specific valid
 - Native and external mutations use short-lived, immutable, one-time approval tokens.
 - Code execution additionally forbids arbitrary shell access, forwards no Worker secrets and bounds code, time, rate and output.
 - Data Lab runs only a fixed Unit369-authored Python pipeline, verifies the dataset digest again at confirmation, validates XLSX archives before parsing and neutralizes spreadsheet formulas in CSV exports.
+- Native Knowledge accepts only bounded UTF-8 TXT/Markdown input, verifies an immutable content manifest at confirmation, indexes atomically per owner and never requires an external AI provider.
 - Provider credentials never enter the browser bundle or local storage.
 
 ## Required production bindings and secrets
@@ -67,6 +69,8 @@ The bounded Runpod/vLLM deployment profile and cost controls for the first owner
 
 The isolated execution API, approval flow and safety limits are documented in `docs/UNIT369_CODE_EXECUTION.md`. Cloudflare Containers require Workers Paid and are not a subscription-free feature.
 
+The native document-import, approval and ranked retrieval contract is documented in `docs/UNIT369_NATIVE_KNOWLEDGE.md`. This knowledge path uses Durable Objects and does not require the Sandbox container.
+
 The implementation status of the tools requested for Unit369 is tracked in `docs/UNIT369_TOOL_CAPABILITY_MATRIX.md`; it distinguishes native features, open-source execution engines and optional third-party adapters.
 
 Optional external adapters use their corresponding OAuth client secrets or manually encrypted server-side credentials.
@@ -81,7 +85,7 @@ npm run ci
 npm run test:smoke
 ```
 
-`npm run ci` checks formatting, validates the complete import graph and PWA assets, runs unit/security tests, and performs a Wrangler production dry-run. The smoke test starts the Worker locally and verifies CSP, Unit369 owner authentication, authentication gates, native planning, Data Lab routing/storage, manifest and icons. Unit tests verify optional Google OAuth PKCE and reject malformed Google credentials.
+`npm run ci` checks formatting, validates the complete import graph and PWA assets, runs unit/security tests, and performs a Wrangler production dry-run. The smoke test starts the Worker locally and verifies CSP, Unit369 owner authentication, authentication gates, native planning, Data Lab routing/storage, approved knowledge import, SQLite FTS5 retrieval, manifest and icons. Unit tests verify optional Google OAuth PKCE and reject malformed Google credentials.
 
 ## Deployment
 

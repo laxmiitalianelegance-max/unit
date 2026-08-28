@@ -44,6 +44,12 @@ import {
   projectExecutionCapabilities,
 } from "../src/native-project-execution.js";
 import {
+  createKnowledgeManifest,
+  knowledgeCapabilities,
+  normalizeKnowledgeImport,
+} from "../src/native-knowledge.js";
+import { knowledgeMatchQuery } from "../src/native-store.js";
+import {
   runOwnedModel,
   shouldUseNativeChatFastPath,
 } from "../src/owned-inference.js";
@@ -679,6 +685,103 @@ test("native planner identifies independent capability domains", () => {
     assert.ok(plan.steps.some((step) => step.capability === capability));
   }
   assert.equal(plan.external_required, false);
+});
+
+test("native knowledge imports only bounded TXT and Markdown documents", () => {
+  const normalized = normalizeKnowledgeImport({
+    name: "Project knowledge",
+    tags: ["project", "orion"],
+    files: [
+      {
+        path: "projects/orion.md",
+        content: "# Project Orion\r\nLaunch window is 14 October.\r\n",
+      },
+      { path: "contacts.txt", content: "Owner: Mila\n" },
+    ],
+  });
+  assert.equal(normalized.files.length, 2);
+  assert.equal(normalized.files[0].title, "Project Orion");
+  assert.equal(normalized.files[0].format, "markdown");
+  assert.equal(normalized.files[0].content.includes("\r"), false);
+  assert.deepEqual(normalized.tags, ["project", "orion"]);
+  assert.throws(
+    () =>
+      normalizeKnowledgeImport({
+        files: [{ path: "../private.txt", content: "secret" }],
+      }),
+    (error) =>
+      error instanceof HttpError && error.code === "invalid_workspace_path",
+  );
+  assert.throws(
+    () =>
+      normalizeKnowledgeImport({
+        files: [{ path: "document.pdf", content: "not a PDF parser" }],
+      }),
+    (error) =>
+      error instanceof HttpError && error.code === "unsupported_knowledge_file",
+  );
+  assert.throws(
+    () =>
+      normalizeKnowledgeImport({
+        files: [{ path: "binary.txt", content: "before\u0000after" }],
+      }),
+    (error) =>
+      error instanceof HttpError && error.code === "binary_knowledge_document",
+  );
+  assert.throws(
+    () =>
+      normalizeKnowledgeImport({
+        files: Array.from({ length: 6 }, (_, index) => ({
+          path: `${index}.txt`,
+          content: "value",
+        })),
+      }),
+    (error) =>
+      error instanceof HttpError && error.code === "too_many_knowledge_files",
+  );
+  assert.throws(
+    () =>
+      normalizeKnowledgeImport({
+        files: [{ path: "large.txt", content: "ž".repeat(70_000) }],
+      }),
+    (error) =>
+      error instanceof HttpError && error.code === "knowledge_file_too_large",
+  );
+});
+
+test("native knowledge approvals bind an order-stable content manifest", async () => {
+  const files = normalizeKnowledgeImport({
+    files: [
+      { path: "b.txt", content: "Second" },
+      { path: "a.md", content: "# First\nOriginal" },
+    ],
+  }).files;
+  const first = await createKnowledgeManifest(files),
+    reordered = await createKnowledgeManifest([...files].reverse()),
+    changed = await createKnowledgeManifest([
+      { ...files[0], content: `${files[0].content}!`, size: files[0].size + 1 },
+      files[1],
+    ]);
+  assert.equal(first.digest, reordered.digest);
+  assert.notEqual(first.digest, changed.digest);
+  assert.equal(first.file_count, 2);
+  assert.deepEqual(
+    first.entries.map((entry) => entry.path),
+    ["a.md", "b.txt"],
+  );
+});
+
+test("native knowledge search builds operator-safe FTS5 queries", () => {
+  const query = knowledgeMatchQuery('OR "secret"* Project Orion');
+  assert.equal(query, '"or"* OR "secret"* OR "project"* OR "orion"*');
+  assert.equal(knowledgeMatchQuery("šta je u projektu"), '"projektu"*');
+  assert.equal(knowledgeMatchQuery("? !"), "");
+  const capabilities = knowledgeCapabilities();
+  assert.equal(capabilities.external_required, false);
+  assert.equal(capabilities.owner_scoped, true);
+  assert.equal(capabilities.import_approval_required, true);
+  assert.equal(capabilities.search_approval_required, false);
+  assert.equal(capabilities.ranking, "fts5-bm25");
 });
 
 test("isolated code requests enforce language, size, and timeout boundaries", () => {

@@ -12,18 +12,23 @@ import {
 } from "./native-code-execution.js";
 import { handleNativeFiles } from "./native-files.js";
 import { dataLabCapabilities, handleNativeDataLab } from "./native-data-lab.js";
+import {
+  handleNativeKnowledge,
+  knowledgeCapabilities,
+} from "./native-knowledge.js";
 import { HttpError, errorResponse, readJsonLimited } from "./runtime-utils.js";
 
 export const NATIVE_CAPABILITIES = Object.freeze({
   intelligence: {
     name: "Intelligence",
-    version: 1,
+    version: 2,
     operations: [
       "chat",
       "research",
       "plan",
       "critique",
       "verify",
+      "knowledge.import",
       "knowledge.search",
     ],
     native: true,
@@ -120,6 +125,7 @@ export const NATIVE_CAPABILITIES = Object.freeze({
       "data-lab.profile",
       "data-lab.clean",
       "data-lab.chart",
+      "data-lab.predict",
       "data-lab.confirm",
       "data-lab.cancel",
     ],
@@ -231,9 +237,11 @@ export function capabilityList(env = {}) {
     ...c,
     ...(id === "code"
       ? { runtime: codeExecutionCapabilities(!!env.UNIT369_SANDBOX) }
-      : id === "data"
-        ? { data_lab: dataLabCapabilities(!!env.UNIT369_SANDBOX) }
-        : {}),
+      : id === "intelligence"
+        ? { knowledge: knowledgeCapabilities() }
+        : id === "data"
+          ? { data_lab: dataLabCapabilities(!!env.UNIT369_SANDBOX) }
+          : {}),
   }));
 }
 export function hasOperation(capability, operation) {
@@ -411,6 +419,8 @@ export async function handleNativeCapabilities(
       return handleNativeCodeExecution(request, env, account, runtime);
     if (/^\/api\/native\/data-lab(\/|$)/.test(url.pathname))
       return handleNativeDataLab(request, env, account, runtime);
+    if (/^\/api\/native\/knowledge(\/|$)/.test(url.pathname))
+      return handleNativeKnowledge(request, env, account);
     if (/^\/api\/native\/create(\/|$)/.test(url.pathname))
       return handleNativeCreate(request, env, account);
     if (/^\/api\/native\/communicate(\/|$)/.test(url.pathname))

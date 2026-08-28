@@ -63,7 +63,7 @@ for (const match of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)) {
 }
 assert.ok(html.includes('data-mode="auto"'), "Auto fallback mode is missing");
 assert.ok(
-  html.includes("unit369-ui-i18n-v11-"),
+  html.includes("unit369-ui-i18n-v12-"),
   "Translation cache version is stale",
 );
 assert.ok(
@@ -96,9 +96,35 @@ assert.ok(
     html.includes("compactDataTool") &&
     html.includes("inferPredictionTarget") &&
     html.includes(
-      'accept=".py,.js,.mjs,.cjs,.json,.md,.txt,.html,.css,.yaml,.yml,.toml,.csv,.tsv,.xlsx"',
+      'accept=".py,.js,.mjs,.cjs,.json,.md,.markdown,.txt,.html,.css,.yaml,.yml,.toml,.csv,.tsv,.xlsx"',
     ),
   "Data Lab import, approval, result or artifact UI is missing",
+);
+assert.ok(
+  html.includes("/api/native/knowledge/${path}") &&
+    html.includes("isKnowledgeImportRequest") &&
+    html.includes("isKnowledgeSearchRequest") &&
+    html.includes("data-knowledge-approve") &&
+    html.includes("data-knowledge-cancel") &&
+    html.includes("compactKnowledgeTool"),
+  "Native knowledge import, approval or cited-search UI is missing",
+);
+const knowledgeSource = readFileSync(
+  join(sourceRoot, "native-knowledge.js"),
+  "utf8",
+);
+const nativeStoreSource = readFileSync(
+  join(sourceRoot, "native-store.js"),
+  "utf8",
+);
+assert.ok(
+  knowledgeSource.includes("import_approval_required: true") &&
+    knowledgeSource.includes("external_required: false") &&
+    nativeStoreSource.includes(
+      "CREATE VIRTUAL TABLE IF NOT EXISTS knowledge_fts",
+    ) &&
+    nativeStoreSource.includes("transactionSync"),
+  "Owner-scoped approved FTS5 knowledge storage is missing",
 );
 const dockerfile = readFileSync(join(root, "Dockerfile"), "utf8");
 assert.ok(
