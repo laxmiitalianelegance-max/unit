@@ -32,9 +32,9 @@ import {
   validateTranslation,
 } from "./ui-translations.js";
 
-export const APP_VERSION = "2026.08.28.6";
+export const APP_VERSION = "2026.08.28.7";
 const HEALTH_CACHE_KEY = `native-intelligence-health-${APP_VERSION}`;
-const TRANSLATION_CACHE_VERSION = "ui-v11";
+const TRANSLATION_CACHE_VERSION = "ui-v12";
 
 const QUOTAS = Object.freeze({
   chat: [

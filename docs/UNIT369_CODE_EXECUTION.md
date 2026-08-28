@@ -102,13 +102,19 @@ downloads.
 ## Guided Data Lab
 
 The chat composer recognizes record-oriented CSV, TSV and JSON attachments plus
-XLSX workbooks as a Data Lab dataset. It supports four server-defined operations:
-`profile`, `clean`, `chart` and `predict`. It returns bounded row previews, column types,
+XLSX workbooks as a Data Lab dataset. It supports five server-defined operations:
+`profile`, `clean`, `chart`, `trend` and `predict`. It returns bounded row previews, column types,
 missing/unique counts, numeric summaries and owner-scoped downloadable output.
 Cleaning removes fully empty and duplicate rows and neutralizes string cells
 that spreadsheet software could interpret as formulas. Chart mode selects a
 bounded Matplotlib chart and returns both an in-chat PNG preview and the source
 artifact.
+
+Trend mode selects a date/time column with at least three valid periods, measures
+bounded linear direction and strength for up to ten numeric metrics, exports a
+CSV summary and returns an in-chat Matplotlib chart for the first dataset. It is
+explicitly descriptive: it does not establish causation or guarantee future
+movement.
 
 XLSX input is base64 encoded in transit and storage, written to the Sandbox with
 the SDK's binary-file mode and read from the first worksheet. Before openpyxl is

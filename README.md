@@ -12,7 +12,7 @@ Unit369 is a Cloudflare Worker/PWA with authenticated AI chat, native workspaces
 - Per-user structured state: `NativeStore` Durable Object
 - Quotas, connection secrets, shared cache and approvals: `ToolStore` Durable Object
 - Isolated Python/JavaScript/TypeScript execution: owner-scoped Cloudflare Sandbox container
-- Guided CSV/TSV/JSON/XLSX analysis, cleaning, charts and prediction evaluation: owner-approved Unit369 Data Lab in a temporary Sandbox
+- Guided CSV/TSV/JSON/XLSX analysis, cleaning, descriptive trends, charts and prediction evaluation: owner-approved Unit369 Data Lab in a temporary Sandbox
 - Owner-scoped TXT/Markdown knowledge: staged import with one-time approval and ranked SQLite FTS5 retrieval in `NativeStore`
 - User files and product media: built-in `NATIVE_STORE`; optional R2 is used automatically when a `FILES` binding is added later
 
@@ -30,7 +30,7 @@ There is one active runtime graph. Historical wrappers and branch-specific valid
 - AI routes have per-account Durable Object quotas.
 - Native and external mutations use short-lived, immutable, one-time approval tokens.
 - Code execution additionally forbids arbitrary shell access, forwards no Worker secrets and bounds code, time, rate and output.
-- Data Lab runs only a fixed Unit369-authored Python pipeline, verifies the dataset digest again at confirmation, validates XLSX archives before parsing and neutralizes spreadsheet formulas in CSV exports.
+- Data Lab runs only a fixed Unit369-authored Python pipeline, verifies the dataset digest again at confirmation, validates XLSX archives before parsing, labels trend and prediction results exploratory, and neutralizes spreadsheet formulas in CSV exports.
 - Native Knowledge accepts only bounded UTF-8 TXT/Markdown input, verifies immutable import and document-mutation approvals, indexes atomically per owner, includes a mobile list/search/source manager and never requires an external AI provider.
 - Provider credentials never enter the browser bundle or local storage.
 

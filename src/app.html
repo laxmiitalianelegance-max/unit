@@ -1589,7 +1589,7 @@
           CUR = "unit369-current-v1",
           LANG = "u369-lang-all-v4",
           PREF = "unit369-settings-v2",
-          CACHE = "unit369-ui-i18n-v13-";
+          CACHE = "unit369-ui-i18n-v14-";
         const RTL = new Set(["ar", "fa", "he", "ur"]);
         const LANGS = [
           ["auto", "Automatic"],
@@ -1814,6 +1814,20 @@
           dataEmptyRowsRemoved: "Empty rows removed",
           dataFormulasNeutralized: "Spreadsheet formulas neutralized",
           dataChart: "Generated chart",
+          dataTrend: "Trend analysis",
+          dataTrendDate: "Time column",
+          dataTrendMetric: "Metric",
+          dataTrendDirection: "Direction",
+          dataTrendPeriods: "Periods",
+          dataTrendStart: "Start",
+          dataTrendEnd: "End",
+          dataTrendChange: "Change",
+          dataTrendStrength: "Strength",
+          dataTrendIncreasing: "Increasing",
+          dataTrendDecreasing: "Decreasing",
+          dataTrendStable: "Stable",
+          dataTrendExploratoryNote:
+            "A descriptive trend does not establish causation or guarantee future movement.",
           dataPrediction: "Prediction evaluation",
           dataTarget: "Target column",
           dataPredictionType: "Prediction type",
@@ -1830,6 +1844,7 @@
           dataOperationProfile: "Profile and summarize",
           dataOperationClean: "Clean and export",
           dataOperationChart: "Create a chart",
+          dataOperationTrend: "Find trends",
           dataOperationPredict: "Evaluate a prediction",
           knowledgeFilesReady: "Knowledge documents selected",
           knowledgeFileLimits:
@@ -2328,6 +2343,57 @@
                         artifact: boundedText(file.chart.artifact, 240),
                       }
                     : null,
+                trend:
+                  file?.trend && typeof file.trend === "object"
+                    ? {
+                        date_column: boundedText(file.trend.date_column, 160),
+                        series: (Array.isArray(file.trend.series)
+                          ? file.trend.series
+                          : []
+                        )
+                          .slice(0, 10)
+                          .map((item) => ({
+                            metric: boundedText(item?.metric, 160),
+                            direction: new Set([
+                              "increasing",
+                              "decreasing",
+                              "stable",
+                            ]).has(item?.direction)
+                              ? item.direction
+                              : "stable",
+                            periods: Math.max(0, Number(item?.periods) || 0),
+                            start_period: boundedText(item?.start_period, 80),
+                            end_period: boundedText(item?.end_period, 80),
+                            start_value: compactDataValue(item?.start_value),
+                            end_value: compactDataValue(item?.end_value),
+                            absolute_change: compactDataValue(
+                              item?.absolute_change,
+                            ),
+                            percent_change: compactDataValue(
+                              item?.percent_change,
+                            ),
+                            slope_per_day: compactDataValue(
+                              item?.slope_per_day,
+                            ),
+                            strength: compactDataValue(item?.strength),
+                          })),
+                        summary_artifact: boundedText(
+                          file.trend.summary_artifact,
+                          240,
+                        ),
+                        chart_artifact: boundedText(
+                          file.trend.chart_artifact,
+                          240,
+                        ),
+                        exploratory: file.trend.exploratory === true,
+                        warnings: (Array.isArray(file.trend.warnings)
+                          ? file.trend.warnings
+                          : []
+                        )
+                          .slice(0, 10)
+                          .map((item) => boundedText(item, 500)),
+                      }
+                    : null,
                 prediction:
                   file?.prediction && typeof file.prediction === "object"
                     ? {
@@ -2797,7 +2863,7 @@
           )
             return true;
           if (
-            /\b(data|dataset|table|analy|analiz|profile|summary|clean|chart|graph|plot|predict|forecast|predvid|prognoz|model|podac|tabel|pregled|očist|ocist|grafik)\w*/i.test(
+            /\b(data|dataset|table|analy|analiz|profile|summary|clean|chart|graph|plot|trend|growth|decline|predict|forecast|predvid|prognoz|model|podac|tabel|pregled|očist|ocist|grafik|kretanj|rast|pad|promen|promjen)\w*/i.test(
               String(message || ""),
             )
           )
@@ -2812,6 +2878,12 @@
             )
           )
             return "predict";
+          if (
+            /\b(trend|trending|growth|decline|kretanj|trendov|rast|pad|promen|promjen)\w*/i.test(
+              message,
+            )
+          )
+            return "trend";
           if (
             /\b(clean|cleanup|deduplic|očist|ocist|duplik|sredi)\w*/i.test(
               message,
@@ -2839,6 +2911,7 @@
               profile: t("dataOperationProfile"),
               clean: t("dataOperationClean"),
               chart: t("dataOperationChart"),
+              trend: t("dataOperationTrend"),
               predict: t("dataOperationPredict"),
             }[value] ||
             value ||
@@ -3287,6 +3360,36 @@
               : "";
           return `<div class="u369-code-output-title">${esc(t("dataPrediction"))}</div><div class="u369-code-meta"><div class="u369-code-meta-row"><span class="u369-code-meta-label">${esc(t("dataTarget"))}</span><code class="u369-code-meta-value">${esc(prediction.target_column)}</code></div><div class="u369-code-meta-row"><span class="u369-code-meta-label">${esc(t("dataPredictionType"))}</span><code class="u369-code-meta-value">${esc(prediction.task_type)}</code></div><div class="u369-code-meta-row"><span class="u369-code-meta-label">${esc(t("dataModel"))}</span><code class="u369-code-meta-value">${esc(prediction.model)}</code></div><div class="u369-code-meta-row"><span class="u369-code-meta-label">${esc(t("dataTrainRows"))}</span><code class="u369-code-meta-value">${esc(prediction.train_rows)}</code></div><div class="u369-code-meta-row"><span class="u369-code-meta-label">${esc(t("dataTestRows"))}</span><code class="u369-code-meta-value">${esc(prediction.test_rows)}</code></div></div>${metrics}${features}<div class="u369-code-note">${esc(t("dataExploratoryNote"))}</div>`;
         }
+        function renderDataTrend(file) {
+          const trend = file?.trend,
+            series = Array.isArray(trend?.series) ? trend.series : [];
+          if (!trend || !series.length) return "";
+          const metricValue = (value) =>
+              typeof value === "number" && Number.isFinite(value)
+                ? Math.round(value * 10_000) / 10_000
+                : (value ?? "—"),
+            directionLabel = (value) =>
+              ({
+                increasing: t("dataTrendIncreasing"),
+                decreasing: t("dataTrendDecreasing"),
+                stable: t("dataTrendStable"),
+              })[value] || t("dataTrendStable"),
+            changeLabel = (item) => {
+              const absolute = metricValue(item.absolute_change);
+              return item.percent_change === null ||
+                item.percent_change === undefined
+                ? absolute
+                : `${absolute} (${metricValue(item.percent_change)}%)`;
+            };
+          return `<div class="u369-code-output-title">${esc(t("dataTrend"))}</div><div class="u369-code-note">${esc(t("dataTrendDate"))}: ${esc(trend.date_column || "—")}</div><div class="u369-data-table-wrap"><table class="u369-data-table"><thead><tr><th>${esc(t("dataTrendMetric"))}</th><th>${esc(t("dataTrendDirection"))}</th><th>${esc(t("dataTrendPeriods"))}</th><th>${esc(t("dataTrendStart"))}</th><th>${esc(t("dataTrendEnd"))}</th><th>${esc(t("dataTrendChange"))}</th><th>${esc(t("dataTrendStrength"))}</th></tr></thead><tbody>${series
+            .map(
+              (item) =>
+                `<tr><td>${esc(item.metric)}</td><td>${esc(directionLabel(item.direction))}</td><td>${esc(item.periods)}</td><td>${esc(item.start_period || "—")} · ${esc(metricValue(item.start_value))}</td><td>${esc(item.end_period || "—")} · ${esc(metricValue(item.end_value))}</td><td>${esc(changeLabel(item))}</td><td>${esc(metricValue(item.strength))}</td></tr>`,
+            )
+            .join(
+              "",
+            )}</tbody></table></div><div class="u369-code-note">${esc(t("dataTrendExploratoryNote"))}</div>`;
+        }
         function renderDataOutput(tool, turnIndex) {
           const blocks = [],
             report = tool?.report;
@@ -3298,7 +3401,7 @@
                 ? `<div class="u369-code-note">${esc(t("dataChart"))} · ${esc(file.chart.type)}${file.chart.x_column ? ` · ${esc(file.chart.x_column)}` : ""}${file.chart.y_column ? ` → ${esc(file.chart.y_column)}` : ""}</div>`
                 : "";
             blocks.push(
-              `<div class="u369-data-file"><div class="u369-code-output-title">${esc(file.path || `${t("dataDataset")} ${fileIndex + 1}`)}</div><div class="u369-code-meta"><div class="u369-code-meta-row"><span class="u369-code-meta-label">${esc(t("dataRows"))}</span><code class="u369-code-meta-value">${esc(file.row_count)}</code></div><div class="u369-code-meta-row"><span class="u369-code-meta-label">${esc(t("dataColumns"))}</span><code class="u369-code-meta-value">${esc(file.column_count)}</code></div></div>${cleaning}${chart}${renderDataPrediction(file)}${renderDataPreview(file)}${renderDataStatistics(file)}</div>`,
+              `<div class="u369-data-file"><div class="u369-code-output-title">${esc(file.path || `${t("dataDataset")} ${fileIndex + 1}`)}</div><div class="u369-code-meta"><div class="u369-code-meta-row"><span class="u369-code-meta-label">${esc(t("dataRows"))}</span><code class="u369-code-meta-value">${esc(file.row_count)}</code></div><div class="u369-code-meta-row"><span class="u369-code-meta-label">${esc(t("dataColumns"))}</span><code class="u369-code-meta-value">${esc(file.column_count)}</code></div></div>${cleaning}${chart}${renderDataTrend(file)}${renderDataPrediction(file)}${renderDataPreview(file)}${renderDataStatistics(file)}</div>`,
             );
           }
           if (report?.warnings?.length)
