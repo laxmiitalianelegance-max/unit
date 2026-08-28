@@ -516,6 +516,46 @@
         background: #fff;
         object-fit: contain;
       }
+      .u369-data-table-wrap {
+        max-width: 100%;
+        margin: 0 0 12px;
+        overflow: auto;
+        border: 1px solid #172638;
+        border-radius: 10px;
+        background: #050a11;
+      }
+      .u369-data-table {
+        width: 100%;
+        min-width: 460px;
+        border-collapse: collapse;
+        color: #d7e7f7;
+        font-size: 10px;
+      }
+      .u369-data-table th,
+      .u369-data-table td {
+        max-width: 220px;
+        padding: 8px 9px;
+        border-bottom: 1px solid #172638;
+        border-right: 1px solid #172638;
+        text-align: left;
+        vertical-align: top;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .u369-data-table th {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        background: #0d1723;
+        color: #8ea0b5;
+        font-weight: 850;
+      }
+      .u369-data-file {
+        margin-top: 12px;
+        padding-top: 12px;
+        border-top: 1px solid #1d2c3e;
+      }
       @media (max-width: 520px) {
         .u369-code-meta {
           grid-template-columns: minmax(0, 1fr);
@@ -1403,7 +1443,7 @@
           CUR = "unit369-current-v1",
           LANG = "u369-lang-all-v4",
           PREF = "unit369-settings-v2",
-          CACHE = "unit369-ui-i18n-v9-";
+          CACHE = "unit369-ui-i18n-v10-";
         const RTL = new Set(["ar", "fa", "he", "ur"]);
         const LANGS = [
           ["auto", "Automatic"],
@@ -1572,7 +1612,7 @@
           codeStatusCancelled: "Cancelled",
           codeStatusExpired: "Expired",
           codeStatusUnknown: "Unknown",
-          projectAttach: "Attach project files",
+          projectAttach: "Attach files",
           projectFilesReady: "Project files selected",
           projectClearFiles: "Remove files",
           projectFileLimits:
@@ -1596,6 +1636,41 @@
             "This project approval is no longer available. Attach the files again to create a new one.",
           projectUnknown:
             "The connection ended before the project result was confirmed. Unit369 will not run it again automatically.",
+          dataFilesReady: "Data files selected",
+          dataFileLimits:
+            "Data Lab accepts up to 5 UTF-8 CSV, TSV or JSON files, 1 MiB each and 3 MiB total.",
+          dataApprovalTitle: "Unit369 Data Lab",
+          dataApprovalRequired:
+            "Review the dataset and operation. Analysis starts only after you approve it.",
+          dataDataset: "Dataset",
+          dataOperation: "Analysis",
+          dataImporting: "Saving data files…",
+          dataRunning: "Running the approved Data Lab analysis…",
+          dataCompleted: "Data Lab analysis completed.",
+          dataFailed: "Data Lab analysis failed.",
+          dataCancelled:
+            "Data Lab analysis was cancelled. No analysis was run.",
+          dataApprovalExpired:
+            "This Data Lab approval is no longer available. Attach the files again to create a new one.",
+          dataUnknown:
+            "The connection ended before the Data Lab result was confirmed. Unit369 will not run it again automatically.",
+          dataRows: "Rows",
+          dataColumns: "Columns",
+          dataPreview: "Data preview",
+          dataStatistics: "Column statistics",
+          dataMissing: "Missing",
+          dataUnique: "Unique",
+          dataMean: "Mean",
+          dataMinimum: "Minimum",
+          dataMaximum: "Maximum",
+          dataCleaning: "Cleaning result",
+          dataDuplicatesRemoved: "Duplicate rows removed",
+          dataEmptyRowsRemoved: "Empty rows removed",
+          dataFormulasNeutralized: "Spreadsheet formulas neutralized",
+          dataChart: "Generated chart",
+          dataOperationProfile: "Profile and summarize",
+          dataOperationClean: "Clean and export",
+          dataOperationChart: "Create a chart",
         };
         let D = { ...BASE },
           integrations = {},
@@ -1757,7 +1832,7 @@
           }
         }
         function compactCodeImage(value) {
-          if (typeof value !== "string" || value.length > 128_000) return "";
+          if (typeof value !== "string" || value.length > 384_000) return "";
           const image = value.trim();
           if (
             /^data:image\/(?:png|jpeg);base64,[A-Za-z0-9+/=\s]+$/i.test(
@@ -1920,6 +1995,178 @@
             ),
           };
         }
+        function compactDataValue(value) {
+          if (value === null || typeof value === "boolean") return value;
+          if (typeof value === "number")
+            return Number.isFinite(value) ? value : null;
+          return boundedText(value, 500);
+        }
+        function compactDataReport(value) {
+          if (!value || typeof value !== "object") return null;
+          return {
+            version: Number(value.version) || 1,
+            operation: boundedText(value.operation, 24),
+            warnings: (Array.isArray(value.warnings) ? value.warnings : [])
+              .slice(0, 20)
+              .map((item) => boundedText(item, 500)),
+            files: (Array.isArray(value.files) ? value.files : [])
+              .slice(0, 5)
+              .map((file) => ({
+                path: boundedText(file?.path, 240),
+                format: boundedText(file?.format, 20),
+                row_count: Math.max(0, Number(file?.row_count) || 0),
+                column_count: Math.max(0, Number(file?.column_count) || 0),
+                truncated_rows: file?.truncated_rows === true,
+                truncated_columns: Math.max(
+                  0,
+                  Number(file?.truncated_columns) || 0,
+                ),
+                columns: (Array.isArray(file?.columns) ? file.columns : [])
+                  .slice(0, 40)
+                  .map((column) => ({
+                    name: boundedText(column?.name, 160),
+                    dtype: boundedText(column?.dtype, 80),
+                    missing: Math.max(0, Number(column?.missing) || 0),
+                    unique: Math.max(0, Number(column?.unique) || 0),
+                    numeric:
+                      column?.numeric && typeof column.numeric === "object"
+                        ? Object.fromEntries(
+                            ["mean", "median", "min", "max"].map((key) => [
+                              key,
+                              compactDataValue(column.numeric[key]),
+                            ]),
+                          )
+                        : null,
+                    top_values: (Array.isArray(column?.top_values)
+                      ? column.top_values
+                      : []
+                    )
+                      .slice(0, 5)
+                      .map((item) => ({
+                        value: boundedText(item?.value, 200),
+                        count: Math.max(0, Number(item?.count) || 0),
+                      })),
+                  })),
+                preview: (Array.isArray(file?.preview) ? file.preview : [])
+                  .slice(0, 8)
+                  .map((row) =>
+                    Object.fromEntries(
+                      Object.entries(
+                        row && typeof row === "object" && !Array.isArray(row)
+                          ? row
+                          : {},
+                      )
+                        .slice(0, 20)
+                        .map(([key, entry]) => [
+                          boundedText(key, 160),
+                          compactDataValue(entry),
+                        ]),
+                    ),
+                  ),
+                cleaning:
+                  file?.cleaning && typeof file.cleaning === "object"
+                    ? {
+                        empty_rows_removed: Math.max(
+                          0,
+                          Number(file.cleaning.empty_rows_removed) || 0,
+                        ),
+                        duplicate_rows_removed: Math.max(
+                          0,
+                          Number(file.cleaning.duplicate_rows_removed) || 0,
+                        ),
+                        spreadsheet_formulas_neutralized: Math.max(
+                          0,
+                          Number(
+                            file.cleaning.spreadsheet_formulas_neutralized,
+                          ) || 0,
+                        ),
+                      }
+                    : null,
+                cleaned_row_count: Math.max(
+                  0,
+                  Number(file?.cleaned_row_count) || 0,
+                ),
+                cleaned_artifact: boundedText(file?.cleaned_artifact, 240),
+                chart:
+                  file?.chart && typeof file.chart === "object"
+                    ? {
+                        type: boundedText(file.chart.type, 24),
+                        x_column: boundedText(file.chart.x_column, 160),
+                        y_column: boundedText(file.chart.y_column, 160),
+                        artifact: boundedText(file.chart.artifact, 240),
+                      }
+                    : null,
+              })),
+          };
+        }
+        function compactDataTool(value) {
+          if (!value || value.kind !== "data") return null;
+          const allowedStatuses = new Set([
+            "approval_required",
+            "cancelling",
+            "running",
+            "completed",
+            "failed",
+            "cancelled",
+            "expired",
+            "unknown",
+          ]);
+          return {
+            kind: "data",
+            status: allowedStatuses.has(value.status)
+              ? value.status
+              : "unknown",
+            dataset_id: boundedText(value.dataset_id, 180),
+            dataset_name: boundedText(value.dataset_name, 180),
+            operation: boundedText(value.operation, 24),
+            timeout_ms: Math.max(0, Number(value.timeout_ms) || 0),
+            manifest_hash: boundedText(value.manifest_hash, 64),
+            file_count: Math.max(0, Number(value.file_count) || 0),
+            total_bytes: Math.max(0, Number(value.total_bytes) || 0),
+            approval_expires_at: Math.max(
+              0,
+              Number(value.approval_expires_at) || 0,
+            ),
+            run_id: boundedText(value.run_id, 100),
+            exit_code: Number.isFinite(value.exit_code)
+              ? value.exit_code
+              : null,
+            files: (Array.isArray(value.files) ? value.files : [])
+              .slice(0, 5)
+              .map((file) => ({
+                path: boundedText(file?.path, 240),
+                size: Math.max(0, Number(file?.size) || 0),
+                sha256: boundedText(file?.sha256, 64),
+              })),
+            logs: {
+              stdout: compactCodeLines(value.logs?.stdout, 12_000),
+              stderr: compactCodeLines(value.logs?.stderr, 12_000),
+            },
+            error:
+              value.error && typeof value.error === "object"
+                ? {
+                    name: boundedText(value.error.name, 160),
+                    message: boundedText(value.error.message, 2_000),
+                    traceback: compactCodeLines(value.error.traceback, 12_000),
+                  }
+                : null,
+            report: compactDataReport(value.report),
+            artifacts: (Array.isArray(value.artifacts) ? value.artifacts : [])
+              .slice(0, 8)
+              .map((artifact) => ({
+                id: boundedText(artifact?.id, 180),
+                path: boundedText(artifact?.path, 240),
+                mime: boundedText(artifact?.mime, 100),
+                size: Math.max(0, Number(artifact?.size) || 0),
+                encoding: boundedText(artifact?.encoding, 20),
+                preview_base64: compactCodeImage(artifact?.preview_base64),
+              })),
+            artifacts_omitted: Math.max(
+              0,
+              Number(value.artifacts_omitted) || 0,
+            ),
+          };
+        }
         function compactSession(session) {
           const providerKeys = [
             "unit369",
@@ -1966,7 +2213,9 @@
                   ? { tool: compactCodeTool(turn.tool) }
                   : turn?.tool?.kind === "project"
                     ? { tool: compactProjectTool(turn.tool) }
-                    : {}),
+                    : turn?.tool?.kind === "data"
+                      ? { tool: compactDataTool(turn.tool) }
+                      : {}),
               })),
           };
         }
@@ -2110,6 +2359,91 @@
           if (/\b(run|execute|pokren|izvrš|izvrs)/.test(message)) return "run";
           return "check";
         }
+        function attachmentExtension(value) {
+          const path = String(value || "").toLowerCase(),
+            index = path.lastIndexOf(".");
+          return index < 0 ? "" : path.slice(index);
+        }
+        function dataAttachmentNames(files) {
+          const blocked = new Set([
+            "package.json",
+            "tsconfig.json",
+            "jsconfig.json",
+            "wrangler.json",
+          ]);
+          return (
+            files.length > 0 &&
+            files.every(
+              (file) =>
+                [".csv", ".tsv", ".json"].includes(
+                  attachmentExtension(file.path || file.name),
+                ) &&
+                !blocked.has(
+                  String(file.path || file.name || "").toLowerCase(),
+                ),
+            )
+          );
+        }
+        function jsonLooksLikeDataset(value) {
+          try {
+            let parsed = JSON.parse(String(value || ""));
+            if (
+              parsed &&
+              typeof parsed === "object" &&
+              !Array.isArray(parsed)
+            ) {
+              const arrays = Object.values(parsed).filter(Array.isArray);
+              parsed = arrays.length === 1 ? arrays[0] : null;
+            }
+            return (
+              Array.isArray(parsed) &&
+              parsed.every(
+                (row) => row && typeof row === "object" && !Array.isArray(row),
+              )
+            );
+          } catch {
+            return false;
+          }
+        }
+        function isDataAttachmentSet(files, message = "") {
+          if (!dataAttachmentNames(files)) return false;
+          if (
+            files.some((file) =>
+              [".csv", ".tsv"].includes(attachmentExtension(file.path)),
+            )
+          )
+            return true;
+          if (
+            /\b(data|dataset|table|analy|analiz|profile|summary|clean|chart|graph|plot|podac|tabel|pregled|očist|ocist|grafik)\w*/i.test(
+              String(message || ""),
+            )
+          )
+            return true;
+          return files.every((file) => jsonLooksLikeDataset(file.content));
+        }
+        function inferDataOperation(value) {
+          const message = String(value || "").toLowerCase();
+          if (
+            /\b(clean|cleanup|deduplic|očist|ocist|duplik|sredi)\w*/i.test(
+              message,
+            )
+          )
+            return "clean";
+          if (/\b(chart|graph|plot|grafik|grafikon|vizuel)\w*/i.test(message))
+            return "chart";
+          return "profile";
+        }
+        function dataOperationLabel(value) {
+          return (
+            {
+              profile: t("dataOperationProfile"),
+              clean: t("dataOperationClean"),
+              chart: t("dataOperationChart"),
+            }[value] ||
+            value ||
+            "—"
+          );
+        }
         function renderProjectAttachments() {
           const box = $("#u369-project-attachments");
           if (!projectAttachments.length) {
@@ -2137,22 +2471,27 @@
           const status = $("#u369-chat-status");
           try {
             if (!files.length) return;
-            if (files.length > 20) throw new Error(t("projectFileLimits"));
+            const dataCandidate = dataAttachmentNames(files),
+              maxFiles = dataCandidate ? 5 : 20,
+              maxFileBytes = dataCandidate ? 1024 * 1024 : 128 * 1024,
+              maxTotalBytes = dataCandidate ? 3 * 1024 * 1024 : 512 * 1024,
+              limitMessage = dataCandidate
+                ? t("dataFileLimits")
+                : t("projectFileLimits");
+            if (files.length > maxFiles) throw new Error(limitMessage);
             let total = 0;
             const seen = new Set();
             const loaded = [];
             for (const file of files) {
               total += Number(file.size) || 0;
-              if (file.size > 128 * 1024 || total > 512 * 1024)
-                throw new Error(t("projectFileLimits"));
+              if (file.size > maxFileBytes || total > maxTotalBytes)
+                throw new Error(limitMessage);
               const path = String(file.webkitRelativePath || file.name || "");
               const folded = path.toLowerCase();
-              if (!path || seen.has(folded))
-                throw new Error(t("projectFileLimits"));
+              if (!path || seen.has(folded)) throw new Error(limitMessage);
               seen.add(folded);
               const content = await file.text();
-              if (content.includes("\u0000"))
-                throw new Error(t("projectFileLimits"));
+              if (content.includes("\u0000")) throw new Error(limitMessage);
               loaded.push({
                 path,
                 content,
@@ -2162,7 +2501,11 @@
             }
             projectAttachments = loaded;
             status.className = "u369-chat-status";
-            status.textContent = `${t("projectFilesReady")} · ${loaded.length} · ${formatBytes(total)}`;
+            status.textContent = `${t(
+              isDataAttachmentSet(loaded)
+                ? "dataFilesReady"
+                : "projectFilesReady",
+            )} · ${loaded.length} · ${formatBytes(total)}`;
             renderProjectAttachments();
           } catch (error) {
             projectAttachments = [];
@@ -2460,6 +2803,153 @@
             : "";
           return `<div class="u369-code-card"><div class="u369-code-card-top"><div class="u369-code-card-title">${esc(t("projectApprovalTitle"))}</div><span class="u369-code-badge ${esc(displayStatus)}">${esc(codeStatusLabel(displayStatus))}</span></div><div class="u369-code-card-body"><div class="u369-code-summary">${esc(projectStatusText(displayStatus))}</div><div class="u369-code-meta">${meta}</div>${fileList}${controls}${output}${copy}</div></div>`;
         }
+        function dataStatusText(status) {
+          return (
+            {
+              approval_required: t("dataApprovalRequired"),
+              cancelling: t("codeCancelling"),
+              running: t("dataRunning"),
+              completed: t("dataCompleted"),
+              failed: t("dataFailed"),
+              cancelled: t("dataCancelled"),
+              expired: t("dataApprovalExpired"),
+              unknown: t("dataUnknown"),
+            }[status] || t("dataUnknown")
+          );
+        }
+        function renderDataPreview(file) {
+          const rows = Array.isArray(file?.preview) ? file.preview : [];
+          if (!rows.length) return "";
+          const columns = [
+            ...new Set(rows.flatMap((row) => Object.keys(row || {}))),
+          ].slice(0, 20);
+          if (!columns.length) return "";
+          return `<div class="u369-code-output-title">${esc(t("dataPreview"))}</div><div class="u369-data-table-wrap"><table class="u369-data-table"><thead><tr>${columns.map((column) => `<th>${esc(column)}</th>`).join("")}</tr></thead><tbody>${rows
+            .map(
+              (row) =>
+                `<tr>${columns.map((column) => `<td title="${esc(row?.[column] ?? "")}">${esc(row?.[column] ?? "")}</td>`).join("")}</tr>`,
+            )
+            .join("")}</tbody></table></div>`;
+        }
+        function renderDataStatistics(file) {
+          const columns = Array.isArray(file?.columns) ? file.columns : [];
+          if (!columns.length) return "";
+          return `<div class="u369-code-output-title">${esc(t("dataStatistics"))}</div><div class="u369-data-table-wrap"><table class="u369-data-table"><thead><tr><th>${esc(t("name"))}</th><th>${esc(t("type"))}</th><th>${esc(t("dataMissing"))}</th><th>${esc(t("dataUnique"))}</th><th>${esc(t("dataMean"))}</th><th>${esc(t("dataMinimum"))}</th><th>${esc(t("dataMaximum"))}</th></tr></thead><tbody>${columns
+            .map(
+              (column) =>
+                `<tr><td title="${esc(column.name)}">${esc(column.name)}</td><td>${esc(column.dtype)}</td><td>${esc(column.missing)}</td><td>${esc(column.unique)}</td><td>${esc(column.numeric?.mean ?? "—")}</td><td>${esc(column.numeric?.min ?? "—")}</td><td>${esc(column.numeric?.max ?? "—")}</td></tr>`,
+            )
+            .join("")}</tbody></table></div>`;
+        }
+        function renderDataOutput(tool, turnIndex) {
+          const blocks = [],
+            report = tool?.report;
+          for (const [fileIndex, file] of (report?.files || []).entries()) {
+            const cleaning = file.cleaning
+                ? `<div class="u369-code-meta"><div class="u369-code-meta-row"><span class="u369-code-meta-label">${esc(t("dataDuplicatesRemoved"))}</span><code class="u369-code-meta-value">${esc(file.cleaning.duplicate_rows_removed)}</code></div><div class="u369-code-meta-row"><span class="u369-code-meta-label">${esc(t("dataEmptyRowsRemoved"))}</span><code class="u369-code-meta-value">${esc(file.cleaning.empty_rows_removed)}</code></div><div class="u369-code-meta-row"><span class="u369-code-meta-label">${esc(t("dataFormulasNeutralized"))}</span><code class="u369-code-meta-value">${esc(file.cleaning.spreadsheet_formulas_neutralized)}</code></div></div>`
+                : "",
+              chart = file.chart
+                ? `<div class="u369-code-note">${esc(t("dataChart"))} · ${esc(file.chart.type)}${file.chart.x_column ? ` · ${esc(file.chart.x_column)}` : ""}${file.chart.y_column ? ` → ${esc(file.chart.y_column)}` : ""}</div>`
+                : "";
+            blocks.push(
+              `<div class="u369-data-file"><div class="u369-code-output-title">${esc(file.path || `${t("dataDataset")} ${fileIndex + 1}`)}</div><div class="u369-code-meta"><div class="u369-code-meta-row"><span class="u369-code-meta-label">${esc(t("dataRows"))}</span><code class="u369-code-meta-value">${esc(file.row_count)}</code></div><div class="u369-code-meta-row"><span class="u369-code-meta-label">${esc(t("dataColumns"))}</span><code class="u369-code-meta-value">${esc(file.column_count)}</code></div></div>${cleaning}${chart}${renderDataPreview(file)}${renderDataStatistics(file)}</div>`,
+            );
+          }
+          if (report?.warnings?.length)
+            blocks.push(
+              `<div class="u369-code-note">${report.warnings.map(esc).join("<br>")}</div>`,
+            );
+          for (const artifact of tool?.artifacts || []) {
+            if (artifact.mime !== "image/png" || !artifact.preview_base64)
+              continue;
+            const source = codeImageSource(artifact.preview_base64, "png");
+            if (source)
+              blocks.push(
+                `<div class="u369-code-output-title">${esc(t("dataChart"))}</div><img class="u369-code-image" src="${esc(source)}" alt="${esc(t("dataChart"))}" loading="lazy">`,
+              );
+          }
+          if (tool?.error?.message)
+            blocks.push(
+              `<div class="u369-code-output-title">${esc(tool.error.name || t("dataFailed"))}</div><pre class="err">${esc(tool.error.message)}</pre>`,
+            );
+          if (tool?.logs?.stderr?.length)
+            blocks.push(
+              `<div class="u369-code-output-title">${esc(t("codeErrors"))}</div><pre class="err">${esc(tool.logs.stderr.join("\n"))}</pre>`,
+            );
+          if (tool?.artifacts?.length)
+            blocks.push(
+              `<div class="u369-code-output-title">${esc(t("projectArtifacts"))}</div><div class="u369-code-actions">${tool.artifacts
+                .map(
+                  (artifact, artifactIndex) =>
+                    `<button type="button" class="u369-code-btn" data-data-download="${turnIndex}:${artifactIndex}">${esc(t("projectDownload"))} · ${esc(artifact.path)} · ${esc(formatBytes(artifact.size))}</button>`,
+                )
+                .join("")}</div>`,
+            );
+          return blocks.length
+            ? `<div class="u369-code-output">${blocks.join("")}</div>`
+            : "";
+        }
+        function renderDataCard(session, turn, index) {
+          const tool = compactDataTool(turn.tool) || {
+              kind: "data",
+              status: "unknown",
+              files: [],
+              artifacts: [],
+            },
+            key = codeTurnKey(session, turn);
+          let approval = codeApprovals.get(key);
+          if (
+            approval &&
+            Number(approval.expiresAt || 0) > 0 &&
+            Number(approval.expiresAt) <= Date.now()
+          ) {
+            codeApprovals.delete(key);
+            approval = null;
+          }
+          const approvalReady =
+              tool.status === "approval_required" && !!approval,
+            displayStatus =
+              tool.status === "approval_required" && !approvalReady
+                ? "expired"
+                : tool.status,
+            shortHash = tool.manifest_hash
+              ? `${tool.manifest_hash.slice(0, 16)}…`
+              : "—",
+            meta = [
+              [t("dataDataset"), tool.dataset_name || "—"],
+              [t("dataOperation"), dataOperationLabel(tool.operation)],
+              [t("projectFiles"), String(tool.file_count || 0)],
+              [t("projectSize"), formatBytes(tool.total_bytes)],
+              [t("codeFingerprint"), shortHash, tool.manifest_hash],
+            ]
+              .map(
+                ([label, value, title]) =>
+                  `<div class="u369-code-meta-row"><span class="u369-code-meta-label">${esc(label)}</span><code class="u369-code-meta-value"${title ? ` title="${esc(title)}"` : ""}>${esc(value)}</code></div>`,
+              )
+              .join(""),
+            fileList = tool.files?.length
+              ? `<div class="u369-code-note">${tool.files.map((file) => esc(file.path)).join(" · ")}</div>`
+              : "";
+          let controls = "";
+          if (approvalReady)
+            controls = `<div class="u369-code-actions"><button type="button" class="u369-code-btn primary" data-data-approve="${index}">${esc(t("codeApprove"))}</button><button type="button" class="u369-code-btn danger" data-data-cancel="${index}">${esc(t("codeCancel"))}</button></div>`;
+          else if (
+            [
+              "running",
+              "cancelling",
+              "cancelled",
+              "expired",
+              "unknown",
+            ].includes(displayStatus)
+          )
+            controls = `<div class="u369-code-note">${esc(dataStatusText(displayStatus))}</div>`;
+          const output = ["completed", "failed", "unknown"].includes(
+            displayStatus,
+          )
+            ? renderDataOutput(tool, index)
+            : "";
+          return `<div class="u369-code-card"><div class="u369-code-card-top"><div class="u369-code-card-title">${esc(t("dataApprovalTitle"))}</div><span class="u369-code-badge ${esc(displayStatus)}">${esc(codeStatusLabel(displayStatus))}</span></div><div class="u369-code-card-body"><div class="u369-code-summary">${esc(dataStatusText(displayStatus))}</div><div class="u369-code-meta">${meta}</div>${fileList}${controls}${output}</div></div>`;
+        }
         function recoverInterruptedTurns() {
           const all = sessions();
           let changed = false;
@@ -2470,20 +2960,25 @@
                 if (!answerFor(turn)) turn.final = t("requestInterrupted");
                 changed = true;
               }
-              if (!["code", "project"].includes(turn.tool?.kind)) return;
+              if (!["code", "project", "data"].includes(turn.tool?.kind))
+                return;
               if (turn.tool.status === "approval_required") {
                 turn.tool.status = "expired";
                 turn.final =
                   turn.tool.kind === "project"
                     ? t("projectApprovalExpired")
-                    : t("codeApprovalExpired");
+                    : turn.tool.kind === "data"
+                      ? t("dataApprovalExpired")
+                      : t("codeApprovalExpired");
                 changed = true;
               } else if (["running", "cancelling"].includes(turn.tool.status)) {
                 turn.tool.status = "unknown";
                 turn.final =
                   turn.tool.kind === "project"
                     ? t("projectUnknown")
-                    : t("codeUnknown");
+                    : turn.tool.kind === "data"
+                      ? t("dataUnknown")
+                      : t("codeUnknown");
                 changed = true;
               }
             }),
@@ -2500,7 +2995,7 @@
             { s } = currentSession(false),
             turns = s?.turns || [];
           if (!turns.length) {
-            box.innerHTML = `<div class="u369-empty"><img src="/app-icon-192.png" alt=""><div class="u369-empty-title">${esc(t("howHelp"))}</div><div class="u369-code-hint">${esc(t("codeCommandHint"))}<br>${esc(t("projectFileLimits"))}</div></div>`;
+            box.innerHTML = `<div class="u369-empty"><img src="/app-icon-192.png" alt=""><div class="u369-empty-title">${esc(t("howHelp"))}</div><div class="u369-code-hint">${esc(t("codeCommandHint"))}<br>${esc(t("projectFileLimits"))}<br>${esc(t("dataFileLimits"))}</div></div>`;
             return;
           }
           box.innerHTML = turns
@@ -2526,7 +3021,9 @@
                     ? renderCodeCard(s, tr, i)
                     : tr.tool?.kind === "project"
                       ? renderProjectCard(s, tr, i)
-                      : "",
+                      : tr.tool?.kind === "data"
+                        ? renderDataCard(s, tr, i)
+                        : "",
                 assistant = toolCard
                   ? `<div class="u369-assistant-msg"><div class="u369-assistant-head"><img src="/app-icon-192.png" alt=""><span>Unit369</span></div>${toolCard}</div>`
                   : ans || tr.pending || failure
@@ -2585,6 +3082,27 @@
                   .split(":")
                   .map(Number);
                 downloadProjectArtifact(turnIndex, artifactIndex);
+              }),
+          );
+          $$("[data-data-approve]").forEach(
+            (button) =>
+              (button.onclick = () =>
+                confirmDataLab(+button.dataset.dataApprove)),
+          );
+          $$("[data-data-cancel]").forEach(
+            (button) =>
+              (button.onclick = () =>
+                cancelDataLab(+button.dataset.dataCancel)),
+          );
+          $$("[data-data-download]").forEach(
+            (button) =>
+              (button.onclick = () => {
+                const [turnIndex, artifactIndex] = String(
+                  button.dataset.dataDownload || "",
+                )
+                  .split(":")
+                  .map(Number);
+                downloadDataArtifact(turnIndex, artifactIndex);
               }),
           );
           requestAnimationFrame(() =>
@@ -2744,6 +3262,45 @@
             clearTimeout(timer);
           }
         }
+        async function callDataLabApi(path, body, timeoutMs) {
+          const controller = new AbortController(),
+            timer = setTimeout(() => controller.abort(), timeoutMs);
+          try {
+            const response = await fetch(`/api/native/data-lab/${path}`, {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify(body),
+                signal: controller.signal,
+              }),
+              data = await response.json().catch(() => ({}));
+            if (!response.ok || data.error) {
+              const error = new Error(data.error || t("requestFailed"));
+              error.status = response.status;
+              error.code = data.code || "data_lab_request_failed";
+              throw error;
+            }
+            return data;
+          } catch (error) {
+            if (error?.name === "AbortError") {
+              const timeout = new Error(t("requestTimeout"));
+              timeout.status = 504;
+              timeout.code = "client_timeout";
+              timeout.uncertain = path.endsWith("/confirm");
+              throw timeout;
+            }
+            if (path.endsWith("/confirm") && !Number(error?.status)) {
+              const uncertainError =
+                error instanceof Error
+                  ? error
+                  : new Error(String(error || t("requestFailed")));
+              uncertainError.uncertain = true;
+              throw uncertainError;
+            }
+            throw error;
+          } finally {
+            clearTimeout(timer);
+          }
+        }
         async function planCodeExecution(session, turn, message) {
           const data = await callCodeApi("plan", { message }, 25_000);
           if (
@@ -2849,6 +3406,84 @@
             artifacts: [],
           };
           turn.final = t("projectApprovalRequired");
+          status.textContent = turn.final;
+        }
+        async function planDataLab(session, turn, files, message) {
+          const status = $("#u369-chat-status");
+          status.textContent = t("dataImporting");
+          const imported = await callDataLabApi(
+            "import",
+            {
+              name:
+                boundedText(message, 120) ||
+                boundedText(files[0]?.path, 120) ||
+                "Dataset",
+              description: boundedText(message, 1000),
+              files: files.map((file) => ({
+                path: file.path,
+                content: file.content,
+                mime: file.mime,
+              })),
+            },
+            45_000,
+          );
+          const dataset = imported.dataset || {};
+          if (!dataset.id) throw new Error(t("requestFailed"));
+          turn.tool = {
+            kind: "data",
+            status: "running",
+            dataset_id: String(dataset.id),
+            dataset_name: String(dataset.name || "Dataset"),
+            operation: inferDataOperation(message),
+            file_count: Number(imported.files?.length) || files.length,
+            total_bytes: Number(imported.total_bytes) || 0,
+            files: (imported.files || files).map((file) => ({
+              path: file.path || file.name,
+              size: file.size,
+            })),
+            logs: { stdout: [], stderr: [] },
+            artifacts: [],
+          };
+          const data = await callDataLabApi(
+            `${encodeURIComponent(dataset.id)}/executions/plan`,
+            {
+              operation: inferDataOperation(message),
+              message: boundedText(message, 1000),
+            },
+            25_000,
+          );
+          if (
+            data.approval_required !== true ||
+            !data.approval?.id ||
+            !data.approval?.token
+          )
+            throw new Error(t("requestFailed"));
+          const execution = data.execution || {},
+            key = codeTurnKey(session, turn);
+          codeApprovals.set(key, {
+            id: String(data.approval.id),
+            token: String(data.approval.token),
+            expiresAt: Number(data.approval.expires_at) || 0,
+          });
+          turn.tool = {
+            kind: "data",
+            status: "approval_required",
+            dataset_id: String(execution.dataset_id || dataset.id),
+            dataset_name: String(
+              execution.dataset_name || dataset.name || "Dataset",
+            ),
+            operation: execution.operation,
+            timeout_ms: execution.timeout_ms,
+            manifest_hash: execution.manifest_hash,
+            file_count: execution.file_count,
+            total_bytes: execution.total_bytes,
+            files: execution.files,
+            approval_expires_at: Number(data.approval.expires_at) || 0,
+            logs: { stdout: [], stderr: [] },
+            report: null,
+            artifacts: [],
+          };
+          turn.final = t("dataApprovalRequired");
           status.textContent = turn.final;
         }
         function codeActionContext(index) {
@@ -3209,15 +3844,210 @@
             status.textContent = error?.message || t("requestFailed");
           }
         }
+        function dataActionContext(index) {
+          const { a, s } = currentSession(false),
+            turn = s?.turns?.[index];
+          if (!s || !turn || turn.tool?.kind !== "data") return null;
+          return {
+            a,
+            s,
+            turn,
+            key: codeTurnKey(s, turn),
+          };
+        }
+        async function confirmDataLab(index) {
+          if (sending) return;
+          const context = dataActionContext(index);
+          if (!context) return;
+          const { a, s, turn, key } = context,
+            approval = codeApprovals.get(key),
+            status = $("#u369-chat-status");
+          if (!approval || Number(approval.expiresAt || 0) <= Date.now()) {
+            codeApprovals.delete(key);
+            turn.tool.status = "expired";
+            turn.final = t("dataApprovalExpired");
+            saveActiveSession(a, s);
+            renderConversation();
+            return;
+          }
+          sending = true;
+          $("#u369-chat-send").disabled = true;
+          $("#u369-chat-attach").disabled = true;
+          status.className = "u369-chat-status";
+          status.textContent = t("dataRunning");
+          turn.tool.status = "running";
+          turn.final = t("dataRunning");
+          saveActiveSession(a, s);
+          renderConversation();
+          try {
+            const data = await callDataLabApi(
+              `${encodeURIComponent(turn.tool.dataset_id)}/executions/confirm`,
+              {
+                approval_id: approval.id,
+                approval_token: approval.token,
+              },
+              120_000,
+            );
+            const previous = turn.tool;
+            turn.tool = {
+              ...previous,
+              kind: "data",
+              status: data.status === "completed" ? "completed" : "failed",
+              operation: data.operation || previous.operation,
+              manifest_hash: data.manifest_hash || previous.manifest_hash,
+              run_id: data.run_id,
+              exit_code: data.exit_code,
+              logs: data.logs,
+              error: data.error,
+              report: data.report,
+              artifacts: data.artifacts,
+              artifacts_omitted: data.artifacts_omitted,
+            };
+            turn.final =
+              turn.tool.status === "completed"
+                ? t("dataCompleted")
+                : t("dataFailed");
+            status.textContent = turn.final;
+          } catch (error) {
+            const uncertain =
+                error?.uncertain ||
+                Number(error?.status) >= 500 ||
+                error?.code === "sandbox_execution_unavailable",
+              expired = Number(error?.status) === 410;
+            turn.tool.status = expired
+              ? "expired"
+              : uncertain
+                ? "unknown"
+                : "failed";
+            turn.tool.error = {
+              name: boundedText(error?.code || "DataLabExecutionError", 160),
+              message: boundedText(error?.message || t("dataFailed"), 2_000),
+              traceback: [],
+            };
+            turn.final = expired
+              ? t("dataApprovalExpired")
+              : uncertain
+                ? t("dataUnknown")
+                : t("dataFailed");
+            status.className = "u369-chat-status err";
+            status.textContent = turn.final;
+          } finally {
+            codeApprovals.delete(key);
+            saveActiveSession(a, s);
+            sending = false;
+            $("#u369-chat-send").disabled = false;
+            $("#u369-chat-attach").disabled = false;
+            renderConversation();
+            renderHistory();
+          }
+        }
+        async function cancelDataLab(index) {
+          if (sending) return;
+          const context = dataActionContext(index);
+          if (!context) return;
+          const { a, s, turn, key } = context,
+            approval = codeApprovals.get(key),
+            status = $("#u369-chat-status");
+          if (!approval) {
+            turn.tool.status = "expired";
+            turn.final = t("dataApprovalExpired");
+            saveActiveSession(a, s);
+            renderConversation();
+            return;
+          }
+          sending = true;
+          $("#u369-chat-send").disabled = true;
+          $("#u369-chat-attach").disabled = true;
+          turn.tool.status = "cancelling";
+          turn.final = t("codeCancelling");
+          status.textContent = turn.final;
+          saveActiveSession(a, s);
+          renderConversation();
+          try {
+            const data = await callDataLabApi(
+              `${encodeURIComponent(turn.tool.dataset_id)}/executions/cancel`,
+              {
+                approval_id: approval.id,
+                approval_token: approval.token,
+              },
+              20_000,
+            );
+            if (data.cancelled !== true) throw new Error(t("requestFailed"));
+            turn.tool.status = "cancelled";
+            turn.final = t("dataCancelled");
+            status.textContent = turn.final;
+          } catch (error) {
+            turn.tool.status = "expired";
+            turn.tool.error = {
+              name: boundedText(error?.code || "CancellationError", 160),
+              message: boundedText(
+                error?.message || t("codeCancelFailed"),
+                2_000,
+              ),
+              traceback: [],
+            };
+            turn.final = t("dataApprovalExpired");
+            status.className = "u369-chat-status err";
+            status.textContent = t("codeCancelFailed");
+          } finally {
+            codeApprovals.delete(key);
+            saveActiveSession(a, s);
+            sending = false;
+            $("#u369-chat-send").disabled = false;
+            $("#u369-chat-attach").disabled = false;
+            renderConversation();
+            renderHistory();
+          }
+        }
+        async function downloadDataArtifact(turnIndex, artifactIndex) {
+          const context = dataActionContext(turnIndex),
+            artifact = context?.turn?.tool?.artifacts?.[artifactIndex],
+            status = $("#u369-chat-status");
+          if (!context || !artifact?.id) return;
+          try {
+            const response = await fetch(
+                `/api/native/data-lab/${encodeURIComponent(context.turn.tool.dataset_id)}/files/${encodeURIComponent(artifact.id)}`,
+                { cache: "no-store" },
+              ),
+              data = await response.json().catch(() => ({}));
+            if (!response.ok || !data.file)
+              throw new Error(data.error || t("requestFailed"));
+            const value = String(data.file.body || ""),
+              binary =
+                data.file.meta?.encoding === "base64"
+                  ? Uint8Array.from(atob(value.replace(/\s+/g, "")), (c) =>
+                      c.charCodeAt(0),
+                    )
+                  : new TextEncoder().encode(value),
+              blob = new Blob([binary], {
+                type: artifact.mime || "application/octet-stream",
+              }),
+              link = document.createElement("a"),
+              url = URL.createObjectURL(blob);
+            link.href = url;
+            link.download =
+              String(artifact.path || "data-lab-result")
+                .split("/")
+                .pop() || "data-lab-result";
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1_000);
+          } catch (error) {
+            status.className = "u369-chat-status err";
+            status.textContent = error?.message || t("requestFailed");
+          }
+        }
         async function sendMessage() {
           if (sending) return;
           const input = $("#u369-chat-input"),
             typedMessage = input.value.trim(),
             attachedFiles = projectAttachments.map((file) => ({ ...file })),
+            dataRequest = isDataAttachmentSet(attachedFiles, typedMessage),
             q =
               typedMessage ||
               (attachedFiles.length
-                ? `Project: ${attachedFiles.map((file) => file.path).join(", ")}`
+                ? `${dataRequest ? "Data Lab" : "Project"}: ${attachedFiles.map((file) => file.path).join(", ")}`
                 : "");
           if (!q) return;
           sending = true;
@@ -3248,16 +4078,30 @@
           try {
             if (attachedFiles.length) {
               try {
-                await planProjectExecution(s, tr, attachedFiles, typedMessage);
+                if (dataRequest)
+                  await planDataLab(s, tr, attachedFiles, typedMessage);
+                else
+                  await planProjectExecution(
+                    s,
+                    tr,
+                    attachedFiles,
+                    typedMessage,
+                  );
               } catch (error) {
                 tr.tool = {
-                  ...(tr.tool?.kind === "project" ? tr.tool : {}),
-                  kind: "project",
+                  ...(tr.tool?.kind === (dataRequest ? "data" : "project")
+                    ? tr.tool
+                    : {}),
+                  kind: dataRequest ? "data" : "project",
                   status: "failed",
                   logs: tr.tool?.logs || { stdout: [], stderr: [] },
                   artifacts: tr.tool?.artifacts || [],
                   error: {
-                    name: boundedText(error?.code || "ProjectPlanError", 160),
+                    name: boundedText(
+                      error?.code ||
+                        (dataRequest ? "DataLabPlanError" : "ProjectPlanError"),
+                      160,
+                    ),
                     message: boundedText(
                       error?.message || t("requestFailed"),
                       2_000,

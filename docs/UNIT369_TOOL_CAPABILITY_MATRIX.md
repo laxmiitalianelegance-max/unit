@@ -15,6 +15,7 @@ The screenshots mix three different things: capabilities Unit369 can own, open-s
 | Python data work                     | Owner-approved isolated execution              | Cloudflare Sandbox with NumPy, Pandas, Matplotlib and scikit-learn | No third-party SaaS account; Workers Paid runtime required |
 | JavaScript/TypeScript execution      | Owner-approved isolated execution              | Cloudflare Sandbox                                                 | No third-party SaaS account; Workers Paid runtime required |
 | Multi-file project checks and tests  | Owner-approved workspace execution             | Temporary Cloudflare Sandbox with downloadable artifacts           | No third-party SaaS account; Workers Paid runtime required |
+| Guided Data Lab                      | Owner-approved profiling, cleaning and charts  | Temporary Sandbox with Pandas and Matplotlib                       | No third-party SaaS account; Workers Paid runtime required |
 
 ## Native capability targets from the screenshots
 
@@ -23,8 +24,8 @@ These are product outcomes Unit369 can own without copying another company's ser
 | Requested area                  | Unit369-owned target                                                                                   | Status                                                                                   |
 | ------------------------------- | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
 | Natural-language processing     | classification, extraction, summarization and semantic search through owned models and local libraries | Partial                                                                                  |
-| Machine learning                | dataset preparation, scikit-learn training/evaluation and model artifacts                              | Execution engine ready; guided workflows pending                                         |
-| Data analysis and visualization | NumPy/Pandas analysis plus Matplotlib and browser-native charts                                        | Core execution and downloadable artifact flow ready; guided Data Lab pending             |
+| Machine learning                | dataset preparation, scikit-learn training/evaluation and model artifacts                              | Dataset profiling/cleaning ready; guided prediction and evaluation pending               |
+| Data analysis and visualization | NumPy/Pandas analysis plus Matplotlib and browser-native charts                                        | Guided CSV/TSV/JSON profiling, cleaning, in-chat charts and artifacts ready              |
 | Web application development     | native code workspaces, file editing, snapshots, preview, build and tests                              | Workspace import and isolated Python/JavaScript multi-file runner ready; preview pending |
 | Testing                         | test plans, isolated test execution and bounded logs                                                   | Python unittest and Node test adapters ready; more framework adapters pending            |
 | Deployment                      | build artifact, approval, deploy and rollback contracts                                                | Pending                                                                                  |
@@ -53,8 +54,9 @@ An optional adapter is considered complete only after OAuth or server-side crede
 1. Isolated interpreter and approval contract — implemented in this release.
 2. Chat-to-tool confirmation UI and bounded execution result cards — implemented.
 3. Multi-file workspace sync, dependency allowlist, builds and tests — implemented.
-4. Native data-analysis and visualization artifact flows — next.
-5. OpenCV/NLP specialized image after size and cold-start tests.
-6. Scheduled automation and deploy/rollback contracts.
-7. Audio/video and GPU framework images under separate cost ceilings.
-8. Optional third-party adapters only when an existing external account must be operated.
+4. Native data-analysis and visualization artifact flows — implemented.
+5. Guided prediction/evaluation with explicit target-column approval — next.
+6. OpenCV/NLP specialized image after size and cold-start tests.
+7. Scheduled automation and deploy/rollback contracts.
+8. Audio/video and GPU framework images under separate cost ceilings.
+9. Optional third-party adapters only when an existing external account must be operated.

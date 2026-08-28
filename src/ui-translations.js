@@ -113,7 +113,7 @@ export const UI_BASE = Object.freeze({
   codeStatusCancelled: "Cancelled",
   codeStatusExpired: "Expired",
   codeStatusUnknown: "Unknown",
-  projectAttach: "Attach project files",
+  projectAttach: "Attach files",
   projectFilesReady: "Project files selected",
   projectClearFiles: "Remove files",
   projectFileLimits:
@@ -136,6 +136,40 @@ export const UI_BASE = Object.freeze({
     "This project approval is no longer available. Attach the files again to create a new one.",
   projectUnknown:
     "The connection ended before the project result was confirmed. Unit369 will not run it again automatically.",
+  dataFilesReady: "Data files selected",
+  dataFileLimits:
+    "Data Lab accepts up to 5 UTF-8 CSV, TSV or JSON files, 1 MiB each and 3 MiB total.",
+  dataApprovalTitle: "Unit369 Data Lab",
+  dataApprovalRequired:
+    "Review the dataset and operation. Analysis starts only after you approve it.",
+  dataDataset: "Dataset",
+  dataOperation: "Analysis",
+  dataImporting: "Saving data files…",
+  dataRunning: "Running the approved Data Lab analysis…",
+  dataCompleted: "Data Lab analysis completed.",
+  dataFailed: "Data Lab analysis failed.",
+  dataCancelled: "Data Lab analysis was cancelled. No analysis was run.",
+  dataApprovalExpired:
+    "This Data Lab approval is no longer available. Attach the files again to create a new one.",
+  dataUnknown:
+    "The connection ended before the Data Lab result was confirmed. Unit369 will not run it again automatically.",
+  dataRows: "Rows",
+  dataColumns: "Columns",
+  dataPreview: "Data preview",
+  dataStatistics: "Column statistics",
+  dataMissing: "Missing",
+  dataUnique: "Unique",
+  dataMean: "Mean",
+  dataMinimum: "Minimum",
+  dataMaximum: "Maximum",
+  dataCleaning: "Cleaning result",
+  dataDuplicatesRemoved: "Duplicate rows removed",
+  dataEmptyRowsRemoved: "Empty rows removed",
+  dataFormulasNeutralized: "Spreadsheet formulas neutralized",
+  dataChart: "Generated chart",
+  dataOperationProfile: "Profile and summarize",
+  dataOperationClean: "Clean and export",
+  dataOperationChart: "Create a chart",
 });
 
 const UI_SR = Object.freeze({
@@ -254,7 +288,7 @@ const UI_SR = Object.freeze({
   codeStatusCancelled: "Otkazano",
   codeStatusExpired: "Isteklo",
   codeStatusUnknown: "Nepoznato",
-  projectAttach: "Dodaj fajlove projekta",
+  projectAttach: "Dodaj fajlove",
   projectFilesReady: "Fajlovi projekta su izabrani",
   projectClearFiles: "Ukloni fajlove",
   projectFileLimits:
@@ -278,6 +312,40 @@ const UI_SR = Object.freeze({
     "Odobrenje projekta više nije dostupno. Ponovo dodajte fajlove da biste napravili novo.",
   projectUnknown:
     "Veza je prekinuta pre potvrde rezultata projekta. Unit369 ga neće automatski ponovo pokrenuti.",
+  dataFilesReady: "Fajlovi sa podacima su izabrani",
+  dataFileLimits:
+    "Data Lab prihvata najviše 5 UTF-8 CSV, TSV ili JSON fajlova, do 1 MiB po fajlu i 3 MiB ukupno.",
+  dataApprovalTitle: "Unit369 Data Lab",
+  dataApprovalRequired:
+    "Pregledajte skup podataka i operaciju. Analiza počinje tek kada je odobrite.",
+  dataDataset: "Skup podataka",
+  dataOperation: "Analiza",
+  dataImporting: "Čuvam fajlove sa podacima…",
+  dataRunning: "Pokrećem odobrenu Data Lab analizu…",
+  dataCompleted: "Data Lab analiza je završena.",
+  dataFailed: "Data Lab analiza nije uspela.",
+  dataCancelled: "Data Lab analiza je otkazana. Analiza nije pokrenuta.",
+  dataApprovalExpired:
+    "Data Lab odobrenje više nije dostupno. Ponovo dodajte fajlove da biste napravili novo.",
+  dataUnknown:
+    "Veza je prekinuta pre potvrde Data Lab rezultata. Unit369 neće automatski ponovo pokrenuti analizu.",
+  dataRows: "Redovi",
+  dataColumns: "Kolone",
+  dataPreview: "Pregled podataka",
+  dataStatistics: "Statistika kolona",
+  dataMissing: "Nedostaje",
+  dataUnique: "Jedinstveno",
+  dataMean: "Prosek",
+  dataMinimum: "Minimum",
+  dataMaximum: "Maksimum",
+  dataCleaning: "Rezultat čišćenja",
+  dataDuplicatesRemoved: "Uklonjeni duplirani redovi",
+  dataEmptyRowsRemoved: "Uklonjeni prazni redovi",
+  dataFormulasNeutralized: "Neutralisane formule u tabeli",
+  dataChart: "Napravljen grafikon",
+  dataOperationProfile: "Profil i sažetak",
+  dataOperationClean: "Čišćenje i izvoz",
+  dataOperationChart: "Pravljenje grafikona",
 });
 
 export function normalizeLanguage(value) {

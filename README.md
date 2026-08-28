@@ -12,6 +12,7 @@ Unit369 is a Cloudflare Worker/PWA with authenticated AI chat, native workspaces
 - Per-user structured state: `NativeStore` Durable Object
 - Quotas, connection secrets, shared cache and approvals: `ToolStore` Durable Object
 - Isolated Python/JavaScript/TypeScript execution: owner-scoped Cloudflare Sandbox container
+- Guided CSV/TSV/JSON analysis, cleaning and charts: owner-approved Unit369 Data Lab in a temporary Sandbox
 - User files and product media: built-in `NATIVE_STORE`; optional R2 is used automatically when a `FILES` binding is added later
 
 There is one active runtime graph. Historical wrappers and branch-specific validation workflows have been removed so CI validates the code that is actually deployed.
@@ -28,6 +29,7 @@ There is one active runtime graph. Historical wrappers and branch-specific valid
 - AI routes have per-account Durable Object quotas.
 - Native and external mutations use short-lived, immutable, one-time approval tokens.
 - Code execution additionally forbids arbitrary shell access, forwards no Worker secrets and bounds code, time, rate and output.
+- Data Lab runs only a fixed Unit369-authored Python pipeline, verifies the dataset digest again at confirmation and neutralizes spreadsheet formulas in cleaned CSV exports.
 - Provider credentials never enter the browser bundle or local storage.
 
 ## Required production bindings and secrets
@@ -79,7 +81,7 @@ npm run ci
 npm run test:smoke
 ```
 
-`npm run ci` checks formatting, validates the complete import graph and PWA assets, runs unit/security tests, and performs a Wrangler production dry-run. The smoke test starts the Worker locally and verifies CSP, Unit369 owner authentication, authentication gates, native planning, manifest and icons. Unit tests verify optional Google OAuth PKCE and reject malformed Google credentials.
+`npm run ci` checks formatting, validates the complete import graph and PWA assets, runs unit/security tests, and performs a Wrangler production dry-run. The smoke test starts the Worker locally and verifies CSP, Unit369 owner authentication, authentication gates, native planning, Data Lab routing/storage, manifest and icons. Unit tests verify optional Google OAuth PKCE and reject malformed Google credentials.
 
 ## Deployment
 
