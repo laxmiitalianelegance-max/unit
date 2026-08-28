@@ -72,6 +72,9 @@ const SERBIAN_HELP_PATTERN =
 const SERBIAN_QUESTION_PATTERN =
   /^(?:imam\s+(?:jedno\s+)?pitanje|mogu\s+li\s+(?:nešto|nesto)\s+da\s+(?:te\s+)?pitam|mogu\s+(?:nešto|nesto)\s+da\s+(?:te\s+)?pitam)[?.!…]*$/i;
 
+const SERBIAN_STATUS_PATTERN =
+  /^(?:kako\s+(?:ide|si)|kako\s+ti\s+ide|ide(?:\s+li)?|(?:da\s+li|je\s+li|jel)\s+ide)(?:\s+(?:sad|sada|kod\s+tebe))?[?.!…]*$/i;
+
 const QUICK_CHAT_PATTERN =
   /^(?:(?:ć|c)ao|zdravo|hej|pozdrav|hello|hi|hey|sta ima|šta ima|tu si|jesi tu|jel si tu|radiš|radis|radi li|hvala|thanks|thank you)[?.!…]*$/i;
 
@@ -83,7 +86,8 @@ export function shouldUseNativeChatFastPath(messages) {
     QUICK_CHAT_PATTERN.test(request) ||
     SERBIAN_HEARING_PATTERN.test(request) ||
     SERBIAN_HELP_PATTERN.test(request) ||
-    SERBIAN_QUESTION_PATTERN.test(request)
+    SERBIAN_QUESTION_PATTERN.test(request) ||
+    SERBIAN_STATUS_PATTERN.test(request)
   );
 }
 
@@ -109,6 +113,11 @@ function nativeChat(messages, context) {
   if (SERBIAN_QUESTION_PATTERN.test(request)) {
     return { content: "Slobodno, pitaj." };
   }
+  if (SERBIAN_STATUS_PATTERN.test(request)) {
+    return {
+      content: "Ide dobro — tu sam i spreman. Reci šta radimo dalje.",
+    };
+  }
   if (
     !request ||
     /^[.?!…]+$/.test(request) ||
@@ -122,8 +131,8 @@ function nativeChat(messages, context) {
   }
   const plan = planNativeIntent(request);
   const content = serbian
-    ? "Razumeo sam. Glavni model se trenutno pokreće, pa puni odgovor još nije spreman. Pokušaj ponovo za nekoliko sekundi."
-    : "I understand. The main model is starting, so the full answer is not ready yet. Please try again in a few seconds.";
+    ? "Nisam uspeo da pripremim potpun odgovor. Pokušaj ponovo za nekoliko sekundi ili napiši zahtev malo konkretnije."
+    : "I could not prepare a complete answer. Try again in a few seconds or make the request a little more specific.";
   return { content, plan };
 }
 
