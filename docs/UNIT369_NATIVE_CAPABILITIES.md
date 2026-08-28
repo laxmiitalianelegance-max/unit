@@ -101,12 +101,14 @@ Unit369 Core must remain useful without any third-party account connection. Exte
 
 ### 12. Data Lab
 
-- owner-scoped CSV, TSV and record-oriented JSON imports
-- guided profiling, cleaning and Matplotlib chart generation
+- owner-scoped CSV, TSV, record-oriented JSON and validated XLSX imports
+- guided profiling, cleaning, Matplotlib chart generation and prediction evaluation
 - fixed server-authored analysis code instead of generated shell access
 - immutable dataset manifest and one-time approval before analysis
 - bounded table previews, statistics, chart previews and downloadable artifacts
 - spreadsheet-formula neutralization in cleaned CSV exports
+- explicit target-column approval, deterministic train/test split and baseline metrics
+- temporary logistic/ridge models that are never persisted
 
 ## External connections
 

@@ -101,16 +101,34 @@ downloads.
 
 ## Guided Data Lab
 
-The chat composer recognizes record-oriented CSV, TSV and JSON attachments as a
-Data Lab dataset. The first release supports three server-defined operations:
-`profile`, `clean` and `chart`. It returns bounded row previews, column types,
+The chat composer recognizes record-oriented CSV, TSV and JSON attachments plus
+XLSX workbooks as a Data Lab dataset. It supports four server-defined operations:
+`profile`, `clean`, `chart` and `predict`. It returns bounded row previews, column types,
 missing/unique counts, numeric summaries and owner-scoped downloadable output.
 Cleaning removes fully empty and duplicate rows and neutralizes string cells
 that spreadsheet software could interpret as formulas. Chart mode selects a
 bounded Matplotlib chart and returns both an in-chat PNG preview and the source
 artifact.
 
-Data Lab accepts at most five UTF-8 files, 1 MiB per file and 3 MiB total. Each
+XLSX input is base64 encoded in transit and storage, written to the Sandbox with
+the SDK's binary-file mode and read from the first worksheet. Before openpyxl is
+called, Unit369 verifies the ZIP signature, required workbook metadata, member
+count, member paths, encryption flag, compressed ratio and a 24 MiB total
+uncompressed ceiling. The image pins openpyxl and installs defusedxml because
+openpyxl does not protect untrusted XML by itself.
+
+Prediction accepts exactly one file and requires the target column to be named
+explicitly in the approval. Unit369 automatically chooses classification or
+regression, limits training to 5,000 rows and 20 usable features, separates a
+deterministic test set, compares the fitted result with a simple baseline and
+exports at most 1,000 evaluation rows. It uses a bounded logistic-regression or
+ridge-regression pipeline with numeric imputation/scaling and categorical
+one-hot encoding. Custom estimators and hyperparameters are not accepted. The
+model is temporary, is never serialized or persisted, and every result is
+labelled exploratory rather than a guaranteed forecast.
+
+Data Lab accepts at most five files, 1 MiB per file and 3 MiB total. Text input
+must be UTF-8 and XLSX input uses validated base64. Each
 file is limited to 100,000 rows and 100 columns during analysis. Unit369 stores
 the input first, hashes every path, size and file content, and places only that
 manifest plus the chosen operation in the approval. Confirmation reloads the
@@ -121,12 +139,10 @@ the browser cannot provide Python or shell text through the Data Lab API. Only
 six non-secret runtime variables identify input, output and configuration
 paths. The temporary Sandbox is destroyed in `finally`, including after an
 error or timeout. Results are limited to eight artifacts, 2 MiB each and 4 MiB
-total. Excel import and predictive-model workflows are intentionally deferred
-until their parsers, target selection and model evaluation contracts have
-separate tests.
+total.
 
 ## Runtime and cost boundary
 
-The Worker pins both `@cloudflare/sandbox` and the container image to `0.12.8`. The Python image includes NumPy, Pandas and Matplotlib; Unit369 adds scikit-learn.
+The Worker pins both `@cloudflare/sandbox` and the container image to `0.12.8`. The Python image includes NumPy, Pandas and Matplotlib; Unit369 pins scikit-learn, openpyxl and defusedxml.
 
 Cloudflare Containers require the Workers Paid plan. Container, Worker, Durable Object, egress and optional log usage are billed under Cloudflare's current rates. Production deployment must therefore remain an explicit owner decision; committing this runtime does not itself subscribe the account or start a container.

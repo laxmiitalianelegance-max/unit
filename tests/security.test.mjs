@@ -27,6 +27,7 @@ import { handleNativeBuild } from "../src/native-build.js";
 import {
   createDataLabManifest,
   DATA_LAB_COMMAND,
+  DATA_LAB_PYTHON_SOURCE,
   dataLabCapabilities,
   handleDataLabExecution,
   normalizeDataLabImport,
@@ -1262,7 +1263,7 @@ test("project approval fails closed when any workspace file changes", async () =
   assert.equal(sandboxCalls, 0);
 });
 
-test("Data Lab validates bounded CSV, TSV, and record-oriented JSON imports", async () => {
+test("Data Lab validates bounded text and base64 XLSX imports", async () => {
   const imported = normalizeDataLabImport({
     name: "Sales",
     files: [
@@ -1305,13 +1306,39 @@ test("Data Lab validates bounded CSV, TSV, and record-oriented JSON imports", as
     (error) =>
       error instanceof HttpError && error.code === "invalid_data_json_shape",
   );
+  const xlsx = normalizeDataLabImport({
+    files: [
+      {
+        path: "data.xlsx",
+        content: Buffer.from([0x50, 0x4b, 0x03, 0x04, 0, 0, 0, 0]).toString(
+          "base64",
+        ),
+        encoding: "base64",
+      },
+    ],
+  });
+  assert.equal(xlsx.files[0].encoding, "base64");
+  assert.equal(xlsx.files[0].size, 8);
   assert.throws(
     () =>
       normalizeDataLabImport({
-        files: [{ path: "data.xlsx", content: "not supported yet" }],
+        files: [{ path: "data.xlsx", content: "not-base64" }],
       }),
     (error) =>
-      error instanceof HttpError && error.code === "unsupported_data_file",
+      error instanceof HttpError && error.code === "xlsx_base64_required",
+  );
+  assert.throws(
+    () =>
+      normalizeDataLabImport({
+        files: [
+          {
+            path: "data.xlsx",
+            content: Buffer.from("not an xlsx").toString("base64"),
+            encoding: "base64",
+          },
+        ],
+      }),
+    (error) => error instanceof HttpError && error.code === "invalid_xlsx_file",
   );
   const first = await createDataLabManifest(imported.files);
   const second = await createDataLabManifest([...imported.files].reverse());
@@ -1332,6 +1359,27 @@ test("Data Lab exposes only server-defined analysis operations", () => {
     normalizeDataLabRequest({ message: "Napravi grafikon" }).operation,
     "chart",
   );
+  const prediction = normalizeDataLabRequest({
+    message: 'Predvidi ciljnu kolonu "total"',
+  });
+  assert.equal(prediction.operation, "predict");
+  assert.equal(prediction.options.target_column, "total");
+  assert.throws(
+    () => normalizeDataLabRequest({ operation: "predict" }),
+    (error) =>
+      error instanceof HttpError && error.code === "prediction_target_required",
+  );
+  assert.throws(
+    () =>
+      normalizeDataLabRequest({
+        operation: "predict",
+        target_column: "total",
+        model: "arbitrary-model",
+      }),
+    (error) =>
+      error instanceof HttpError &&
+      error.code === "custom_prediction_options_not_supported",
+  );
   assert.throws(
     () => normalizeDataLabRequest({ operation: "python" }),
     (error) =>
@@ -1348,7 +1396,44 @@ test("Data Lab exposes only server-defined analysis operations", () => {
   assert.equal(capabilities.arbitrary_code_enabled, false);
   assert.equal(capabilities.arbitrary_shell_enabled, false);
   assert.equal(capabilities.secrets_forwarded, false);
-  assert.deepEqual(capabilities.formats, ["csv", "tsv", "json"]);
+  assert.deepEqual(capabilities.formats, ["csv", "tsv", "json", "xlsx"]);
+  assert.deepEqual(capabilities.operations, [
+    "profile",
+    "clean",
+    "chart",
+    "predict",
+  ]);
+  assert.equal(capabilities.prediction.custom_models_enabled, false);
+  assert.equal(capabilities.prediction.model_persisted, false);
+  assert.equal(capabilities.xlsx_archive_validation, true);
+  assert.match(DATA_LAB_PYTHON_SOURCE, /def validate_xlsx\(path\):/);
+  assert.match(DATA_LAB_PYTHON_SOURCE, /LogisticRegression/);
+  assert.match(DATA_LAB_PYTHON_SOURCE, /Ridge\(alpha=1\.0/);
+});
+
+test("Data Lab prediction requires exactly one approved dataset file", async () => {
+  const response = await handleDataLabExecution(
+    request("/api/native/data-lab/dataset_prediction/executions/plan", {
+      operation: "predict",
+      target_column: "total",
+    }),
+    { UNIT369_SANDBOX: {}, TOOL_STORE: toolStoreNamespace() },
+    { uid: "owner-prediction" },
+    { getSandbox() {} },
+    {
+      datasetName: "Two files",
+      async readInputFiles() {
+        return [
+          { path: "one.csv", content: "total\n1\n" },
+          { path: "two.csv", content: "total\n2\n" },
+        ];
+      },
+    },
+    "dataset_prediction",
+    "plan",
+  );
+  assert.equal(response.status, 400);
+  assert.equal((await response.json()).code, "prediction_single_file_required");
 });
 
 test("Data Lab executes a fixed script only after immutable one-time approval", async () => {
@@ -1360,6 +1445,14 @@ test("Data Lab executes a fixed script only after immutable one-time approval", 
       path: "sales.csv",
       content: "month,total\nJan,10\nFeb,20\n",
       mime: "text/csv",
+    },
+    {
+      path: "workbook.xlsx",
+      content: Buffer.from([0x50, 0x4b, 0x03, 0x04, 0, 0, 0, 0]).toString(
+        "base64",
+      ),
+      encoding: "base64",
+      mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     },
   ];
   const report = {
@@ -1528,6 +1621,13 @@ test("Data Lab executes a fixed script only after immutable one-time approval", 
   assert.equal(persisted.length, 2);
   assert.equal(calls.filter((entry) => entry.type === "exec").length, 1);
   assert.equal(calls.at(-1).type, "destroy");
+  assert.deepEqual(
+    calls.find(
+      (entry) =>
+        entry.type === "write" && entry.path.endsWith("/workbook.xlsx"),
+    )?.options,
+    { encoding: "base64" },
+  );
   assert.ok(
     calls
       .filter((entry) => entry.type === "write")
@@ -1624,10 +1724,29 @@ test("Data Lab report normalization bounds previews and statistics", () => {
           },
         ],
         preview: [{ value: "y".repeat(900) }],
+        prediction: {
+          target_column: "value",
+          task_type: "regression",
+          model: "ridge-regression",
+          train_rows: 80,
+          test_rows: 20,
+          features_used: Array.from({ length: 30 }, (_, index) => `f${index}`),
+          features_dropped: [],
+          metrics: { mae: 1.5, r2: Infinity },
+          baseline: { mae: 3 },
+          evaluation_artifact: "prediction-evaluation.csv",
+          exploratory: true,
+          model_persisted: false,
+          warnings: ["w".repeat(700)],
+        },
       },
     ],
   });
   assert.equal(normalized.warnings[0].length, 500);
   assert.equal(normalized.files[0].columns[0].numeric.mean, null);
   assert.equal(normalized.files[0].preview[0].value.length, 500);
+  assert.equal(normalized.files[0].prediction.metrics.r2, null);
+  assert.equal(normalized.files[0].prediction.features_used.length, 20);
+  assert.equal(normalized.files[0].prediction.warnings[0].length, 500);
+  assert.equal(normalized.files[0].prediction.model_persisted, false);
 });
