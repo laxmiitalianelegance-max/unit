@@ -113,6 +113,29 @@ export const UI_BASE = Object.freeze({
   codeStatusCancelled: "Cancelled",
   codeStatusExpired: "Expired",
   codeStatusUnknown: "Unknown",
+  projectAttach: "Attach project files",
+  projectFilesReady: "Project files selected",
+  projectClearFiles: "Remove files",
+  projectFileLimits:
+    "Select up to 20 UTF-8 text files, 128 KiB each and 512 KiB total.",
+  projectApprovalTitle: "Project execution",
+  projectApprovalRequired:
+    "Review the workspace, files and operation. Nothing runs until you approve it.",
+  projectWorkspace: "Workspace",
+  projectOperation: "Operation",
+  projectFiles: "Files",
+  projectSize: "Source size",
+  projectArtifacts: "Output files",
+  projectDownload: "Download",
+  projectImporting: "Saving project files…",
+  projectRunning: "Running the approved project…",
+  projectCompleted: "Project execution completed.",
+  projectFailed: "Project execution failed.",
+  projectCancelled: "Project execution was cancelled. No project file was run.",
+  projectApprovalExpired:
+    "This project approval is no longer available. Attach the files again to create a new one.",
+  projectUnknown:
+    "The connection ended before the project result was confirmed. Unit369 will not run it again automatically.",
 });
 
 const UI_SR = Object.freeze({
@@ -231,6 +254,30 @@ const UI_SR = Object.freeze({
   codeStatusCancelled: "Otkazano",
   codeStatusExpired: "Isteklo",
   codeStatusUnknown: "Nepoznato",
+  projectAttach: "Dodaj fajlove projekta",
+  projectFilesReady: "Fajlovi projekta su izabrani",
+  projectClearFiles: "Ukloni fajlove",
+  projectFileLimits:
+    "Izaberite najviše 20 UTF-8 tekstualnih fajlova, do 128 KiB po fajlu i 512 KiB ukupno.",
+  projectApprovalTitle: "Izvršavanje projekta",
+  projectApprovalRequired:
+    "Pregledajte radni prostor, fajlove i operaciju. Ništa se ne pokreće dok ne odobrite.",
+  projectWorkspace: "Radni prostor",
+  projectOperation: "Operacija",
+  projectFiles: "Fajlovi",
+  projectSize: "Veličina izvora",
+  projectArtifacts: "Izlazni fajlovi",
+  projectDownload: "Preuzmi",
+  projectImporting: "Čuvam fajlove projekta…",
+  projectRunning: "Pokrećem odobreni projekat…",
+  projectCompleted: "Izvršavanje projekta je završeno.",
+  projectFailed: "Izvršavanje projekta nije uspelo.",
+  projectCancelled:
+    "Izvršavanje projekta je otkazano. Nijedan fajl projekta nije pokrenut.",
+  projectApprovalExpired:
+    "Odobrenje projekta više nije dostupno. Ponovo dodajte fajlove da biste napravili novo.",
+  projectUnknown:
+    "Veza je prekinuta pre potvrde rezultata projekta. Unit369 ga neće automatski ponovo pokrenuti.",
 });
 
 export function normalizeLanguage(value) {

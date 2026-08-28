@@ -532,7 +532,54 @@
         border-radius: 29px;
         background: #24272b;
         box-shadow: 0 12px 34px rgba(0, 0, 0, 0.3);
-        padding: 8px 54px 8px 14px;
+        padding: 8px 54px;
+      }
+      .u369-chat-attach {
+        position: absolute;
+        left: 9px;
+        bottom: 9px;
+        width: 40px;
+        height: 40px;
+        border: 0;
+        border-radius: 50%;
+        background: #33373c;
+        color: #e8edf3;
+        font-size: 23px;
+        display: grid;
+        place-items: center;
+      }
+      .u369-chat-attach:disabled {
+        opacity: 0.45;
+      }
+      .u369-project-attachments {
+        display: none;
+        max-width: 780px;
+        margin: 0 auto 7px;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+      .u369-project-attachments.show {
+        display: flex;
+      }
+      .u369-project-chip {
+        max-width: 100%;
+        border: 1px solid #263a52;
+        border-radius: 999px;
+        padding: 6px 9px;
+        background: #0d1723;
+        color: #c8d7e7;
+        font-size: 10px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .u369-project-clear {
+        border: 1px solid rgba(255, 102, 122, 0.32);
+        border-radius: 999px;
+        padding: 6px 9px;
+        background: #211219;
+        color: #ff9aaa;
+        font-size: 10px;
       }
       .u369-chat-input {
         display: block;
@@ -584,11 +631,15 @@
         color: var(--bad);
       }
       html[dir="rtl"] .u369-chat-composer {
-        padding: 8px 14px 8px 54px;
+        padding: 8px 54px;
       }
       html[dir="rtl"] .u369-chat-send {
         right: auto;
         left: 9px;
+      }
+      html[dir="rtl"] .u369-chat-attach {
+        left: auto;
+        right: 9px;
       }
       .section-wrap {
         max-width: 780px;
@@ -950,7 +1001,26 @@
         <div class="u369-conversation-wrap">
           <div id="u369-conversation" class="u369-conversation"></div>
         </div>
+        <div
+          id="u369-project-attachments"
+          class="u369-project-attachments"
+        ></div>
         <div class="u369-chat-composer">
+          <input
+            id="u369-project-files"
+            type="file"
+            multiple
+            hidden
+            accept=".py,.js,.mjs,.cjs,.json,.md,.txt,.html,.css,.yaml,.yml,.toml,.csv,.tsv"
+          />
+          <button
+            type="button"
+            id="u369-chat-attach"
+            class="u369-chat-attach"
+            aria-label="Attach project files"
+          >
+            ＋
+          </button>
           <textarea
             id="u369-chat-input"
             class="u369-chat-input"
@@ -1333,7 +1403,7 @@
           CUR = "unit369-current-v1",
           LANG = "u369-lang-all-v4",
           PREF = "unit369-settings-v2",
-          CACHE = "unit369-ui-i18n-v8-";
+          CACHE = "unit369-ui-i18n-v9-";
         const RTL = new Set(["ar", "fa", "he", "ur"]);
         const LANGS = [
           ["auto", "Automatic"],
@@ -1502,6 +1572,30 @@
           codeStatusCancelled: "Cancelled",
           codeStatusExpired: "Expired",
           codeStatusUnknown: "Unknown",
+          projectAttach: "Attach project files",
+          projectFilesReady: "Project files selected",
+          projectClearFiles: "Remove files",
+          projectFileLimits:
+            "Select up to 20 UTF-8 text files, 128 KiB each and 512 KiB total.",
+          projectApprovalTitle: "Project execution",
+          projectApprovalRequired:
+            "Review the workspace, files and operation. Nothing runs until you approve it.",
+          projectWorkspace: "Workspace",
+          projectOperation: "Operation",
+          projectFiles: "Files",
+          projectSize: "Source size",
+          projectArtifacts: "Output files",
+          projectDownload: "Download",
+          projectImporting: "Saving project files…",
+          projectRunning: "Running the approved project…",
+          projectCompleted: "Project execution completed.",
+          projectFailed: "Project execution failed.",
+          projectCancelled:
+            "Project execution was cancelled. No project file was run.",
+          projectApprovalExpired:
+            "This project approval is no longer available. Attach the files again to create a new one.",
+          projectUnknown:
+            "The connection ended before the project result was confirmed. Unit369 will not run it again automatically.",
         };
         let D = { ...BASE },
           integrations = {},
@@ -1514,6 +1608,7 @@
             models: { claude: "", openai: "", grok: "" },
           });
         const codeApprovals = new Map();
+        let projectAttachments = [];
         function loadJson(k, f) {
           try {
             return { ...f, ...JSON.parse(localStorage.getItem(k) || "{}") };
@@ -1597,6 +1692,7 @@
           renderProviders();
           renderIntegrations();
           renderToolkit();
+          renderProjectAttachments();
         }
         function applyTranslations() {
           $$("[data-i18n]").forEach((e) => (e.textContent = t(e.dataset.i18n)));
@@ -1612,6 +1708,7 @@
           input.placeholder = t("messageUnit369");
           input.setAttribute("aria-label", t("messageUnit369"));
           $("#u369-chat-send").setAttribute("aria-label", t("send"));
+          $("#u369-chat-attach").setAttribute("aria-label", t("projectAttach"));
           $("#u369-menu").setAttribute(
             "aria-label",
             t("openMenu") || "Open menu",
@@ -1744,6 +1841,85 @@
               .map(compactCodeResult),
           };
         }
+        function compactProjectTool(value) {
+          if (!value || value.kind !== "project") return null;
+          const allowedStatuses = new Set([
+            "approval_required",
+            "cancelling",
+            "running",
+            "completed",
+            "failed",
+            "cancelled",
+            "expired",
+            "unknown",
+          ]);
+          return {
+            kind: "project",
+            status: allowedStatuses.has(value.status)
+              ? value.status
+              : "unknown",
+            workspace_id: boundedText(value.workspace_id, 180),
+            workspace_name: boundedText(value.workspace_name, 180),
+            operation: boundedText(value.operation, 24),
+            language: boundedText(value.language, 24),
+            entrypoint: boundedText(value.entrypoint, 240),
+            timeout_ms: Math.max(0, Number(value.timeout_ms) || 0),
+            manifest_hash: boundedText(value.manifest_hash, 64),
+            file_count: Math.max(0, Number(value.file_count) || 0),
+            total_bytes: Math.max(0, Number(value.total_bytes) || 0),
+            command_label: boundedText(value.command_label, 240),
+            approval_expires_at: Math.max(
+              0,
+              Number(value.approval_expires_at) || 0,
+            ),
+            run_id: boundedText(value.run_id, 100),
+            exit_code: Number.isFinite(value.exit_code)
+              ? value.exit_code
+              : null,
+            files: (Array.isArray(value.files) ? value.files : [])
+              .slice(0, 20)
+              .map((file) => ({
+                path: boundedText(file?.path, 240),
+                size: Math.max(0, Number(file?.size) || 0),
+                sha256: boundedText(file?.sha256, 64),
+              })),
+            dependencies: (Array.isArray(value.dependencies)
+              ? value.dependencies
+              : []
+            )
+              .slice(0, 20)
+              .map((item) => ({
+                ecosystem: boundedText(item?.ecosystem, 24),
+                name: boundedText(item?.name, 160),
+                declaration: boundedText(item?.declaration, 160),
+              })),
+            logs: {
+              stdout: compactCodeLines(value.logs?.stdout, 16_000),
+              stderr: compactCodeLines(value.logs?.stderr, 12_000),
+            },
+            error:
+              value.error && typeof value.error === "object"
+                ? {
+                    name: boundedText(value.error.name, 160),
+                    message: boundedText(value.error.message, 2_000),
+                    traceback: compactCodeLines(value.error.traceback, 12_000),
+                  }
+                : null,
+            artifacts: (Array.isArray(value.artifacts) ? value.artifacts : [])
+              .slice(0, 8)
+              .map((artifact) => ({
+                id: boundedText(artifact?.id, 180),
+                path: boundedText(artifact?.path, 240),
+                mime: boundedText(artifact?.mime, 100),
+                size: Math.max(0, Number(artifact?.size) || 0),
+                encoding: boundedText(artifact?.encoding, 20),
+              })),
+            artifacts_omitted: Math.max(
+              0,
+              Number(value.artifacts_omitted) || 0,
+            ),
+          };
+        }
         function compactSession(session) {
           const providerKeys = [
             "unit369",
@@ -1788,7 +1964,9 @@
                 ...(turn?.pending ? { pending: true } : {}),
                 ...(turn?.tool?.kind === "code"
                   ? { tool: compactCodeTool(turn.tool) }
-                  : {}),
+                  : turn?.tool?.kind === "project"
+                    ? { tool: compactProjectTool(turn.tool) }
+                    : {}),
               })),
           };
         }
@@ -1867,6 +2045,9 @@
             };
           a.unshift(s);
           saveSessions(a, s);
+          projectAttachments = [];
+          $("#u369-project-files").value = "";
+          renderProjectAttachments();
           renderConversation();
           renderHistory();
           closeDrawer();
@@ -1917,6 +2098,80 @@
           return /^\/(?:run|execute|izvrsi|izvrši)\b/i.test(
             String(value || "").trim(),
           );
+        }
+        function formatBytes(value) {
+          const bytes = Math.max(0, Number(value) || 0);
+          if (bytes < 1024) return `${bytes} B`;
+          return `${Math.round((bytes / 1024) * 10) / 10} KiB`;
+        }
+        function inferProjectOperation(value) {
+          const message = String(value || "").toLowerCase();
+          if (/\b(test|testir|prover|provjer)/.test(message)) return "test";
+          if (/\b(run|execute|pokren|izvrš|izvrs)/.test(message)) return "run";
+          return "check";
+        }
+        function renderProjectAttachments() {
+          const box = $("#u369-project-attachments");
+          if (!projectAttachments.length) {
+            box.className = "u369-project-attachments";
+            box.innerHTML = "";
+            return;
+          }
+          box.className = "u369-project-attachments show";
+          box.innerHTML = `${projectAttachments
+            .map(
+              (file) =>
+                `<span class="u369-project-chip" title="${esc(file.path)}">${esc(file.path)} · ${esc(formatBytes(file.size))}</span>`,
+            )
+            .join(
+              "",
+            )}<button type="button" class="u369-project-clear" id="u369-project-clear">${esc(t("projectClearFiles"))}</button>`;
+          $("#u369-project-clear").onclick = () => {
+            projectAttachments = [];
+            $("#u369-project-files").value = "";
+            renderProjectAttachments();
+          };
+        }
+        async function loadProjectAttachments(fileList) {
+          const files = Array.from(fileList || []);
+          const status = $("#u369-chat-status");
+          try {
+            if (!files.length) return;
+            if (files.length > 20) throw new Error(t("projectFileLimits"));
+            let total = 0;
+            const seen = new Set();
+            const loaded = [];
+            for (const file of files) {
+              total += Number(file.size) || 0;
+              if (file.size > 128 * 1024 || total > 512 * 1024)
+                throw new Error(t("projectFileLimits"));
+              const path = String(file.webkitRelativePath || file.name || "");
+              const folded = path.toLowerCase();
+              if (!path || seen.has(folded))
+                throw new Error(t("projectFileLimits"));
+              seen.add(folded);
+              const content = await file.text();
+              if (content.includes("\u0000"))
+                throw new Error(t("projectFileLimits"));
+              loaded.push({
+                path,
+                content,
+                mime: file.type || "text/plain",
+                size: file.size,
+              });
+            }
+            projectAttachments = loaded;
+            status.className = "u369-chat-status";
+            status.textContent = `${t("projectFilesReady")} · ${loaded.length} · ${formatBytes(total)}`;
+            renderProjectAttachments();
+          } catch (error) {
+            projectAttachments = [];
+            status.className = "u369-chat-status err";
+            status.textContent = error?.message || t("projectFileLimits");
+            renderProjectAttachments();
+          } finally {
+            $("#u369-project-files").value = "";
+          }
         }
         function codeStatusText(status) {
           return (
@@ -2091,6 +2346,120 @@
             : "";
           return `<div class="u369-code-card"><div class="u369-code-card-top"><div class="u369-code-card-title">${esc(t("codeApprovalTitle"))}</div><span class="u369-code-badge ${esc(displayStatus)}">${esc(codeStatusLabel(displayStatus))}</span></div><div class="u369-code-card-body"><div class="u369-code-summary">${esc(codeStatusText(displayStatus))}</div><div class="u369-code-meta">${meta}</div>${controls}${output}${copy}</div></div>`;
         }
+        function projectStatusText(status) {
+          return (
+            {
+              approval_required: t("projectApprovalRequired"),
+              cancelling: t("codeCancelling"),
+              running: t("projectRunning"),
+              completed: t("projectCompleted"),
+              failed: t("projectFailed"),
+              cancelled: t("projectCancelled"),
+              expired: t("projectApprovalExpired"),
+              unknown: t("projectUnknown"),
+            }[status] || t("projectUnknown")
+          );
+        }
+        function renderProjectOutput(tool, turnIndex) {
+          const blocks = [];
+          const stdout = (tool?.logs?.stdout || []).join("\n");
+          const stderr = (tool?.logs?.stderr || []).join("\n");
+          if (stdout)
+            blocks.push(
+              `<div class="u369-code-output-title">${esc(t("codeOutput"))}</div><pre>${esc(stdout)}</pre>`,
+            );
+          if (stderr)
+            blocks.push(
+              `<div class="u369-code-output-title">${esc(t("codeErrors"))}</div><pre class="err">${esc(stderr)}</pre>`,
+            );
+          if (tool?.error?.message)
+            blocks.push(
+              `<div class="u369-code-output-title">${esc(tool.error.name || t("projectFailed"))}</div><pre class="err">${esc(tool.error.message)}</pre>`,
+            );
+          if (tool?.artifacts?.length) {
+            blocks.push(
+              `<div class="u369-code-output-title">${esc(t("projectArtifacts"))}</div><div class="u369-code-actions">${tool.artifacts
+                .map(
+                  (artifact, artifactIndex) =>
+                    `<button type="button" class="u369-code-btn" data-project-download="${turnIndex}:${artifactIndex}">${esc(t("projectDownload"))} · ${esc(artifact.path)} · ${esc(formatBytes(artifact.size))}</button>`,
+                )
+                .join("")}</div>`,
+            );
+          }
+          if (!blocks.length && tool?.status === "completed")
+            blocks.push(
+              `<div class="u369-code-note">${esc(t("codeNoOutput"))}</div>`,
+            );
+          return blocks.length
+            ? `<div class="u369-code-output">${blocks.join("")}</div>`
+            : "";
+        }
+        function renderProjectCard(session, turn, index) {
+          const tool = compactProjectTool(turn.tool) || {
+              kind: "project",
+              status: "unknown",
+              logs: { stdout: [], stderr: [] },
+              files: [],
+              artifacts: [],
+            },
+            key = codeTurnKey(session, turn);
+          let approval = codeApprovals.get(key);
+          if (
+            approval &&
+            Number(approval.expiresAt || 0) > 0 &&
+            Number(approval.expiresAt) <= Date.now()
+          ) {
+            codeApprovals.delete(key);
+            approval = null;
+          }
+          const approvalReady =
+              tool.status === "approval_required" && !!approval,
+            displayStatus =
+              tool.status === "approval_required" && !approvalReady
+                ? "expired"
+                : tool.status,
+            shortHash = tool.manifest_hash
+              ? `${tool.manifest_hash.slice(0, 16)}…`
+              : "—",
+            meta = [
+              [t("projectWorkspace"), tool.workspace_name || "—"],
+              [t("projectOperation"), tool.operation || "—"],
+              [t("codeLanguage"), tool.language || "—"],
+              [t("projectFiles"), String(tool.file_count || 0)],
+              [t("projectSize"), formatBytes(tool.total_bytes)],
+              [t("codeFingerprint"), shortHash, tool.manifest_hash],
+            ]
+              .map(
+                ([label, value, title]) =>
+                  `<div class="u369-code-meta-row"><span class="u369-code-meta-label">${esc(label)}</span><code class="u369-code-meta-value"${title ? ` title="${esc(title)}"` : ""}>${esc(value)}</code></div>`,
+              )
+              .join(""),
+            fileList = tool.files?.length
+              ? `<div class="u369-code-note">${tool.files.map((file) => esc(file.path)).join(" · ")}</div>`
+              : "";
+          let controls = "";
+          if (approvalReady)
+            controls = `<div class="u369-code-actions"><button type="button" class="u369-code-btn primary" data-project-approve="${index}">${esc(t("codeApprove"))}</button><button type="button" class="u369-code-btn danger" data-project-cancel="${index}">${esc(t("codeCancel"))}</button></div>`;
+          else if (
+            [
+              "running",
+              "cancelling",
+              "cancelled",
+              "expired",
+              "unknown",
+            ].includes(displayStatus)
+          )
+            controls = `<div class="u369-code-note">${esc(projectStatusText(displayStatus))}</div>`;
+          const output = ["completed", "failed", "unknown"].includes(
+            displayStatus,
+          )
+            ? renderProjectOutput(tool, index)
+            : "";
+          const copy = codeOutputText(tool)
+            ? `<div class="u369-code-actions"><button type="button" class="u369-code-btn" data-project-copy="${index}">${esc(t("codeCopyOutput"))}</button></div>`
+            : "";
+          return `<div class="u369-code-card"><div class="u369-code-card-top"><div class="u369-code-card-title">${esc(t("projectApprovalTitle"))}</div><span class="u369-code-badge ${esc(displayStatus)}">${esc(codeStatusLabel(displayStatus))}</span></div><div class="u369-code-card-body"><div class="u369-code-summary">${esc(projectStatusText(displayStatus))}</div><div class="u369-code-meta">${meta}</div>${fileList}${controls}${output}${copy}</div></div>`;
+        }
         function recoverInterruptedTurns() {
           const all = sessions();
           let changed = false;
@@ -2101,14 +2470,20 @@
                 if (!answerFor(turn)) turn.final = t("requestInterrupted");
                 changed = true;
               }
-              if (turn.tool?.kind !== "code") return;
+              if (!["code", "project"].includes(turn.tool?.kind)) return;
               if (turn.tool.status === "approval_required") {
                 turn.tool.status = "expired";
-                turn.final = t("codeApprovalExpired");
+                turn.final =
+                  turn.tool.kind === "project"
+                    ? t("projectApprovalExpired")
+                    : t("codeApprovalExpired");
                 changed = true;
               } else if (["running", "cancelling"].includes(turn.tool.status)) {
                 turn.tool.status = "unknown";
-                turn.final = t("codeUnknown");
+                turn.final =
+                  turn.tool.kind === "project"
+                    ? t("projectUnknown")
+                    : t("codeUnknown");
                 changed = true;
               }
             }),
@@ -2125,7 +2500,7 @@
             { s } = currentSession(false),
             turns = s?.turns || [];
           if (!turns.length) {
-            box.innerHTML = `<div class="u369-empty"><img src="/app-icon-192.png" alt=""><div class="u369-empty-title">${esc(t("howHelp"))}</div><div class="u369-code-hint">${esc(t("codeCommandHint"))}</div></div>`;
+            box.innerHTML = `<div class="u369-empty"><img src="/app-icon-192.png" alt=""><div class="u369-empty-title">${esc(t("howHelp"))}</div><div class="u369-code-hint">${esc(t("codeCommandHint"))}<br>${esc(t("projectFileLimits"))}</div></div>`;
             return;
           }
           box.innerHTML = turns
@@ -2146,10 +2521,14 @@
                   keys.length > 1
                     ? `<details class="u369-details"><summary>${esc(t("aiTeamDetails"))}</summary>${keys.map((k) => `<div class="u369-detail-row"><b>${esc(names[k] || k)}</b>${esc(tr.answers[k])}</div>`).join("")}</details>`
                     : "";
-              const codeCard =
-                  tr.tool?.kind === "code" ? renderCodeCard(s, tr, i) : "",
-                assistant = codeCard
-                  ? `<div class="u369-assistant-msg"><div class="u369-assistant-head"><img src="/app-icon-192.png" alt=""><span>Unit369</span></div>${codeCard}</div>`
+              const toolCard =
+                  tr.tool?.kind === "code"
+                    ? renderCodeCard(s, tr, i)
+                    : tr.tool?.kind === "project"
+                      ? renderProjectCard(s, tr, i)
+                      : "",
+                assistant = toolCard
+                  ? `<div class="u369-assistant-msg"><div class="u369-assistant-head"><img src="/app-icon-192.png" alt=""><span>Unit369</span></div>${toolCard}</div>`
                   : ans || tr.pending || failure
                     ? `<div class="u369-assistant-msg"><div class="u369-assistant-head"><img src="/app-icon-192.png" alt=""><span>Unit369</span></div><div class="u369-answer${tr.pending ? " u369-thinking" : ""}">${esc(ans || (tr.pending ? t("thinking") : failure))}</div>${details}${ans ? `<button class="u369-msg-action" data-copy="${i}">${esc(t("copy"))}</button>` : ""}</div>`
                     : "";
@@ -2180,6 +2559,34 @@
                   codeOutputText(turns[+button.dataset.codeCopy]?.tool),
                 )),
           );
+          $$("[data-project-approve]").forEach(
+            (button) =>
+              (button.onclick = () =>
+                confirmProjectExecution(+button.dataset.projectApprove)),
+          );
+          $$("[data-project-cancel]").forEach(
+            (button) =>
+              (button.onclick = () =>
+                cancelProjectExecution(+button.dataset.projectCancel)),
+          );
+          $$("[data-project-copy]").forEach(
+            (button) =>
+              (button.onclick = () =>
+                navigator.clipboard?.writeText(
+                  codeOutputText(turns[+button.dataset.projectCopy]?.tool),
+                )),
+          );
+          $$("[data-project-download]").forEach(
+            (button) =>
+              (button.onclick = () => {
+                const [turnIndex, artifactIndex] = String(
+                  button.dataset.projectDownload || "",
+                )
+                  .split(":")
+                  .map(Number);
+                downloadProjectArtifact(turnIndex, artifactIndex);
+              }),
+          );
           requestAnimationFrame(() =>
             window.scrollTo({
               top: document.body.scrollHeight,
@@ -2190,7 +2597,7 @@
         function historyMessages(s, p) {
           const o = [];
           (s.turns || [])
-            .filter((x) => !x.pending && x.tool?.kind !== "code")
+            .filter((x) => !x.pending && !x.tool)
             .slice(-8)
             .forEach((x) => {
               if (x.q) o.push({ role: "user", content: x.q });
@@ -2298,6 +2705,45 @@
             clearTimeout(timer);
           }
         }
+        async function callBuildApi(path, body, timeoutMs) {
+          const controller = new AbortController(),
+            timer = setTimeout(() => controller.abort(), timeoutMs);
+          try {
+            const response = await fetch(`/api/native/build/${path}`, {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify(body),
+                signal: controller.signal,
+              }),
+              data = await response.json().catch(() => ({}));
+            if (!response.ok || data.error) {
+              const error = new Error(data.error || t("requestFailed"));
+              error.status = response.status;
+              error.code = data.code || "project_request_failed";
+              throw error;
+            }
+            return data;
+          } catch (error) {
+            if (error?.name === "AbortError") {
+              const timeout = new Error(t("requestTimeout"));
+              timeout.status = 504;
+              timeout.code = "client_timeout";
+              timeout.uncertain = path.endsWith("/confirm");
+              throw timeout;
+            }
+            if (path.endsWith("/confirm") && !Number(error?.status)) {
+              const uncertainError =
+                error instanceof Error
+                  ? error
+                  : new Error(String(error || t("requestFailed")));
+              uncertainError.uncertain = true;
+              throw uncertainError;
+            }
+            throw error;
+          } finally {
+            clearTimeout(timer);
+          }
+        }
         async function planCodeExecution(session, turn, message) {
           const data = await callCodeApi("plan", { message }, 25_000);
           if (
@@ -2325,6 +2771,85 @@
             results: [],
           };
           turn.final = t("codeApprovalRequired");
+        }
+        async function planProjectExecution(session, turn, files, message) {
+          const status = $("#u369-chat-status");
+          status.textContent = t("projectImporting");
+          const imported = await callBuildApi(
+            "import",
+            {
+              name:
+                boundedText(message, 120) ||
+                boundedText(files[0]?.path, 120) ||
+                "Project",
+              language: "auto",
+              description: boundedText(message, 1000),
+              files: files.map((file) => ({
+                path: file.path,
+                content: file.content,
+                mime: file.mime,
+              })),
+            },
+            35_000,
+          );
+          const workspace = imported.workspace || {};
+          if (!workspace.id) throw new Error(t("requestFailed"));
+          turn.tool = {
+            kind: "project",
+            status: "running",
+            workspace_id: String(workspace.id),
+            workspace_name: String(workspace.name || "Project"),
+            operation: inferProjectOperation(message),
+            file_count: Number(imported.files?.length) || files.length,
+            total_bytes: Number(imported.total_bytes) || 0,
+            files: (imported.files || files).map((file) => ({
+              path: file.path || file.name,
+              size: file.size,
+            })),
+            logs: { stdout: [], stderr: [] },
+            artifacts: [],
+          };
+          const data = await callBuildApi(
+            `${encodeURIComponent(workspace.id)}/executions/plan`,
+            { operation: inferProjectOperation(message) },
+            25_000,
+          );
+          if (
+            data.approval_required !== true ||
+            !data.approval?.id ||
+            !data.approval?.token
+          )
+            throw new Error(t("requestFailed"));
+          const execution = data.execution || {},
+            key = codeTurnKey(session, turn);
+          codeApprovals.set(key, {
+            id: String(data.approval.id),
+            token: String(data.approval.token),
+            expiresAt: Number(data.approval.expires_at) || 0,
+          });
+          turn.tool = {
+            kind: "project",
+            status: "approval_required",
+            workspace_id: String(execution.workspace_id || workspace.id),
+            workspace_name: String(
+              execution.workspace_name || workspace.name || "Project",
+            ),
+            operation: execution.operation,
+            language: execution.language,
+            entrypoint: execution.entrypoint,
+            timeout_ms: execution.timeout_ms,
+            manifest_hash: execution.manifest_hash,
+            file_count: execution.file_count,
+            total_bytes: execution.total_bytes,
+            command_label: execution.command_label,
+            files: execution.files,
+            dependencies: execution.dependencies,
+            approval_expires_at: Number(data.approval.expires_at) || 0,
+            logs: { stdout: [], stderr: [] },
+            artifacts: [],
+          };
+          turn.final = t("projectApprovalRequired");
+          status.textContent = turn.final;
         }
         function codeActionContext(index) {
           const { a, s } = currentSession(false),
@@ -2361,6 +2886,7 @@
           }
           sending = true;
           $("#u369-chat-send").disabled = true;
+          $("#u369-chat-attach").disabled = true;
           status.className = "u369-chat-status";
           status.textContent = t("codeRunning");
           turn.tool.status = "running";
@@ -2423,6 +2949,7 @@
             saveActiveSession(a, s);
             sending = false;
             $("#u369-chat-send").disabled = false;
+            $("#u369-chat-attach").disabled = false;
             renderConversation();
             renderHistory();
           }
@@ -2443,6 +2970,7 @@
           }
           sending = true;
           $("#u369-chat-send").disabled = true;
+          $("#u369-chat-attach").disabled = true;
           status.className = "u369-chat-status";
           status.textContent = t("codeCancelling");
           turn.tool.status = "cancelling";
@@ -2480,17 +3008,221 @@
             saveActiveSession(a, s);
             sending = false;
             $("#u369-chat-send").disabled = false;
+            $("#u369-chat-attach").disabled = false;
             renderConversation();
             renderHistory();
+          }
+        }
+        function projectActionContext(index) {
+          const { a, s } = currentSession(false),
+            turn = s?.turns?.[index];
+          if (!s || !turn || turn.tool?.kind !== "project") return null;
+          return {
+            a,
+            s,
+            turn,
+            key: codeTurnKey(s, turn),
+          };
+        }
+        async function confirmProjectExecution(index) {
+          if (sending) return;
+          const context = projectActionContext(index);
+          if (!context) return;
+          const { a, s, turn, key } = context,
+            approval = codeApprovals.get(key),
+            status = $("#u369-chat-status");
+          if (!approval || Number(approval.expiresAt || 0) <= Date.now()) {
+            codeApprovals.delete(key);
+            turn.tool.status = "expired";
+            turn.final = t("projectApprovalExpired");
+            saveActiveSession(a, s);
+            renderConversation();
+            return;
+          }
+          sending = true;
+          $("#u369-chat-send").disabled = true;
+          $("#u369-chat-attach").disabled = true;
+          status.className = "u369-chat-status";
+          status.textContent = t("projectRunning");
+          turn.tool.status = "running";
+          turn.final = t("projectRunning");
+          saveActiveSession(a, s);
+          renderConversation();
+          try {
+            const data = await callBuildApi(
+              `${encodeURIComponent(turn.tool.workspace_id)}/executions/confirm`,
+              {
+                approval_id: approval.id,
+                approval_token: approval.token,
+              },
+              120_000,
+            );
+            const previous = turn.tool;
+            turn.tool = {
+              ...previous,
+              kind: "project",
+              status: data.status === "completed" ? "completed" : "failed",
+              operation: data.operation || previous.operation,
+              language: data.language || previous.language,
+              entrypoint: data.entrypoint || previous.entrypoint,
+              manifest_hash: data.manifest_hash || previous.manifest_hash,
+              command_label: data.command_label || previous.command_label,
+              run_id: data.run_id,
+              exit_code: data.exit_code,
+              logs: data.logs,
+              error: data.error,
+              artifacts: data.artifacts,
+              artifacts_omitted: data.artifacts_omitted,
+            };
+            turn.final =
+              turn.tool.status === "completed"
+                ? t("projectCompleted")
+                : t("projectFailed");
+            status.textContent = turn.final;
+          } catch (error) {
+            const uncertain =
+                error?.uncertain ||
+                Number(error?.status) >= 500 ||
+                error?.code === "sandbox_execution_unavailable",
+              expired = Number(error?.status) === 410;
+            turn.tool.status = expired
+              ? "expired"
+              : uncertain
+                ? "unknown"
+                : "failed";
+            turn.tool.error = {
+              name: boundedText(error?.code || "ProjectExecutionError", 160),
+              message: boundedText(error?.message || t("projectFailed"), 2_000),
+              traceback: [],
+            };
+            turn.final = expired
+              ? t("projectApprovalExpired")
+              : uncertain
+                ? t("projectUnknown")
+                : t("projectFailed");
+            status.className = "u369-chat-status err";
+            status.textContent = turn.final;
+          } finally {
+            codeApprovals.delete(key);
+            saveActiveSession(a, s);
+            sending = false;
+            $("#u369-chat-send").disabled = false;
+            $("#u369-chat-attach").disabled = false;
+            renderConversation();
+            renderHistory();
+          }
+        }
+        async function cancelProjectExecution(index) {
+          if (sending) return;
+          const context = projectActionContext(index);
+          if (!context) return;
+          const { a, s, turn, key } = context,
+            approval = codeApprovals.get(key),
+            status = $("#u369-chat-status");
+          if (!approval) {
+            turn.tool.status = "expired";
+            turn.final = t("projectApprovalExpired");
+            saveActiveSession(a, s);
+            renderConversation();
+            return;
+          }
+          sending = true;
+          $("#u369-chat-send").disabled = true;
+          $("#u369-chat-attach").disabled = true;
+          turn.tool.status = "cancelling";
+          turn.final = t("codeCancelling");
+          status.textContent = turn.final;
+          saveActiveSession(a, s);
+          renderConversation();
+          try {
+            const data = await callBuildApi(
+              `${encodeURIComponent(turn.tool.workspace_id)}/executions/cancel`,
+              {
+                approval_id: approval.id,
+                approval_token: approval.token,
+              },
+              20_000,
+            );
+            if (data.cancelled !== true) throw new Error(t("requestFailed"));
+            turn.tool.status = "cancelled";
+            turn.final = t("projectCancelled");
+            status.textContent = turn.final;
+          } catch (error) {
+            turn.tool.status = "expired";
+            turn.tool.error = {
+              name: boundedText(error?.code || "CancellationError", 160),
+              message: boundedText(
+                error?.message || t("codeCancelFailed"),
+                2_000,
+              ),
+              traceback: [],
+            };
+            turn.final = t("projectApprovalExpired");
+            status.className = "u369-chat-status err";
+            status.textContent = t("codeCancelFailed");
+          } finally {
+            codeApprovals.delete(key);
+            saveActiveSession(a, s);
+            sending = false;
+            $("#u369-chat-send").disabled = false;
+            $("#u369-chat-attach").disabled = false;
+            renderConversation();
+            renderHistory();
+          }
+        }
+        async function downloadProjectArtifact(turnIndex, artifactIndex) {
+          const context = projectActionContext(turnIndex),
+            artifact = context?.turn?.tool?.artifacts?.[artifactIndex],
+            status = $("#u369-chat-status");
+          if (!context || !artifact?.id) return;
+          try {
+            const response = await fetch(
+                `/api/native/build/${encodeURIComponent(context.turn.tool.workspace_id)}/files/${encodeURIComponent(artifact.id)}`,
+                { cache: "no-store" },
+              ),
+              data = await response.json().catch(() => ({}));
+            if (!response.ok || !data.file)
+              throw new Error(data.error || t("requestFailed"));
+            const value = String(data.file.body || ""),
+              binary =
+                data.file.meta?.encoding === "base64"
+                  ? Uint8Array.from(atob(value.replace(/\s+/g, "")), (c) =>
+                      c.charCodeAt(0),
+                    )
+                  : new TextEncoder().encode(value),
+              blob = new Blob([binary], {
+                type: artifact.mime || "application/octet-stream",
+              }),
+              link = document.createElement("a"),
+              url = URL.createObjectURL(blob);
+            link.href = url;
+            link.download =
+              String(artifact.path || "artifact")
+                .split("/")
+                .pop() || "artifact";
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1_000);
+          } catch (error) {
+            status.className = "u369-chat-status err";
+            status.textContent = error?.message || t("requestFailed");
           }
         }
         async function sendMessage() {
           if (sending) return;
           const input = $("#u369-chat-input"),
-            q = input.value.trim();
+            typedMessage = input.value.trim(),
+            attachedFiles = projectAttachments.map((file) => ({ ...file })),
+            q =
+              typedMessage ||
+              (attachedFiles.length
+                ? `Project: ${attachedFiles.map((file) => file.path).join(", ")}`
+                : "");
           if (!q) return;
           sending = true;
           $("#u369-chat-send").disabled = true;
+          $("#u369-chat-attach").disabled = true;
           const status = $("#u369-chat-status");
           status.className = "u369-chat-status";
           status.textContent = "";
@@ -2509,9 +3241,39 @@
           s.updatedAt = Date.now();
           saveSessions([s, ...a.filter((x) => x.id !== s.id)], s);
           input.value = "";
+          projectAttachments = [];
+          renderProjectAttachments();
           renderConversation();
           renderHistory();
           try {
+            if (attachedFiles.length) {
+              try {
+                await planProjectExecution(s, tr, attachedFiles, typedMessage);
+              } catch (error) {
+                tr.tool = {
+                  ...(tr.tool?.kind === "project" ? tr.tool : {}),
+                  kind: "project",
+                  status: "failed",
+                  logs: tr.tool?.logs || { stdout: [], stderr: [] },
+                  artifacts: tr.tool?.artifacts || [],
+                  error: {
+                    name: boundedText(error?.code || "ProjectPlanError", 160),
+                    message: boundedText(
+                      error?.message || t("requestFailed"),
+                      2_000,
+                    ),
+                    traceback: [],
+                  },
+                };
+                tr.final = error?.message || t("requestFailed");
+                status.className = "u369-chat-status err";
+                status.textContent =
+                  Number(error?.status) === 401
+                    ? t("signInRequired")
+                    : tr.final;
+              }
+              return;
+            }
             if (isExplicitCodeCommand(q)) {
               try {
                 await planCodeExecution(s, tr, q);
@@ -2597,6 +3359,7 @@
             saveSessions([s, ...sessions().filter((x) => x.id !== s.id)], s);
             sending = false;
             $("#u369-chat-send").disabled = false;
+            $("#u369-chat-attach").disabled = false;
             renderConversation();
             renderHistory();
           }
@@ -2913,6 +3676,11 @@
             }
           });
           $("#u369-chat-send").onclick = sendMessage;
+          $("#u369-chat-attach").onclick = () => {
+            if (!sending) $("#u369-project-files").click();
+          };
+          $("#u369-project-files").onchange = (event) =>
+            loadProjectAttachments(event.target.files);
           $("#language-select").onchange = (e) => {
             if (e.target.value === "custom") {
               $("#custom-language-row").style.display = "flex";
@@ -2965,6 +3733,7 @@
           renderSettings();
           renderHistory();
           renderConversation();
+          renderProjectAttachments();
           networkState();
           await refreshStatus();
           await loadLanguage();

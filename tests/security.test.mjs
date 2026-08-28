@@ -23,6 +23,16 @@ import {
   normalizeExecutionResult,
   parseCodeChatCommand,
 } from "../src/native-code-execution.js";
+import { handleNativeBuild } from "../src/native-build.js";
+import {
+  createProjectManifest,
+  handleProjectExecution,
+  inspectProjectDependencies,
+  normalizeProjectExecutionRequest,
+  normalizeProjectImport,
+  normalizeWorkspacePath,
+  projectExecutionCapabilities,
+} from "../src/native-project-execution.js";
 import {
   runOwnedModel,
   shouldUseNativeChatFastPath,
@@ -37,6 +47,7 @@ import { ToolStore } from "../src/tool-store.js";
 import {
   normalizeLanguage,
   staticTranslation,
+  UI_BASE,
 } from "../src/ui-translations.js";
 
 class MemoryStorage {
@@ -180,6 +191,10 @@ test("message and language validation enforce strict limits", () => {
   assert.equal(normalizeLanguage("sr-Latn"), "sr-Latn");
   assert.throws(() => normalizeLanguage("sr<script>"));
   assert.equal(staticTranslation("sr-RS").price, "Cena");
+  assert.deepEqual(
+    Object.keys(staticTranslation("sr-RS")).sort(),
+    Object.keys(UI_BASE).sort(),
+  );
 });
 
 test("Workers AI uses the quota-efficient production model by default", async () => {
@@ -854,4 +869,386 @@ test("chat execution approvals can be cancelled and never executed", async () =>
   );
   assert.equal(confirmedResponse.status, 409);
   assert.deepEqual(calls, []);
+});
+
+test("project imports enforce safe paths, text limits, and dependency allowlists", async () => {
+  const imported = normalizeProjectImport({
+    name: "Example",
+    files: [
+      { path: "main.py", content: "import numpy as np\nprint(np.sum([1, 2]))" },
+      { path: "requirements.txt", content: "numpy==2.3.2\npandas>=2" },
+    ],
+  });
+  assert.equal(imported.name, "Example");
+  assert.equal(imported.files.length, 2);
+  assert.ok(imported.total_bytes > 0);
+  assert.equal(normalizeWorkspacePath("src/main file.js"), "src/main file.js");
+  assert.throws(
+    () => normalizeWorkspacePath("../secret.env"),
+    (error) =>
+      error instanceof HttpError && error.code === "invalid_workspace_path",
+  );
+  assert.throws(
+    () =>
+      normalizeProjectImport({
+        files: [
+          { path: "same.py", content: "print(1)" },
+          { path: "SAME.py", content: "print(2)" },
+        ],
+      }),
+    (error) =>
+      error instanceof HttpError && error.code === "duplicate_project_path",
+  );
+  assert.deepEqual(
+    inspectProjectDependencies(imported.files).map((item) => item.name),
+    ["numpy", "pandas"],
+  );
+  assert.throws(
+    () =>
+      inspectProjectDependencies([
+        {
+          path: "package.json",
+          content: JSON.stringify({ dependencies: { express: "5.1.0" } }),
+        },
+      ]),
+    (error) =>
+      error instanceof HttpError && error.code === "dependency_not_allowed",
+  );
+
+  const first = await createProjectManifest(imported.files);
+  const second = await createProjectManifest([...imported.files].reverse());
+  assert.equal(first.digest, second.digest);
+  assert.equal(first.file_count, 2);
+});
+
+test("project execution supports only bounded server-defined operations", () => {
+  const python = [{ path: "main.py", content: "print('ok')" }];
+  const run = normalizeProjectExecutionRequest(
+    { operation: "run", timeout_ms: 90_000 },
+    python,
+  );
+  assert.equal(run.language, "python");
+  assert.equal(run.entrypoint, "main.py");
+  assert.equal(run.timeout_ms, 30_000);
+  assert.equal(run.command, "python3 -B 'main.py'");
+  const check = normalizeProjectExecutionRequest({ operation: "check" }, [
+    { path: "src/index.js", content: "console.log('ok')" },
+  ]);
+  assert.equal(check.command_label, "JavaScript syntax check");
+  assert.throws(
+    () => normalizeProjectExecutionRequest({ operation: "shell" }, python),
+    (error) =>
+      error instanceof HttpError && error.code === "invalid_project_operation",
+  );
+  assert.throws(
+    () =>
+      normalizeProjectExecutionRequest({ operation: "check" }, [
+        { path: "main.py", content: "print(1)" },
+        { path: "index.js", content: "console.log(1)" },
+      ]),
+    (error) =>
+      error instanceof HttpError &&
+      error.code === "mixed_project_not_supported",
+  );
+  const capabilities = projectExecutionCapabilities(true);
+  assert.equal(capabilities.configured, true);
+  assert.equal(capabilities.arbitrary_shell_enabled, false);
+  assert.equal(capabilities.dependency_installation_enabled, false);
+  assert.equal(capabilities.secrets_forwarded, false);
+});
+
+test("workspace metadata remains editable while execution artifacts stay read-only", async () => {
+  const calls = [];
+  const nativeStore = {
+    idFromName(value) {
+      return String(value);
+    },
+    get() {
+      return {
+        async fetch(input) {
+          const storeRequest =
+              input instanceof Request ? input : new Request(input),
+            url = new URL(storeRequest.url),
+            path = url.pathname.replace(/^\/native-store/, "");
+          calls.push({ method: storeRequest.method, path });
+          if (storeRequest.method === "GET" && path === "/data/collections") {
+            return Response.json({
+              collections: [{ id: "c_build", name: "__unit369_build_v1" }],
+            });
+          }
+          if (
+            storeRequest.method === "GET" &&
+            path === "/data/collections/c_build/records/ws_1"
+          ) {
+            return Response.json({
+              record: {
+                id: "ws_1",
+                name: "Workspace",
+                data: { type: "workspace", name: "Workspace" },
+              },
+            });
+          }
+          if (
+            storeRequest.method === "PUT" &&
+            path === "/data/collections/c_build/records/ws_1"
+          ) {
+            return Response.json({ ok: true, updated_at: Date.now() });
+          }
+          if (storeRequest.method === "GET" && path === "/files/f_artifact") {
+            return Response.json({
+              file: {
+                id: "f_artifact",
+                parent_id: "ws_1",
+                name: "artifacts/run/result.txt",
+                mime: "text/plain",
+                body: "cmVzdWx0",
+                meta: { kind: "artifact", encoding: "base64" },
+              },
+            });
+          }
+          return Response.json(
+            { error: "Unexpected store request." },
+            {
+              status: 500,
+            },
+          );
+        },
+      };
+    },
+  };
+  const env = { NATIVE_STORE: nativeStore };
+  const account = { uid: "owner-build" };
+  const updated = await handleNativeBuild(
+    new Request("https://unit.test/api/native/build/ws_1", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "Updated workspace" }),
+    }),
+    env,
+    account,
+  );
+  assert.equal(updated.status, 200, await updated.clone().text());
+  assert.equal((await updated.json()).workspace.name, "Updated workspace");
+
+  for (const method of ["PUT", "DELETE"]) {
+    const artifactRequest = new Request(
+      "https://unit.test/api/native/build/ws_1/files/f_artifact",
+      {
+        method,
+        headers: { "content-type": "application/json" },
+        ...(method === "PUT"
+          ? { body: JSON.stringify({ content: "changed" }) }
+          : {}),
+      },
+    );
+    const response = await handleNativeBuild(artifactRequest, env, account);
+    assert.equal(response.status, 409, await response.clone().text());
+  }
+  assert.equal(
+    calls.filter(
+      (entry) => entry.path === "/files/f_artifact" && entry.method !== "GET",
+    ).length,
+    0,
+  );
+});
+
+test("multi-file projects execute only after immutable one-time approval", async () => {
+  const calls = [];
+  const persisted = [];
+  let outputDirectory = "";
+  const sources = [
+    {
+      path: "src/helper.py",
+      content: "def value(): return 9",
+      mime: "text/x-python",
+    },
+    {
+      path: "main.py",
+      content: "from src.helper import value\nprint(value())",
+      mime: "text/x-python",
+    },
+  ];
+  const env = {
+    UNIT369_SANDBOX: {},
+    TOOL_STORE: toolStoreNamespace(),
+  };
+  const services = {
+    workspaceName: "Approved project",
+    async readSourceFiles() {
+      return sources;
+    },
+    async persistArtifact(artifact) {
+      persisted.push(artifact);
+      return {
+        id: "f_artifact",
+        path: artifact.path,
+        mime: artifact.mime,
+        size: artifact.size,
+        encoding: artifact.encoding,
+      };
+    },
+  };
+  const runtime = {
+    getSandbox(_binding, id, options) {
+      calls.push({ type: "sandbox", id, options });
+      return {
+        async mkdir(path) {
+          calls.push({ type: "mkdir", path });
+          if (path.endsWith("/output")) outputDirectory = path;
+          return { success: true };
+        },
+        async writeFile(path, content, options) {
+          calls.push({ type: "write", path, content, options });
+          return { success: true };
+        },
+        async exec(command, options) {
+          calls.push({ type: "exec", command, options });
+          assert.deepEqual(Object.keys(options.env).sort(), [
+            "NO_COLOR",
+            "PYTHONDONTWRITEBYTECODE",
+            "UNIT369_OUTPUT_DIR",
+          ]);
+          return {
+            success: true,
+            exitCode: 0,
+            stdout: "9\n",
+            stderr: "",
+          };
+        },
+        async listFiles(path) {
+          assert.equal(path, outputDirectory);
+          return {
+            files: [
+              {
+                type: "file",
+                relativePath: "result.txt",
+                absolutePath: `${outputDirectory}/result.txt`,
+                size: 2,
+              },
+            ],
+          };
+        },
+        async readFile(path, options) {
+          assert.equal(path, `${outputDirectory}/result.txt`);
+          assert.deepEqual(options, { encoding: "base64" });
+          return {
+            content: "OQo=",
+            mimeType: "text/plain",
+          };
+        },
+        async destroy() {
+          calls.push({ type: "destroy" });
+        },
+      };
+    },
+  };
+  const account = { uid: "owner-project" };
+  const plannedResponse = await handleProjectExecution(
+    request("/api/native/build/ws_1/executions/plan", {
+      operation: "run",
+    }),
+    env,
+    account,
+    runtime,
+    services,
+    "ws_1",
+    "plan",
+  );
+  assert.equal(plannedResponse.status, 202);
+  const planned = await plannedResponse.json();
+  assert.equal(planned.approval_required, true);
+  assert.equal(planned.execution.file_count, 2);
+  assert.equal(calls.length, 0);
+
+  const confirmedResponse = await handleProjectExecution(
+    request("/api/native/build/ws_1/executions/confirm", {
+      approval_id: planned.approval.id,
+      approval_token: planned.approval.token,
+    }),
+    env,
+    account,
+    runtime,
+    services,
+    "ws_1",
+    "confirm",
+  );
+  assert.equal(
+    confirmedResponse.status,
+    200,
+    await confirmedResponse.clone().text(),
+  );
+  const confirmed = await confirmedResponse.json();
+  assert.equal(confirmed.status, "completed");
+  assert.deepEqual(confirmed.logs.stdout, ["9"]);
+  assert.equal(confirmed.artifacts[0].id, "f_artifact");
+  assert.equal(persisted[0].content, "OQo=");
+  assert.equal(calls.filter((entry) => entry.type === "exec").length, 1);
+  assert.equal(calls.at(-1).type, "destroy");
+
+  const replayResponse = await handleProjectExecution(
+    request("/api/native/build/ws_1/executions/confirm", {
+      approval_id: planned.approval.id,
+      approval_token: planned.approval.token,
+    }),
+    env,
+    account,
+    runtime,
+    services,
+    "ws_1",
+    "confirm",
+  );
+  assert.equal(replayResponse.status, 409);
+  assert.equal(calls.filter((entry) => entry.type === "exec").length, 1);
+});
+
+test("project approval fails closed when any workspace file changes", async () => {
+  let source = "print(1)";
+  let sandboxCalls = 0;
+  const env = {
+    UNIT369_SANDBOX: {},
+    TOOL_STORE: toolStoreNamespace(),
+  };
+  const services = {
+    workspaceName: "Changing project",
+    async readSourceFiles() {
+      return [{ path: "main.py", content: source }];
+    },
+    async persistArtifact() {
+      throw new Error("should not persist");
+    },
+  };
+  const runtime = {
+    getSandbox() {
+      sandboxCalls += 1;
+      throw new Error("should not execute");
+    },
+  };
+  const account = { uid: "owner-changing-project" };
+  const plannedResponse = await handleProjectExecution(
+    request("/api/native/build/ws_2/executions/plan", {
+      operation: "run",
+    }),
+    env,
+    account,
+    runtime,
+    services,
+    "ws_2",
+    "plan",
+  );
+  const planned = await plannedResponse.json();
+  source = "print(2)";
+  const confirmed = await handleProjectExecution(
+    request("/api/native/build/ws_2/executions/confirm", {
+      approval_id: planned.approval.id,
+      approval_token: planned.approval.token,
+    }),
+    env,
+    account,
+    runtime,
+    services,
+    "ws_2",
+    "confirm",
+  );
+  assert.equal(confirmed.status, 409);
+  assert.equal(sandboxCalls, 0);
 });

@@ -63,7 +63,7 @@ for (const match of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)) {
 }
 assert.ok(html.includes('data-mode="auto"'), "Auto fallback mode is missing");
 assert.ok(
-  html.includes("unit369-ui-i18n-v8-"),
+  html.includes("unit369-ui-i18n-v9-"),
   "Translation cache version is stale",
 );
 assert.ok(
@@ -78,6 +78,14 @@ assert.ok(
     html.includes("data-code-cancel") &&
     html.includes("const codeApprovals = new Map()"),
   "Explicit code approval UI or in-memory approval storage is missing",
+);
+assert.ok(
+  html.includes('id="u369-project-files"') &&
+    html.includes("/api/native/build/${path}") &&
+    html.includes("data-project-approve") &&
+    html.includes("data-project-cancel") &&
+    html.includes("data-project-download"),
+  "Multi-file project approval or artifact UI is missing",
 );
 assert.ok(!html.includes(".jpg"), "The UI still references legacy JPG icons");
 assert.ok(
