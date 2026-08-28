@@ -1,4 +1,9 @@
 import { readJsonLimited, readResponseJsonLimited } from "./runtime-utils.js";
+import {
+  handleProjectExecution,
+  normalizeProjectImport,
+  normalizeWorkspacePath,
+} from "./native-project-execution.js";
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -107,10 +112,62 @@ async function readFiles(env, uid, wid) {
         path: f.name,
         content: x.data.file.body || "",
         mime: x.data.file.mime || "text/plain",
+        meta: x.data.file.meta || {},
         updated_at: f.updated_at,
       });
   }
   return out;
+}
+
+async function createWorkspaceRecord(env, uid, cid, body) {
+  const name = clean(body.name);
+  if (!name)
+    return { error: json({ error: "Workspace name is required." }, 400) };
+  const data = {
+    type: "workspace",
+    name,
+    project_id: clean(body.project_id, 160),
+    language: clean(body.language || "mixed", 80),
+    description: clean(body.description, 4000),
+  };
+  const created = await callStore(
+    env,
+    uid,
+    `/data/collections/${cid}/records`,
+    { method: "POST", body: JSON.stringify({ name, record: data }) },
+  );
+  if (!created.r.ok) return { error: json(created.data, created.r.status) };
+  return { workspace: ws(created.data.record), record: created.data.record };
+}
+
+async function createWorkspaceFile(env, uid, wid, source, kind = "source") {
+  const path = normalizeWorkspacePath(source.path || source.name);
+  const created = await callStore(env, uid, "/files", {
+    method: "POST",
+    body: JSON.stringify({
+      name: path,
+      parent_id: wid,
+      content: String(source.content ?? ""),
+      mime: clean(source.mime || "text/plain", 100),
+      meta: {
+        ...(source.meta && typeof source.meta === "object" ? source.meta : {}),
+        workspace_id: wid,
+        kind,
+      },
+    }),
+  });
+  if (!created.r.ok)
+    throw new Error(created.data.error || "Unable to create workspace file.");
+  return { ...created.data.file, path };
+}
+
+async function deleteWorkspaceContents(env, uid, cid, wid) {
+  for (const file of await workspaceFiles(env, uid, wid)) {
+    await callStore(env, uid, `/files/${file.id}`, { method: "DELETE" });
+  }
+  await callStore(env, uid, `/data/collections/${cid}/records/${wid}`, {
+    method: "DELETE",
+  });
 }
 function lineDiff(a, b) {
   const A = String(a || "").split("\n"),
@@ -122,7 +179,7 @@ function lineDiff(a, b) {
       changes.push({ line: i + 1, before: A[i] ?? null, after: B[i] ?? null });
   return changes.slice(0, 2000);
 }
-export async function handleNativeBuild(request, env, account) {
+export async function handleNativeBuild(request, env, account, runtime = {}) {
   const u = new URL(request.url),
     p = u.pathname
       .replace(/^\/api\/native\/build\/?/, "")
@@ -137,26 +194,48 @@ export async function handleNativeBuild(request, env, account) {
       });
     }
     if (request.method === "POST") {
-      const b = await readJsonLimited(request, 1024 * 1024),
-        name = clean(b.name);
-      if (!name) return json({ error: "Workspace name is required." }, 400);
-      const d = {
-        type: "workspace",
-        name,
-        project_id: clean(b.project_id, 160),
-        language: clean(b.language || "mixed", 80),
-        description: clean(b.description, 4000),
-      };
-      const x = await callStore(
-        env,
-        account.uid,
-        `/data/collections/${cid}/records`,
-        { method: "POST", body: JSON.stringify({ name, record: d }) },
-      );
-      if (!x.r.ok) return json(x.data, x.r.status);
-      return json({ workspace: ws(x.data.record) }, 201);
+      const body = await readJsonLimited(request, 1024 * 1024);
+      const created = await createWorkspaceRecord(env, account.uid, cid, body);
+      if (created.error) return created.error;
+      return json({ workspace: created.workspace }, 201);
     }
     return json({ error: "Method not allowed." }, 405);
+  }
+  if (p[0] === "import" && p.length === 1 && request.method === "POST") {
+    const body = normalizeProjectImport(
+      await readJsonLimited(request, 4 * 1024 * 1024),
+    );
+    const created = await createWorkspaceRecord(env, account.uid, cid, body);
+    if (created.error) return created.error;
+    const files = [];
+    try {
+      for (const file of body.files) {
+        files.push(
+          await createWorkspaceFile(
+            env,
+            account.uid,
+            created.workspace.id,
+            file,
+          ),
+        );
+      }
+    } catch (error) {
+      await deleteWorkspaceContents(
+        env,
+        account.uid,
+        cid,
+        created.workspace.id,
+      );
+      throw error;
+    }
+    return json(
+      {
+        workspace: created.workspace,
+        files,
+        total_bytes: body.total_bytes,
+      },
+      201,
+    );
   }
   const wid = p[0];
   if (!validId(wid)) return json({ error: "Invalid workspace id." }, 400);
@@ -232,20 +311,13 @@ export async function handleNativeBuild(request, env, account) {
         return json({ files: await workspaceFiles(env, account.uid, wid) });
       if (request.method === "POST") {
         const b = await readJsonLimited(request, 1024 * 1024),
-          path = clean(b.path || b.name, 500);
+          path = normalizeWorkspacePath(b.path || b.name);
         if (!path) return json({ error: "File path is required." }, 400);
-        const x = await callStore(env, account.uid, "/files", {
-          method: "POST",
-          body: JSON.stringify({
-            name: path,
-            parent_id: wid,
-            content: String(b.content ?? ""),
-            mime: clean(b.mime || "text/plain", 100),
-            meta: { workspace_id: wid, kind: "source" },
-          }),
+        const file = await createWorkspaceFile(env, account.uid, wid, {
+          ...b,
+          path,
         });
-        if (!x.r.ok) return json(x.data, x.r.status);
-        return json({ file: { ...x.data.file, path } }, 201);
+        return json({ file }, 201);
       }
       return json({ error: "Method not allowed." }, 405);
     }
@@ -256,12 +328,17 @@ export async function handleNativeBuild(request, env, account) {
       return json({ error: "File not found." }, 404);
     if (request.method === "GET")
       return json({ file: { ...x.data.file, path: x.data.file.name } });
+    if (
+      ["PUT", "DELETE"].includes(request.method) &&
+      x.data.file.meta?.kind === "artifact"
+    )
+      return json({ error: "Execution artifacts are read-only." }, 409);
     if (request.method === "PUT") {
       const b = await readJsonLimited(request, 1024 * 1024),
         up = await callStore(env, account.uid, `/files/${fid}`, {
           method: "PUT",
           body: JSON.stringify({
-            name: clean(b.path || b.name || x.data.file.name, 500),
+            name: normalizeWorkspacePath(b.path || b.name || x.data.file.name),
             parent_id: wid,
             content:
               b.content === undefined ? x.data.file.body : String(b.content),
@@ -398,8 +475,52 @@ export async function handleNativeBuild(request, env, account) {
         "Capture logs and artifacts",
       ],
       execution_available: !!env.UNIT369_SANDBOX,
-      execution_endpoint: "/api/native/code/plan",
+      execution_endpoint: `/api/native/build/${wid}/executions/plan`,
     });
+  }
+  if (p[1] === "executions" && p.length === 3) {
+    const sourceFiles = async () =>
+      (await readFiles(env, account.uid, wid)).filter(
+        (file) => file.meta?.kind !== "artifact",
+      );
+    const persistArtifact = async (artifact) => {
+      const file = await createWorkspaceFile(
+        env,
+        account.uid,
+        wid,
+        {
+          path: `artifacts/${artifact.run_id}/${artifact.path}`,
+          content: artifact.content,
+          mime: artifact.mime,
+          meta: {
+            encoding: artifact.encoding,
+            run_id: artifact.run_id,
+            original_path: artifact.path,
+          },
+        },
+        "artifact",
+      );
+      return {
+        id: file.id,
+        path: artifact.path,
+        mime: artifact.mime,
+        size: artifact.size,
+        encoding: artifact.encoding,
+      };
+    };
+    return handleProjectExecution(
+      request,
+      env,
+      account,
+      runtime,
+      {
+        workspaceName: rec.name || rec.data?.name || "Workspace",
+        readSourceFiles: sourceFiles,
+        persistArtifact,
+      },
+      wid,
+      p[2],
+    );
   }
   return json({ error: "Build route not found." }, 404);
 }

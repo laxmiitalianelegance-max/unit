@@ -52,7 +52,7 @@ export const NATIVE_CAPABILITIES = Object.freeze({
   },
   build: {
     name: "Build",
-    version: 3,
+    version: 4,
     operations: [
       "workspace.create",
       "workspace.read",
@@ -69,6 +69,11 @@ export const NATIVE_CAPABILITIES = Object.freeze({
       "snapshot.list",
       "diff.read",
       "test.plan",
+      "project.import",
+      "project.execution.capabilities",
+      "project.execution.plan",
+      "project.execution.confirm",
+      "project.execution.cancel",
     ],
     native: true,
   },
@@ -404,7 +409,7 @@ export async function handleNativeCapabilities(
     if (/^\/api\/native\/automations(\/|$)/.test(url.pathname))
       return handleNativeAutomation(request, env, account);
     if (/^\/api\/native\/build(\/|$)/.test(url.pathname))
-      return handleNativeBuild(request, env, account);
+      return handleNativeBuild(request, env, account, runtime);
     if (/^\/api\/native\/projects(\/|$)/.test(url.pathname))
       return handleNativeWork(request, env, account);
     if (/^\/api\/native\/files(\/|$)/.test(url.pathname))
