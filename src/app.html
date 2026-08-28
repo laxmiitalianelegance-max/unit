@@ -1051,7 +1051,7 @@
             type="file"
             multiple
             hidden
-            accept=".py,.js,.mjs,.cjs,.json,.md,.txt,.html,.css,.yaml,.yml,.toml,.csv,.tsv"
+            accept=".py,.js,.mjs,.cjs,.json,.md,.txt,.html,.css,.yaml,.yml,.toml,.csv,.tsv,.xlsx"
           />
           <button
             type="button"
@@ -1443,7 +1443,7 @@
           CUR = "unit369-current-v1",
           LANG = "u369-lang-all-v4",
           PREF = "unit369-settings-v2",
-          CACHE = "unit369-ui-i18n-v10-";
+          CACHE = "unit369-ui-i18n-v11-";
         const RTL = new Set(["ar", "fa", "he", "ur"]);
         const LANGS = [
           ["auto", "Automatic"],
@@ -1638,7 +1638,7 @@
             "The connection ended before the project result was confirmed. Unit369 will not run it again automatically.",
           dataFilesReady: "Data files selected",
           dataFileLimits:
-            "Data Lab accepts up to 5 UTF-8 CSV, TSV or JSON files, 1 MiB each and 3 MiB total.",
+            "Data Lab accepts up to 5 CSV, TSV, JSON or XLSX files, 1 MiB each and 3 MiB total.",
           dataApprovalTitle: "Unit369 Data Lab",
           dataApprovalRequired:
             "Review the dataset and operation. Analysis starts only after you approve it.",
@@ -1668,9 +1668,23 @@
           dataEmptyRowsRemoved: "Empty rows removed",
           dataFormulasNeutralized: "Spreadsheet formulas neutralized",
           dataChart: "Generated chart",
+          dataPrediction: "Prediction evaluation",
+          dataTarget: "Target column",
+          dataPredictionType: "Prediction type",
+          dataModel: "Model",
+          dataBaseline: "Baseline",
+          dataMetrics: "Test-set metrics",
+          dataFeatures: "Features used",
+          dataTrainRows: "Training rows",
+          dataTestRows: "Test rows",
+          dataExploratoryNote:
+            "Exploratory result only. Verify data quality and domain fit before using it for decisions.",
+          dataPredictionTargetRequired:
+            'Name the target column in quotes, for example: Predict "sales".',
           dataOperationProfile: "Profile and summarize",
           dataOperationClean: "Clean and export",
           dataOperationChart: "Create a chart",
+          dataOperationPredict: "Evaluate a prediction",
         };
         let D = { ...BASE },
           integrations = {},
@@ -2001,6 +2015,16 @@
             return Number.isFinite(value) ? value : null;
           return boundedText(value, 500);
         }
+        function compactDataMetrics(value) {
+          return Object.fromEntries(
+            Object.entries(value && typeof value === "object" ? value : {})
+              .slice(0, 12)
+              .map(([key, entry]) => [
+                boundedText(key, 80),
+                compactDataValue(entry),
+              ]),
+          );
+        }
         function compactDataReport(value) {
           if (!value || typeof value !== "object") return null;
           return {
@@ -2096,6 +2120,56 @@
                         artifact: boundedText(file.chart.artifact, 240),
                       }
                     : null,
+                prediction:
+                  file?.prediction && typeof file.prediction === "object"
+                    ? {
+                        target_column: boundedText(
+                          file.prediction.target_column,
+                          160,
+                        ),
+                        task_type: boundedText(file.prediction.task_type, 32),
+                        model: boundedText(file.prediction.model, 80),
+                        train_rows: Math.max(
+                          0,
+                          Number(file.prediction.train_rows) || 0,
+                        ),
+                        test_rows: Math.max(
+                          0,
+                          Number(file.prediction.test_rows) || 0,
+                        ),
+                        features_used: (Array.isArray(
+                          file.prediction.features_used,
+                        )
+                          ? file.prediction.features_used
+                          : []
+                        )
+                          .slice(0, 20)
+                          .map((item) => boundedText(item, 160)),
+                        features_dropped: (Array.isArray(
+                          file.prediction.features_dropped,
+                        )
+                          ? file.prediction.features_dropped
+                          : []
+                        )
+                          .slice(0, 50)
+                          .map((item) => boundedText(item, 160)),
+                        metrics: compactDataMetrics(file.prediction.metrics),
+                        baseline: compactDataMetrics(file.prediction.baseline),
+                        evaluation_artifact: boundedText(
+                          file.prediction.evaluation_artifact,
+                          240,
+                        ),
+                        exploratory: file.prediction.exploratory === true,
+                        model_persisted:
+                          file.prediction.model_persisted === true,
+                        warnings: (Array.isArray(file.prediction.warnings)
+                          ? file.prediction.warnings
+                          : []
+                        )
+                          .slice(0, 10)
+                          .map((item) => boundedText(item, 500)),
+                      }
+                    : null,
               })),
           };
         }
@@ -2119,6 +2193,7 @@
             dataset_id: boundedText(value.dataset_id, 180),
             dataset_name: boundedText(value.dataset_name, 180),
             operation: boundedText(value.operation, 24),
+            target_column: boundedText(value.target_column, 160),
             timeout_ms: Math.max(0, Number(value.timeout_ms) || 0),
             manifest_hash: boundedText(value.manifest_hash, 64),
             file_count: Math.max(0, Number(value.file_count) || 0),
@@ -2375,7 +2450,7 @@
             files.length > 0 &&
             files.every(
               (file) =>
-                [".csv", ".tsv", ".json"].includes(
+                [".csv", ".tsv", ".json", ".xlsx"].includes(
                   attachmentExtension(file.path || file.name),
                 ) &&
                 !blocked.has(
@@ -2409,12 +2484,14 @@
           if (!dataAttachmentNames(files)) return false;
           if (
             files.some((file) =>
-              [".csv", ".tsv"].includes(attachmentExtension(file.path)),
+              [".csv", ".tsv", ".xlsx"].includes(
+                attachmentExtension(file.path),
+              ),
             )
           )
             return true;
           if (
-            /\b(data|dataset|table|analy|analiz|profile|summary|clean|chart|graph|plot|podac|tabel|pregled|očist|ocist|grafik)\w*/i.test(
+            /\b(data|dataset|table|analy|analiz|profile|summary|clean|chart|graph|plot|predict|forecast|predvid|prognoz|model|podac|tabel|pregled|očist|ocist|grafik)\w*/i.test(
               String(message || ""),
             )
           )
@@ -2423,6 +2500,12 @@
         }
         function inferDataOperation(value) {
           const message = String(value || "").toLowerCase();
+          if (
+            /\b(predict|prediction|forecast|predvid|prognoz|model)\w*/i.test(
+              message,
+            )
+          )
+            return "predict";
           if (
             /\b(clean|cleanup|deduplic|očist|ocist|duplik|sredi)\w*/i.test(
               message,
@@ -2433,12 +2516,24 @@
             return "chart";
           return "profile";
         }
+        function inferPredictionTarget(value) {
+          const message = String(value || ""),
+            explicit = message.match(
+              /(?:target(?:\s+column)?|ciljn(?:a|u)\s+kolon(?:a|u)|kolon(?:a|u)|column)\s*(?:is|je|:|=)?\s*["'`]([^"'`\r\n]{1,160})["'`]/i,
+            );
+          if (explicit) return boundedText(explicit[1], 160);
+          const quoted = message.match(
+            /\b(?:predict|forecast|predvid\w*|prognoz\w*)[^"'`\r\n]{0,40}["'`]([^"'`\r\n]{1,160})["'`]/i,
+          );
+          return quoted ? boundedText(quoted[1], 160) : "";
+        }
         function dataOperationLabel(value) {
           return (
             {
               profile: t("dataOperationProfile"),
               clean: t("dataOperationClean"),
               chart: t("dataOperationChart"),
+              predict: t("dataOperationPredict"),
             }[value] ||
             value ||
             "—"
@@ -2466,6 +2561,16 @@
             renderProjectAttachments();
           };
         }
+        function arrayBufferToBase64(buffer) {
+          const bytes = new Uint8Array(buffer);
+          let binary = "";
+          for (let offset = 0; offset < bytes.length; offset += 8_192) {
+            binary += String.fromCharCode(
+              ...bytes.subarray(offset, offset + 8_192),
+            );
+          }
+          return btoa(binary);
+        }
         async function loadProjectAttachments(fileList) {
           const files = Array.from(fileList || []);
           const status = $("#u369-chat-status");
@@ -2490,12 +2595,21 @@
               const folded = path.toLowerCase();
               if (!path || seen.has(folded)) throw new Error(limitMessage);
               seen.add(folded);
-              const content = await file.text();
-              if (content.includes("\u0000")) throw new Error(limitMessage);
+              const xlsx = attachmentExtension(path) === ".xlsx",
+                content = xlsx
+                  ? arrayBufferToBase64(await file.arrayBuffer())
+                  : await file.text();
+              if (!xlsx && content.includes("\u0000"))
+                throw new Error(limitMessage);
               loaded.push({
                 path,
                 content,
-                mime: file.type || "text/plain",
+                encoding: xlsx ? "base64" : "utf-8",
+                mime:
+                  file.type ||
+                  (xlsx
+                    ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    : "text/plain"),
                 size: file.size,
               });
             }
@@ -2841,6 +2955,32 @@
             )
             .join("")}</tbody></table></div>`;
         }
+        function renderDataPrediction(file) {
+          const prediction = file?.prediction;
+          if (!prediction) return "";
+          const metricKeys = [
+              ...new Set([
+                ...Object.keys(prediction.metrics || {}),
+                ...Object.keys(prediction.baseline || {}),
+              ]),
+            ].slice(0, 12),
+            metricValue = (value) =>
+              typeof value === "number" && Number.isFinite(value)
+                ? Math.round(value * 10_000) / 10_000
+                : (value ?? "—"),
+            metrics = metricKeys.length
+              ? `<div class="u369-code-output-title">${esc(t("dataMetrics"))}</div><div class="u369-data-table-wrap"><table class="u369-data-table"><thead><tr><th>${esc(t("name"))}</th><th>${esc(t("dataModel"))}</th><th>${esc(t("dataBaseline"))}</th></tr></thead><tbody>${metricKeys
+                  .map(
+                    (key) =>
+                      `<tr><td>${esc(key.replaceAll("_", " "))}</td><td>${esc(metricValue(prediction.metrics?.[key]))}</td><td>${esc(metricValue(prediction.baseline?.[key]))}</td></tr>`,
+                  )
+                  .join("")}</tbody></table></div>`
+              : "",
+            features = prediction.features_used?.length
+              ? `<div class="u369-code-note">${esc(t("dataFeatures"))}: ${prediction.features_used.map(esc).join(" · ")}</div>`
+              : "";
+          return `<div class="u369-code-output-title">${esc(t("dataPrediction"))}</div><div class="u369-code-meta"><div class="u369-code-meta-row"><span class="u369-code-meta-label">${esc(t("dataTarget"))}</span><code class="u369-code-meta-value">${esc(prediction.target_column)}</code></div><div class="u369-code-meta-row"><span class="u369-code-meta-label">${esc(t("dataPredictionType"))}</span><code class="u369-code-meta-value">${esc(prediction.task_type)}</code></div><div class="u369-code-meta-row"><span class="u369-code-meta-label">${esc(t("dataModel"))}</span><code class="u369-code-meta-value">${esc(prediction.model)}</code></div><div class="u369-code-meta-row"><span class="u369-code-meta-label">${esc(t("dataTrainRows"))}</span><code class="u369-code-meta-value">${esc(prediction.train_rows)}</code></div><div class="u369-code-meta-row"><span class="u369-code-meta-label">${esc(t("dataTestRows"))}</span><code class="u369-code-meta-value">${esc(prediction.test_rows)}</code></div></div>${metrics}${features}<div class="u369-code-note">${esc(t("dataExploratoryNote"))}</div>`;
+        }
         function renderDataOutput(tool, turnIndex) {
           const blocks = [],
             report = tool?.report;
@@ -2852,7 +2992,7 @@
                 ? `<div class="u369-code-note">${esc(t("dataChart"))} · ${esc(file.chart.type)}${file.chart.x_column ? ` · ${esc(file.chart.x_column)}` : ""}${file.chart.y_column ? ` → ${esc(file.chart.y_column)}` : ""}</div>`
                 : "";
             blocks.push(
-              `<div class="u369-data-file"><div class="u369-code-output-title">${esc(file.path || `${t("dataDataset")} ${fileIndex + 1}`)}</div><div class="u369-code-meta"><div class="u369-code-meta-row"><span class="u369-code-meta-label">${esc(t("dataRows"))}</span><code class="u369-code-meta-value">${esc(file.row_count)}</code></div><div class="u369-code-meta-row"><span class="u369-code-meta-label">${esc(t("dataColumns"))}</span><code class="u369-code-meta-value">${esc(file.column_count)}</code></div></div>${cleaning}${chart}${renderDataPreview(file)}${renderDataStatistics(file)}</div>`,
+              `<div class="u369-data-file"><div class="u369-code-output-title">${esc(file.path || `${t("dataDataset")} ${fileIndex + 1}`)}</div><div class="u369-code-meta"><div class="u369-code-meta-row"><span class="u369-code-meta-label">${esc(t("dataRows"))}</span><code class="u369-code-meta-value">${esc(file.row_count)}</code></div><div class="u369-code-meta-row"><span class="u369-code-meta-label">${esc(t("dataColumns"))}</span><code class="u369-code-meta-value">${esc(file.column_count)}</code></div></div>${cleaning}${chart}${renderDataPrediction(file)}${renderDataPreview(file)}${renderDataStatistics(file)}</div>`,
             );
           }
           if (report?.warnings?.length)
@@ -2918,6 +3058,9 @@
             meta = [
               [t("dataDataset"), tool.dataset_name || "—"],
               [t("dataOperation"), dataOperationLabel(tool.operation)],
+              ...(tool.operation === "predict"
+                ? [[t("dataTarget"), tool.target_column || "—"]]
+                : []),
               [t("projectFiles"), String(tool.file_count || 0)],
               [t("projectSize"), formatBytes(tool.total_bytes)],
               [t("codeFingerprint"), shortHash, tool.manifest_hash],
@@ -3409,7 +3552,12 @@
           status.textContent = turn.final;
         }
         async function planDataLab(session, turn, files, message) {
-          const status = $("#u369-chat-status");
+          const status = $("#u369-chat-status"),
+            operation = inferDataOperation(message),
+            targetColumn =
+              operation === "predict" ? inferPredictionTarget(message) : "";
+          if (operation === "predict" && !targetColumn)
+            throw new Error(t("dataPredictionTargetRequired"));
           status.textContent = t("dataImporting");
           const imported = await callDataLabApi(
             "import",
@@ -3423,6 +3571,7 @@
                 path: file.path,
                 content: file.content,
                 mime: file.mime,
+                encoding: file.encoding || "utf-8",
               })),
             },
             45_000,
@@ -3434,7 +3583,8 @@
             status: "running",
             dataset_id: String(dataset.id),
             dataset_name: String(dataset.name || "Dataset"),
-            operation: inferDataOperation(message),
+            operation,
+            target_column: targetColumn,
             file_count: Number(imported.files?.length) || files.length,
             total_bytes: Number(imported.total_bytes) || 0,
             files: (imported.files || files).map((file) => ({
@@ -3447,8 +3597,9 @@
           const data = await callDataLabApi(
             `${encodeURIComponent(dataset.id)}/executions/plan`,
             {
-              operation: inferDataOperation(message),
+              operation,
               message: boundedText(message, 1000),
+              target_column: targetColumn,
             },
             25_000,
           );
@@ -3473,6 +3624,7 @@
               execution.dataset_name || dataset.name || "Dataset",
             ),
             operation: execution.operation,
+            target_column: execution.options?.target_column || "",
             timeout_ms: execution.timeout_ms,
             manifest_hash: execution.manifest_hash,
             file_count: execution.file_count,

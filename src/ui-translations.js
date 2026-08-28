@@ -138,7 +138,7 @@ export const UI_BASE = Object.freeze({
     "The connection ended before the project result was confirmed. Unit369 will not run it again automatically.",
   dataFilesReady: "Data files selected",
   dataFileLimits:
-    "Data Lab accepts up to 5 UTF-8 CSV, TSV or JSON files, 1 MiB each and 3 MiB total.",
+    "Data Lab accepts up to 5 CSV, TSV, JSON or XLSX files, 1 MiB each and 3 MiB total.",
   dataApprovalTitle: "Unit369 Data Lab",
   dataApprovalRequired:
     "Review the dataset and operation. Analysis starts only after you approve it.",
@@ -167,9 +167,23 @@ export const UI_BASE = Object.freeze({
   dataEmptyRowsRemoved: "Empty rows removed",
   dataFormulasNeutralized: "Spreadsheet formulas neutralized",
   dataChart: "Generated chart",
+  dataPrediction: "Prediction evaluation",
+  dataTarget: "Target column",
+  dataPredictionType: "Prediction type",
+  dataModel: "Model",
+  dataBaseline: "Baseline",
+  dataMetrics: "Test-set metrics",
+  dataFeatures: "Features used",
+  dataTrainRows: "Training rows",
+  dataTestRows: "Test rows",
+  dataExploratoryNote:
+    "Exploratory result only. Verify data quality and domain fit before using it for decisions.",
+  dataPredictionTargetRequired:
+    'Name the target column in quotes, for example: Predict "sales".',
   dataOperationProfile: "Profile and summarize",
   dataOperationClean: "Clean and export",
   dataOperationChart: "Create a chart",
+  dataOperationPredict: "Evaluate a prediction",
 });
 
 const UI_SR = Object.freeze({
@@ -314,7 +328,7 @@ const UI_SR = Object.freeze({
     "Veza je prekinuta pre potvrde rezultata projekta. Unit369 ga neće automatski ponovo pokrenuti.",
   dataFilesReady: "Fajlovi sa podacima su izabrani",
   dataFileLimits:
-    "Data Lab prihvata najviše 5 UTF-8 CSV, TSV ili JSON fajlova, do 1 MiB po fajlu i 3 MiB ukupno.",
+    "Data Lab prihvata najviše 5 CSV, TSV, JSON ili XLSX fajlova, do 1 MiB po fajlu i 3 MiB ukupno.",
   dataApprovalTitle: "Unit369 Data Lab",
   dataApprovalRequired:
     "Pregledajte skup podataka i operaciju. Analiza počinje tek kada je odobrite.",
@@ -343,9 +357,23 @@ const UI_SR = Object.freeze({
   dataEmptyRowsRemoved: "Uklonjeni prazni redovi",
   dataFormulasNeutralized: "Neutralisane formule u tabeli",
   dataChart: "Napravljen grafikon",
+  dataPrediction: "Provera predikcije",
+  dataTarget: "Ciljna kolona",
+  dataPredictionType: "Vrsta predikcije",
+  dataModel: "Model",
+  dataBaseline: "Osnovno poređenje",
+  dataMetrics: "Metrike na test skupu",
+  dataFeatures: "Korišćene osobine",
+  dataTrainRows: "Redovi za obuku",
+  dataTestRows: "Redovi za test",
+  dataExploratoryNote:
+    "Rezultat je istraživački. Proverite kvalitet podataka i prikladnost za oblast pre donošenja odluka.",
+  dataPredictionTargetRequired:
+    'Navedite ciljnu kolonu u navodnicima, na primer: Predvidi "prodaja".',
   dataOperationProfile: "Profil i sažetak",
   dataOperationClean: "Čišćenje i izvoz",
   dataOperationChart: "Pravljenje grafikona",
+  dataOperationPredict: "Provera predikcije",
 });
 
 export function normalizeLanguage(value) {

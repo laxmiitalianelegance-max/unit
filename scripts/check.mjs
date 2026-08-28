@@ -63,7 +63,7 @@ for (const match of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)) {
 }
 assert.ok(html.includes('data-mode="auto"'), "Auto fallback mode is missing");
 assert.ok(
-  html.includes("unit369-ui-i18n-v10-"),
+  html.includes("unit369-ui-i18n-v11-"),
   "Translation cache version is stale",
 );
 assert.ok(
@@ -93,8 +93,18 @@ assert.ok(
     html.includes("data-data-approve") &&
     html.includes("data-data-cancel") &&
     html.includes("data-data-download") &&
-    html.includes("compactDataTool"),
+    html.includes("compactDataTool") &&
+    html.includes("inferPredictionTarget") &&
+    html.includes(
+      'accept=".py,.js,.mjs,.cjs,.json,.md,.txt,.html,.css,.yaml,.yml,.toml,.csv,.tsv,.xlsx"',
+    ),
   "Data Lab import, approval, result or artifact UI is missing",
+);
+const dockerfile = readFileSync(join(root, "Dockerfile"), "utf8");
+assert.ok(
+  dockerfile.includes("openpyxl==3.1.5") &&
+    dockerfile.includes("defusedxml==0.7.1"),
+  "The XLSX parser dependencies are not pinned safely",
 );
 assert.ok(!html.includes(".jpg"), "The UI still references legacy JPG icons");
 assert.ok(

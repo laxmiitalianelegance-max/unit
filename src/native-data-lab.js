@@ -28,8 +28,10 @@ const MAX_ARTIFACT_FILES = 8;
 const MAX_ARTIFACT_BYTES = 2 * 1024 * 1024;
 const MAX_ARTIFACT_TOTAL_BYTES = 4 * 1024 * 1024;
 const MAX_PREVIEW_IMAGE_CHARS = 384 * 1024;
-const DATA_EXTENSIONS = new Set([".csv", ".tsv", ".json"]);
-const OPERATIONS = new Set(["profile", "clean", "chart"]);
+const DATA_EXTENSIONS = new Set([".csv", ".tsv", ".json", ".xlsx"]);
+const TEXT_DATA_EXTENSIONS = new Set([".csv", ".tsv", ".json"]);
+const OPERATIONS = new Set(["profile", "clean", "chart", "predict"]);
+const MAX_XLSX_UNCOMPRESSED_BYTES = 24 * 1024 * 1024;
 const DATA_WINDOWS = Object.freeze([
   { window_ms: 60 * 60 * 1000, limit: 10 },
   { window_ms: 24 * 60 * 60 * 1000, limit: 40 },
@@ -45,6 +47,7 @@ export const DATA_LAB_PYTHON_SOURCE = String.raw`import json
 import math
 import os
 import re
+import zipfile
 from pathlib import Path
 
 import matplotlib
@@ -52,11 +55,33 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from sklearn.compose import ColumnTransformer
+from sklearn.dummy import DummyClassifier, DummyRegressor
+from sklearn.impute import SimpleImputer
+from sklearn.linear_model import LogisticRegression, Ridge
+from sklearn.metrics import (
+    accuracy_score,
+    balanced_accuracy_score,
+    f1_score,
+    mean_absolute_error,
+    r2_score,
+    root_mean_squared_error,
+)
+from sklearn.model_selection import train_test_split
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
 MAX_ROWS = 100000
 MAX_COLUMNS = 100
 MAX_PREVIEW_ROWS = 10
 MAX_TOP_VALUES = 5
+MAX_XLSX_MEMBERS = 1000
+MAX_XLSX_MEMBER_BYTES = 16 * 1024 * 1024
+MAX_XLSX_UNCOMPRESSED_BYTES = 24 * 1024 * 1024
+MAX_MODEL_ROWS = 5000
+MAX_MODEL_FEATURES = 20
+MAX_MODEL_CLASSES = 20
+MIN_MODEL_ROWS = 30
 
 INPUT_DIR = Path(os.environ["UNIT369_DATA_INPUT_DIR"])
 OUTPUT_DIR = Path(os.environ["UNIT369_DATA_OUTPUT_DIR"])
@@ -91,6 +116,32 @@ def safe_records(frame):
     ]
 
 
+def validate_xlsx(path):
+    if not zipfile.is_zipfile(path):
+        raise ValueError("XLSX input is not a valid Office Open XML archive.")
+    with zipfile.ZipFile(path) as archive:
+        members = archive.infolist()
+        names = {member.filename for member in members}
+        if len(members) > MAX_XLSX_MEMBERS:
+            raise ValueError("XLSX contains too many archive members.")
+        if "[Content_Types].xml" not in names or "xl/workbook.xml" not in names:
+            raise ValueError("XLSX workbook metadata is missing.")
+        total = 0
+        for member in members:
+            name = member.filename.replace("\\", "/")
+            if name.startswith("/") or ".." in Path(name).parts:
+                raise ValueError("XLSX contains an unsafe archive path.")
+            if member.flag_bits & 0x1:
+                raise ValueError("Encrypted XLSX workbooks are not supported.")
+            if member.file_size > MAX_XLSX_MEMBER_BYTES:
+                raise ValueError("XLSX contains an oversized archive member.")
+            total += int(member.file_size)
+            if total > MAX_XLSX_UNCOMPRESSED_BYTES:
+                raise ValueError("XLSX expands beyond the 24 MiB safety limit.")
+            if member.compress_size > 0 and member.file_size > 200 * member.compress_size:
+                raise ValueError("XLSX compression ratio exceeds the safety limit.")
+
+
 def load_frame(path):
     suffix = path.suffix.lower()
     truncated_rows = False
@@ -113,6 +164,14 @@ def load_frame(path):
             raise ValueError("JSON records must be objects.")
         truncated_rows = len(value) > MAX_ROWS
         frame = pd.DataFrame(value[:MAX_ROWS])
+    elif suffix == ".xlsx":
+        validate_xlsx(path)
+        frame = pd.read_excel(
+            path,
+            sheet_name=0,
+            engine="openpyxl",
+            nrows=MAX_ROWS + 1,
+        )
     else:
         raise ValueError("Unsupported data format.")
     if len(frame.index) > MAX_ROWS:
@@ -263,13 +322,197 @@ def choose_chart(frame, options, output_path):
     }
 
 
+def prediction_task(target):
+    unique = int(target.nunique(dropna=True))
+    if pd.api.types.is_bool_dtype(target):
+        return "classification"
+    if pd.api.types.is_numeric_dtype(target):
+        threshold = min(12, max(2, int(math.sqrt(max(1, len(target.index))))))
+        return "classification" if unique <= threshold and unique / max(1, len(target.index)) <= 0.2 else "regression"
+    return "classification"
+
+
+def spreadsheet_safe_scalar(value):
+    if isinstance(value, str) and value.lstrip().startswith(("=", "+", "-", "@")):
+        return "'" + value
+    return value
+
+
+def build_prediction(frame, options, output_path):
+    target_name = str(options.get("target_column", ""))[:160]
+    if not target_name or target_name not in frame.columns:
+        raise ValueError("The approved prediction target column was not found.")
+
+    working = frame.dropna(subset=[target_name]).copy()
+    if len(working.index) < MIN_MODEL_ROWS:
+        raise ValueError("Prediction requires at least 30 rows with a target value.")
+    if len(working.index) > MAX_MODEL_ROWS:
+        working = working.sample(n=MAX_MODEL_ROWS, random_state=369).sort_index()
+
+    target = working[target_name]
+    features = working.drop(columns=[target_name])
+    warnings = [
+        "Exploratory model only: evaluate domain fit and data quality before using predictions for decisions."
+    ]
+    dropped = []
+    for column in list(features.columns):
+        series = features[column]
+        if series.isna().all():
+            dropped.append(str(column))
+            features = features.drop(columns=[column])
+            continue
+        if not pd.api.types.is_numeric_dtype(series):
+            unique = int(series.nunique(dropna=True))
+            if unique > 50 and unique / max(1, len(series.index)) > 0.5:
+                dropped.append(str(column))
+                features = features.drop(columns=[column])
+    if len(features.columns) > MAX_MODEL_FEATURES:
+        dropped.extend(str(column) for column in features.columns[MAX_MODEL_FEATURES:])
+        features = features.iloc[:, :MAX_MODEL_FEATURES].copy()
+        warnings.append("Prediction was limited to the first 20 usable feature columns.")
+    if not len(features.columns):
+        raise ValueError("Prediction needs at least one usable feature column.")
+
+    numeric = list(features.select_dtypes(include=[np.number]).columns)
+    categorical = [column for column in features.columns if column not in numeric]
+    if numeric:
+        features[numeric] = features[numeric].replace([np.inf, -np.inf], np.nan)
+    for column in categorical:
+        features[column] = features[column].map(
+            lambda value: np.nan if pd.isna(value) else str(value)[:200]
+        )
+
+    transformers = []
+    if numeric:
+        transformers.append((
+            "numeric",
+            Pipeline([
+                ("imputer", SimpleImputer(strategy="median")),
+                ("scale", StandardScaler()),
+            ]),
+            numeric,
+        ))
+    if categorical:
+        transformers.append((
+            "categorical",
+            Pipeline([
+                ("imputer", SimpleImputer(strategy="most_frequent")),
+                ("onehot", OneHotEncoder(handle_unknown="ignore", max_categories=20)),
+            ]),
+            categorical,
+        ))
+    preprocessor = ColumnTransformer(transformers=transformers, remainder="drop")
+    task = prediction_task(target)
+    indices = np.asarray(working.index)
+
+    if task == "classification":
+        target = target.map(lambda value: str(value)[:160])
+        counts = target.value_counts()
+        if len(counts.index) < 2:
+            raise ValueError("Classification target must contain at least two classes.")
+        if len(counts.index) > MAX_MODEL_CLASSES:
+            raise ValueError("Classification target may contain at most 20 classes.")
+        if int(counts.min()) < 2:
+            raise ValueError("Every classification class needs at least two rows.")
+        test_rows = max(int(math.ceil(len(target.index) * 0.2)), len(counts.index))
+        if len(target.index) - test_rows < len(counts.index):
+            raise ValueError("There are not enough rows for a stratified train/test split.")
+        split = train_test_split(
+            features,
+            target,
+            indices,
+            test_size=test_rows,
+            random_state=369,
+            stratify=target,
+        )
+        x_train, x_test, y_train, y_test, _, index_test = split
+        model = Pipeline([
+            ("prepare", preprocessor),
+            ("model", LogisticRegression(max_iter=300, class_weight="balanced")),
+        ])
+        baseline = DummyClassifier(strategy="most_frequent")
+        model_name = "logistic-regression"
+    else:
+        numeric_target = pd.to_numeric(target, errors="coerce")
+        valid = numeric_target.notna()
+        features = features.loc[valid].copy()
+        target = numeric_target.loc[valid]
+        indices = indices[valid.to_numpy()]
+        if len(target.index) < MIN_MODEL_ROWS or int(target.nunique()) < 2:
+            raise ValueError("Regression target needs at least 30 numeric rows and two distinct values.")
+        split = train_test_split(
+            features,
+            target,
+            indices,
+            test_size=0.2,
+            random_state=369,
+        )
+        x_train, x_test, y_train, y_test, _, index_test = split
+        model = Pipeline([
+            ("prepare", preprocessor),
+            ("model", Ridge(alpha=1.0, solver="lsqr")),
+        ])
+        baseline = DummyRegressor(strategy="median")
+        model_name = "ridge-regression"
+
+    model.fit(x_train, y_train)
+    predicted = model.predict(x_test)
+    baseline.fit(np.zeros((len(y_train.index), 1)), y_train)
+    baseline_predicted = baseline.predict(np.zeros((len(y_test.index), 1)))
+
+    if task == "classification":
+        metrics = {
+            "accuracy": scalar(accuracy_score(y_test, predicted)),
+            "balanced_accuracy": scalar(balanced_accuracy_score(y_test, predicted)),
+            "weighted_f1": scalar(f1_score(y_test, predicted, average="weighted", zero_division=0)),
+        }
+        baseline_metrics = {
+            "accuracy": scalar(accuracy_score(y_test, baseline_predicted)),
+            "balanced_accuracy": scalar(balanced_accuracy_score(y_test, baseline_predicted)),
+        }
+    else:
+        metrics = {
+            "mae": scalar(mean_absolute_error(y_test, predicted)),
+            "rmse": scalar(root_mean_squared_error(y_test, predicted)),
+            "r2": scalar(r2_score(y_test, predicted)),
+        }
+        baseline_metrics = {
+            "mae": scalar(mean_absolute_error(y_test, baseline_predicted)),
+            "rmse": scalar(root_mean_squared_error(y_test, baseline_predicted)),
+        }
+
+    evaluation = pd.DataFrame({
+        "row_number": [int(value) + 2 for value in index_test],
+        "actual": [spreadsheet_safe_scalar(value) for value in y_test],
+        "predicted": [spreadsheet_safe_scalar(value) for value in predicted],
+    })
+    evaluation.head(1000).to_csv(output_path, index=False)
+    if dropped:
+        warnings.append("High-cardinality, empty or excess feature columns were excluded.")
+    return {
+        "target_column": target_name,
+        "task_type": task,
+        "model": model_name,
+        "train_rows": int(len(y_train.index)),
+        "test_rows": int(len(y_test.index)),
+        "features_used": [str(column)[:160] for column in features.columns],
+        "features_dropped": [str(column)[:160] for column in dropped[:50]],
+        "metrics": metrics,
+        "baseline": baseline_metrics,
+        "evaluation_artifact": output_path.name,
+        "exploratory": True,
+        "model_persisted": False,
+        "warnings": warnings,
+    }
+
+
 def main():
     with CONFIG_PATH.open("r", encoding="utf-8") as source:
         config = json.load(source)
     operation = config["operation"]
     options = config.get("options", {})
     report = {
-        "version": 1,
+        "version": 2,
         "operation": operation,
         "files": [],
         "warnings": [],
@@ -296,6 +539,11 @@ def main():
             file_report["cleaned_artifact"] = output_name
         if operation == "chart" and index == 0:
             file_report["chart"] = choose_chart(frame, options, OUTPUT_DIR / "chart.png")
+        if operation == "predict" and index == 0:
+            file_report["prediction"] = build_prediction(
+                frame, options, OUTPUT_DIR / "prediction-evaluation.csv"
+            )
+            report["warnings"].extend(file_report["prediction"].get("warnings", []))
         if truncated_rows:
             report["warnings"].append(item["path"] + " was limited to 100,000 rows.")
         if truncated_columns:
@@ -318,6 +566,34 @@ function clean(value, max = 240) {
 
 function byteLength(value) {
   return new TextEncoder().encode(String(value ?? "")).byteLength;
+}
+
+function base64ByteLength(value) {
+  const content = String(value || "");
+  if (
+    !content ||
+    content.length % 4 !== 0 ||
+    !/^[A-Za-z0-9+/]*={0,2}$/.test(content) ||
+    /=/.test(content.slice(0, -2))
+  ) {
+    return -1;
+  }
+  const padding = content.endsWith("==") ? 2 : content.endsWith("=") ? 1 : 0;
+  return (content.length / 4) * 3 - padding;
+}
+
+function isXlsxSignature(value) {
+  try {
+    const prefix = atob(String(value || "").slice(0, 16));
+    return (
+      prefix.charCodeAt(0) === 0x50 &&
+      prefix.charCodeAt(1) === 0x4b &&
+      prefix.charCodeAt(2) === 0x03 &&
+      prefix.charCodeAt(3) === 0x04
+    );
+  } catch {
+    return false;
+  }
 }
 
 function extension(path) {
@@ -381,7 +657,7 @@ function normalizeDataFiles(input) {
   if (!Array.isArray(input) || !input.length) {
     throw new HttpError(
       400,
-      "At least one CSV, TSV, or JSON file is required.",
+      "At least one CSV, TSV, JSON, or XLSX file is required.",
       "data_files_required",
     );
   }
@@ -412,17 +688,46 @@ function normalizeDataFiles(input) {
       );
     }
     seen.add(folded);
-    if (
-      typeof source.content !== "string" ||
-      source.content.includes("\u0000")
-    ) {
+    if (typeof source.content !== "string") {
       throw new HttpError(
         415,
-        `Data files must contain UTF-8 text: ${path}`,
-        "binary_data_file",
+        `Invalid Data Lab content: ${path}`,
+        "invalid_data_content",
       );
     }
-    const size = byteLength(source.content);
+    const ext = extension(path);
+    const encoding = clean(source.encoding || "utf-8", 20).toLowerCase();
+    let size;
+    if (ext === ".xlsx") {
+      if (encoding !== "base64") {
+        throw new HttpError(
+          415,
+          `${path} must use base64 binary encoding.`,
+          "xlsx_base64_required",
+        );
+      }
+      size = base64ByteLength(source.content);
+      if (size < 0 || !isXlsxSignature(source.content)) {
+        throw new HttpError(
+          415,
+          `${path} is not a valid XLSX upload.`,
+          "invalid_xlsx_file",
+        );
+      }
+    } else {
+      if (
+        !TEXT_DATA_EXTENSIONS.has(ext) ||
+        encoding !== "utf-8" ||
+        source.content.includes("\u0000")
+      ) {
+        throw new HttpError(
+          415,
+          `Data text files must contain UTF-8 text: ${path}`,
+          "binary_data_file",
+        );
+      }
+      size = byteLength(source.content);
+    }
     if (size > MAX_FILE_BYTES) {
       throw new HttpError(
         413,
@@ -441,9 +746,16 @@ function normalizeDataFiles(input) {
     const file = {
       path,
       content: source.content,
+      encoding,
       mime:
         clean(source.mime, 100) ||
-        (extension(path) === ".json" ? "application/json" : "text/csv"),
+        (ext === ".json"
+          ? "application/json"
+          : ext === ".xlsx"
+            ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            : ext === ".tsv"
+              ? "text/tab-separated-values"
+              : "text/csv"),
       size,
     };
     validateJsonRecords(file);
@@ -476,6 +788,7 @@ export async function createDataLabManifest(input) {
   const entries = await Promise.all(
     normalized.files.map(async (file) => ({
       path: file.path,
+      encoding: file.encoding,
       size: file.size,
       sha256: await sha256(file.content),
     })),
@@ -492,11 +805,25 @@ export async function createDataLabManifest(input) {
 
 function inferredOperation(message) {
   const text = String(message || "").toLowerCase();
+  if (/\b(predict|prediction|forecast|predvid|prognoz|model)\w*/i.test(text))
+    return "predict";
   if (/\b(clean|cleanup|deduplic|očist|ocist|duplik|sredi)\w*/i.test(text))
     return "clean";
   if (/\b(chart|graph|plot|grafik|grafikon|vizuel)\w*/i.test(text))
     return "chart";
   return "profile";
+}
+
+function inferredTargetColumn(message) {
+  const text = String(message || "");
+  const explicit = text.match(
+    /(?:target(?:\s+column)?|ciljn(?:a|u)\s+kolon(?:a|u)|kolon(?:a|u)|column)\s*(?:is|je|:|=)?\s*["'`]([^"'`\r\n]{1,160})["'`]/i,
+  );
+  if (explicit) return clean(explicit[1], 160);
+  const quoted = text.match(
+    /\b(?:predict|forecast|predvid\w*|prognoz\w*)[^"'`\r\n]{0,40}["'`]([^"'`\r\n]{1,160})["'`]/i,
+  );
+  return quoted ? clean(quoted[1], 160) : "";
 }
 
 export function normalizeDataLabRequest(input) {
@@ -514,7 +841,7 @@ export function normalizeDataLabRequest(input) {
   if (!OPERATIONS.has(operation)) {
     throw new HttpError(
       400,
-      "Data Lab operation must be profile, clean, or chart.",
+      "Data Lab operation must be profile, clean, chart, or predict.",
       "invalid_data_operation",
     );
   }
@@ -529,6 +856,39 @@ export function normalizeDataLabRequest(input) {
       "custom_chart_options_not_supported",
     );
   }
+  const targetColumn = clean(
+    input.target_column || inferredTargetColumn(input.message),
+    160,
+  );
+  if (operation === "predict" && !targetColumn) {
+    throw new HttpError(
+      400,
+      'Prediction requires an explicit target column, for example: Predvidi "prodaja".',
+      "prediction_target_required",
+    );
+  }
+  if (
+    operation !== "predict" &&
+    input.target_column !== undefined &&
+    String(input.target_column).trim()
+  ) {
+    throw new HttpError(
+      400,
+      "A target column is accepted only for prediction.",
+      "unexpected_prediction_target",
+    );
+  }
+  if (
+    ["prediction_type", "feature_columns", "model", "model_options"].some(
+      (key) => input[key] !== undefined,
+    )
+  ) {
+    throw new HttpError(
+      400,
+      "Custom models and model parameters are not enabled.",
+      "custom_prediction_options_not_supported",
+    );
+  }
   return {
     operation,
     timeout_ms: MAX_TIMEOUT_MS,
@@ -536,6 +896,7 @@ export function normalizeDataLabRequest(input) {
       chart_type: "auto",
       x_column: "",
       y_column: "",
+      target_column: targetColumn,
     },
   };
 }
@@ -561,6 +922,14 @@ function boundedScalar(value) {
   if (value === null || ["boolean", "number"].includes(typeof value))
     return Number.isFinite(value) || typeof value !== "number" ? value : null;
   return clean(value, 500);
+}
+
+function boundedMetrics(value) {
+  return Object.fromEntries(
+    Object.entries(value && typeof value === "object" ? value : {})
+      .slice(0, 12)
+      .map(([key, entry]) => [clean(key, 80), boundedScalar(entry)]),
+  );
 }
 
 export function normalizeDataLabReport(value) {
@@ -650,6 +1019,48 @@ export function normalizeDataLabReport(value) {
                 x_column: clean(file.chart.x_column, 160),
                 y_column: clean(file.chart.y_column, 160),
                 artifact: clean(file.chart.artifact, 240),
+              },
+            }
+          : {}),
+        ...(file?.prediction && typeof file.prediction === "object"
+          ? {
+              prediction: {
+                target_column: clean(file.prediction.target_column, 160),
+                task_type: clean(file.prediction.task_type, 32),
+                model: clean(file.prediction.model, 80),
+                train_rows: Math.max(
+                  0,
+                  Number(file.prediction.train_rows) || 0,
+                ),
+                test_rows: Math.max(0, Number(file.prediction.test_rows) || 0),
+                features_used: (Array.isArray(file.prediction.features_used)
+                  ? file.prediction.features_used
+                  : []
+                )
+                  .slice(0, 20)
+                  .map((item) => clean(item, 160)),
+                features_dropped: (Array.isArray(
+                  file.prediction.features_dropped,
+                )
+                  ? file.prediction.features_dropped
+                  : []
+                )
+                  .slice(0, 50)
+                  .map((item) => clean(item, 160)),
+                metrics: boundedMetrics(file.prediction.metrics),
+                baseline: boundedMetrics(file.prediction.baseline),
+                evaluation_artifact: clean(
+                  file.prediction.evaluation_artifact,
+                  240,
+                ),
+                exploratory: file.prediction.exploratory === true,
+                model_persisted: file.prediction.model_persisted === true,
+                warnings: (Array.isArray(file.prediction.warnings)
+                  ? file.prediction.warnings
+                  : []
+                )
+                  .slice(0, 10)
+                  .map((item) => clean(item, 500)),
               },
             }
           : {}),
@@ -790,7 +1201,7 @@ async function executeApprovedDataLab(
         directories.add(parent);
       }
       await sandbox.writeFile(absolutePath, file.content, {
-        encoding: "utf-8",
+        encoding: file.encoding === "base64" ? "base64" : "utf-8",
       });
     }
     await sandbox.writeFile(scriptPath, DATA_LAB_PYTHON_SOURCE, {
@@ -899,17 +1310,27 @@ export function dataLabCapabilities(configured = false) {
     owner_scoped: true,
     approval_required: true,
     operations: [...OPERATIONS],
-    formats: ["csv", "tsv", "json"],
+    formats: ["csv", "tsv", "json", "xlsx"],
     arbitrary_code_enabled: false,
     arbitrary_shell_enabled: false,
     secrets_forwarded: false,
     spreadsheet_formula_protection: true,
+    xlsx_archive_validation: true,
+    prediction: {
+      target_required: true,
+      custom_models_enabled: false,
+      exploratory_only: true,
+      model_persisted: false,
+    },
     limits: {
       max_files: MAX_DATA_FILES,
       max_file_bytes: MAX_FILE_BYTES,
       max_dataset_bytes: MAX_DATASET_BYTES,
       max_rows_per_file: 100_000,
       max_columns_per_file: 100,
+      max_xlsx_uncompressed_bytes: MAX_XLSX_UNCOMPRESSED_BYTES,
+      max_prediction_rows: 5_000,
+      max_prediction_features: 20,
       max_timeout_ms: MAX_TIMEOUT_MS,
       max_artifact_files: MAX_ARTIFACT_FILES,
       max_artifact_bytes: MAX_ARTIFACT_BYTES,
@@ -1002,6 +1423,7 @@ async function readInputFiles(env, uid, datasetId) {
       content: file.body || "",
       mime: file.mime || "text/plain",
       meta: file.meta || {},
+      encoding: file.meta?.encoding === "base64" ? "base64" : "utf-8",
     });
   }
   return output;
@@ -1029,6 +1451,10 @@ async function createDatasetFile(
         ...(source.meta && typeof source.meta === "object" ? source.meta : {}),
         dataset_id: datasetId,
         kind,
+        encoding:
+          source.encoding === "base64" || source.meta?.encoding === "base64"
+            ? "base64"
+            : "utf-8",
       },
     }),
   });
@@ -1127,6 +1553,13 @@ export async function handleDataLabExecution(
       const manifest = await createDataLabManifest(
         await services.readInputFiles(),
       );
+      if (action.operation === "predict" && manifest.file_count !== 1) {
+        throw new HttpError(
+          400,
+          "Prediction accepts exactly one dataset file per approved run.",
+          "prediction_single_file_required",
+        );
+      }
       const approvedAction = {
         dataset_id: datasetId,
         manifest_hash: manifest.digest,

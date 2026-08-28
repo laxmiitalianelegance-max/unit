@@ -167,7 +167,14 @@ try {
   assert.equal(dataCapabilities.status, 200);
   const dataCapabilitiesBody = await dataCapabilities.json();
   assert.equal(dataCapabilitiesBody.configured, false);
-  assert.deepEqual(dataCapabilitiesBody.formats, ["csv", "tsv", "json"]);
+  assert.deepEqual(dataCapabilitiesBody.formats, [
+    "csv",
+    "tsv",
+    "json",
+    "xlsx",
+  ]);
+  assert.ok(dataCapabilitiesBody.operations.includes("predict"));
+  assert.equal(dataCapabilitiesBody.prediction.model_persisted, false);
   assert.equal(dataCapabilitiesBody.approval_required, true);
 
   const dataImport = await fetch(`${origin}/api/native/data-lab/import`, {
