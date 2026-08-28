@@ -16,6 +16,8 @@ import {
 import { normalizeWorkspacePath } from "./native-project-execution.js";
 
 const APPROVAL_KIND = "native-knowledge-import";
+const DOCUMENT_UPDATE_APPROVAL_KIND = "native-knowledge-document-update";
+const DOCUMENT_DELETE_APPROVAL_KIND = "native-knowledge-document-delete";
 const MAX_FILES = 5;
 const MAX_FILE_BYTES = 128 * 1024;
 const MAX_TOTAL_BYTES = 512 * 1024;
@@ -29,6 +31,14 @@ const IMPORT_WINDOWS = Object.freeze([
 const SEARCH_WINDOWS = Object.freeze([
   { window_ms: 60 * 60 * 1000, limit: 240 },
   { window_ms: 24 * 60 * 60 * 1000, limit: 2_000 },
+]);
+const MANAGER_READ_WINDOWS = Object.freeze([
+  { window_ms: 60 * 60 * 1000, limit: 600 },
+  { window_ms: 24 * 60 * 60 * 1000, limit: 5_000 },
+]);
+const MANAGER_MUTATION_WINDOWS = Object.freeze([
+  { window_ms: 60 * 60 * 1000, limit: 60 },
+  { window_ms: 24 * 60 * 60 * 1000, limit: 300 },
 ]);
 
 function clean(value, max = 240) {
@@ -213,6 +223,13 @@ export function knowledgeCapabilities() {
     external_required: false,
     import_approval_required: true,
     search_approval_required: false,
+    manager: {
+      list: true,
+      source_preview: true,
+      metadata_update_approval_required: true,
+      delete_approval_required: true,
+      content_replace_supported: false,
+    },
     formats: ["txt", "md", "markdown"],
     ranking: "fts5-bm25",
     limits: {
@@ -222,6 +239,97 @@ export function knowledgeCapabilities() {
       max_search_results: 10,
     },
   };
+}
+
+function documentSummary(document) {
+  return {
+    id: clean(document?.id, 180),
+    title: clean(document?.title, 160),
+    format: clean(document?.format, 40),
+    tags: normalizeTags(document?.tags),
+    source_path: clean(
+      document?.source_path || document?.meta?.source_path,
+      240,
+    ),
+    size: Math.max(
+      0,
+      Number(document?.size) || byteLength(document?.content || ""),
+    ),
+    version: Math.max(1, Math.trunc(Number(document?.version) || 1)),
+    created_at: Math.max(0, Number(document?.created_at) || 0),
+    updated_at: Math.max(0, Number(document?.updated_at) || 0),
+  };
+}
+
+export async function createKnowledgeDocumentSnapshot(document) {
+  const summary = documentSummary(document);
+  if (!validId(summary.id) || !summary.title || !summary.updated_at) {
+    throw new HttpError(
+      409,
+      "Knowledge document metadata is incomplete.",
+      "invalid_knowledge_document_snapshot",
+    );
+  }
+  const snapshot = {
+    document_id: summary.id,
+    title: summary.title,
+    format: summary.format,
+    tags: summary.tags,
+    source_path: summary.source_path,
+    version: summary.version,
+    updated_at: summary.updated_at,
+    content_sha256: await sha256(String(document?.content ?? "")),
+  };
+  return {
+    ...snapshot,
+    fingerprint: await sha256(JSON.stringify(snapshot)),
+  };
+}
+
+function normalizeDocumentMetadataUpdate(input, document) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    throw new HttpError(
+      400,
+      "Document update must be an object.",
+      "invalid_knowledge_document_update",
+    );
+  }
+  const unsupported = Object.keys(input).filter(
+    (key) => !["title", "tags"].includes(key),
+  );
+  if (unsupported.length) {
+    throw new HttpError(
+      400,
+      "This manager currently updates only document title and tags.",
+      "unsupported_knowledge_document_update",
+    );
+  }
+  const title =
+      input.title === undefined
+        ? clean(document.title, 160)
+        : clean(input.title, 160),
+    tags =
+      input.tags === undefined
+        ? normalizeTags(document.tags)
+        : normalizeTags(input.tags);
+  if (!title) {
+    throw new HttpError(
+      400,
+      "Document title is required.",
+      "knowledge_document_title_required",
+    );
+  }
+  if (
+    title === clean(document.title, 160) &&
+    JSON.stringify(tags) === JSON.stringify(normalizeTags(document.tags))
+  ) {
+    throw new HttpError(
+      400,
+      "Document metadata has not changed.",
+      "knowledge_document_unchanged",
+    );
+  }
+  return { title, tags };
 }
 
 function nativeStore(env, uid) {
@@ -251,6 +359,264 @@ async function callStore(env, uid, path, init = {}) {
     );
   }
   return data;
+}
+
+async function readKnowledgeDocument(env, uid, documentId) {
+  const value = await callStore(
+    env,
+    uid,
+    `/documents/${encodeURIComponent(documentId)}`,
+  );
+  if (!value.document) {
+    throw new HttpError(
+      404,
+      "Knowledge document was not found.",
+      "knowledge_document_not_found",
+    );
+  }
+  return value.document;
+}
+
+async function listKnowledgeDocuments(env, account, url) {
+  await enforceQuota(
+    env,
+    account.uid,
+    "native-knowledge-manager-read",
+    MANAGER_READ_WINDOWS,
+  );
+  const query = clean(url.searchParams.get("q"), 120),
+    limit = Math.max(
+      1,
+      Math.min(100, Math.trunc(Number(url.searchParams.get("limit")) || 50)),
+    ),
+    offset = Math.max(
+      0,
+      Math.min(
+        1_000_000,
+        Math.trunc(Number(url.searchParams.get("offset")) || 0),
+      ),
+    ),
+    search = new URLSearchParams({
+      limit: String(limit),
+      offset: String(offset),
+      ...(query ? { q: query } : {}),
+    });
+  return json(
+    await callStore(env, account.uid, `/documents?${search.toString()}`),
+  );
+}
+
+async function getKnowledgeDocument(env, account, documentId) {
+  await enforceQuota(
+    env,
+    account.uid,
+    "native-knowledge-manager-read",
+    MANAGER_READ_WINDOWS,
+  );
+  return json({
+    document: await readKnowledgeDocument(env, account.uid, documentId),
+  });
+}
+
+async function planDocumentUpdate(env, account, documentId, request) {
+  await enforceQuota(
+    env,
+    account.uid,
+    "native-knowledge-manager-mutation",
+    MANAGER_MUTATION_WINDOWS,
+  );
+  const document = await readKnowledgeDocument(env, account.uid, documentId),
+    update = normalizeDocumentMetadataUpdate(
+      await readJsonLimited(request, 32 * 1024),
+      document,
+    ),
+    before = await createKnowledgeDocumentSnapshot(document),
+    approval = await requestApproval(
+      env,
+      account.uid,
+      DOCUMENT_UPDATE_APPROVAL_KIND,
+      { document_id: documentId, before, update },
+    );
+  return json(
+    {
+      approval_required: true,
+      message: "Review and approve this document metadata change.",
+      document: documentSummary(document),
+      update,
+      approval,
+    },
+    202,
+  );
+}
+
+async function confirmDocumentUpdate(env, account, documentId, request) {
+  const body = await readJsonLimited(request, 8 * 1024),
+    consumed = await consumeApproval(
+      env,
+      account.uid,
+      DOCUMENT_UPDATE_APPROVAL_KIND,
+      String(body.approval_id || ""),
+      String(body.approval_token || ""),
+    );
+  if (consumed.action?.document_id !== documentId) {
+    throw new HttpError(
+      409,
+      "Approved document update does not match this request.",
+      "approved_knowledge_document_mismatch",
+    );
+  }
+  const document = await readKnowledgeDocument(env, account.uid, documentId),
+    current = await createKnowledgeDocumentSnapshot(document);
+  if (current.fingerprint !== consumed.action.before?.fingerprint) {
+    throw new HttpError(
+      409,
+      "Knowledge document changed after approval was created.",
+      "approved_knowledge_document_changed",
+    );
+  }
+  const query = new URLSearchParams({
+      expected_version: String(current.version),
+      expected_updated_at: String(current.updated_at),
+    }),
+    updated = await callStore(
+      env,
+      account.uid,
+      `/documents/${encodeURIComponent(documentId)}?${query.toString()}`,
+      {
+        method: "PUT",
+        body: JSON.stringify(consumed.action.update || {}),
+      },
+    );
+  return json({ status: "completed", document: updated.document });
+}
+
+async function planDocumentDelete(env, account, documentId) {
+  await enforceQuota(
+    env,
+    account.uid,
+    "native-knowledge-manager-mutation",
+    MANAGER_MUTATION_WINDOWS,
+  );
+  const document = await readKnowledgeDocument(env, account.uid, documentId),
+    snapshot = await createKnowledgeDocumentSnapshot(document),
+    approval = await requestApproval(
+      env,
+      account.uid,
+      DOCUMENT_DELETE_APPROVAL_KIND,
+      { document_id: documentId, snapshot },
+    );
+  return json(
+    {
+      approval_required: true,
+      message: "Review and approve permanent deletion of this document.",
+      document: documentSummary(document),
+      fingerprint: snapshot.fingerprint,
+      approval,
+    },
+    202,
+  );
+}
+
+async function confirmDocumentDelete(env, account, documentId, request) {
+  const body = await readJsonLimited(request, 8 * 1024),
+    consumed = await consumeApproval(
+      env,
+      account.uid,
+      DOCUMENT_DELETE_APPROVAL_KIND,
+      String(body.approval_id || ""),
+      String(body.approval_token || ""),
+    );
+  if (consumed.action?.document_id !== documentId) {
+    throw new HttpError(
+      409,
+      "Approved document deletion does not match this request.",
+      "approved_knowledge_document_mismatch",
+    );
+  }
+  const document = await readKnowledgeDocument(env, account.uid, documentId),
+    current = await createKnowledgeDocumentSnapshot(document);
+  if (current.fingerprint !== consumed.action.snapshot?.fingerprint) {
+    throw new HttpError(
+      409,
+      "Knowledge document changed after approval was created.",
+      "approved_knowledge_document_changed",
+    );
+  }
+  const query = new URLSearchParams({
+    expected_version: String(current.version),
+    expected_updated_at: String(current.updated_at),
+  });
+  await callStore(
+    env,
+    account.uid,
+    `/documents/${encodeURIComponent(documentId)}?${query.toString()}`,
+    { method: "DELETE" },
+  );
+  return json({
+    status: "completed",
+    deleted: true,
+    document: documentSummary(document),
+  });
+}
+
+async function cancelDocumentMutation(env, account, request, approvalKind) {
+  const body = await readJsonLimited(request, 8 * 1024),
+    cancelled = await cancelApproval(
+      env,
+      account.uid,
+      approvalKind,
+      String(body.approval_id || ""),
+      String(body.approval_token || ""),
+    );
+  return json({ cancelled: cancelled.cancelled === true });
+}
+
+async function handleKnowledgeDocuments(request, env, account, url, parts) {
+  if (parts.length === 1 && request.method === "GET") {
+    return listKnowledgeDocuments(env, account, url);
+  }
+  const documentId = parts[1];
+  if (!validId(documentId)) {
+    throw new HttpError(
+      400,
+      "Knowledge document id is invalid.",
+      "invalid_knowledge_document_id",
+    );
+  }
+  if (parts.length === 2 && request.method === "GET") {
+    return getKnowledgeDocument(env, account, documentId);
+  }
+  if (parts.length > 4)
+    return json({ error: "Knowledge document route not found." }, 404);
+  const action = parts[2],
+    operation = parts.length === 3 ? "plan" : parts[3];
+  if (action === "update" && request.method === "POST") {
+    if (operation === "plan")
+      return planDocumentUpdate(env, account, documentId, request);
+    if (operation === "confirm")
+      return confirmDocumentUpdate(env, account, documentId, request);
+    if (operation === "cancel")
+      return cancelDocumentMutation(
+        env,
+        account,
+        request,
+        DOCUMENT_UPDATE_APPROVAL_KIND,
+      );
+  }
+  if (action === "delete" && request.method === "POST") {
+    if (operation === "plan")
+      return planDocumentDelete(env, account, documentId);
+    if (operation === "confirm")
+      return confirmDocumentDelete(env, account, documentId, request);
+    if (operation === "cancel")
+      return cancelDocumentMutation(
+        env,
+        account,
+        request,
+        DOCUMENT_DELETE_APPROVAL_KIND,
+      );
+  }
+  return json({ error: "Knowledge document route not found." }, 404);
 }
 
 async function ensureCollection(env, uid) {
@@ -533,20 +899,23 @@ export async function handleNativeKnowledge(request, env, account) {
       return json(knowledgeCapabilities());
     }
     if (parts[0] === "search" && request.method === "GET") {
-      return searchKnowledge(env, account, url);
+      return await searchKnowledge(env, account, url);
+    }
+    if (parts[0] === "documents") {
+      return await handleKnowledgeDocuments(request, env, account, url, parts);
     }
     if (parts[0] === "import" && request.method === "POST") {
-      return stageKnowledgeImport(env, account, request);
+      return await stageKnowledgeImport(env, account, request);
     }
     if (parts[0] !== "imports" || !validId(parts[1])) {
       return json({ error: "Knowledge route not found." }, 404);
     }
     const importId = parts[1];
     if (parts[2] === "confirm" && request.method === "POST") {
-      return confirmKnowledgeImport(env, account, importId, request);
+      return await confirmKnowledgeImport(env, account, importId, request);
     }
     if (parts[2] === "cancel" && request.method === "POST") {
-      return cancelKnowledgeImport(env, account, importId, request);
+      return await cancelKnowledgeImport(env, account, importId, request);
     }
     return json({ error: "Knowledge route not found." }, 404);
   } catch (error) {

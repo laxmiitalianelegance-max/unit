@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createHmac } from "node:crypto";
+import { createHmac, randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const origin = "http://127.0.0.1:8791";
 const secret = "local-smoke-app-secret-369";
+const smokeRunId = randomUUID().replaceAll("-", "");
 const wrangler = resolve(root, "node_modules/.bin/wrangler");
 const child = spawn(
   wrangler,
@@ -42,11 +43,12 @@ for (const stream of [child.stdout, child.stderr]) {
 }
 
 function sessionCookie(uid) {
+  const scopedUid = `${uid}-${smokeRunId}`;
   const body = Buffer.from(
     JSON.stringify({
-      uid,
-      email: `${uid}@test.local`,
-      name: uid,
+      uid: scopedUid,
+      email: `${scopedUid}@test.local`,
+      name: scopedUid,
       exp: Date.now() + 60 * 60 * 1000,
     }),
   ).toString("base64url");
@@ -73,6 +75,8 @@ try {
   const rootResponse = await waitUntilReady();
   const html = await rootResponse.text();
   assert.ok(html.includes('data-mode="auto"'));
+  assert.ok(html.includes('data-page="knowledge"'));
+  assert.ok(html.includes('id="u369-knowledge-list"'));
   assert.ok(html.includes('id="u369-account-client"'));
   assert.match(rootResponse.headers.get("content-security-policy"), /nonce-/);
   assert.equal(rootResponse.headers.get("x-frame-options"), "DENY");
@@ -315,6 +319,219 @@ try {
   );
   assert.equal(isolatedKnowledgeSearch.status, 200);
   assert.deepEqual((await isolatedKnowledgeSearch.json()).results, []);
+
+  const knowledgeDocuments = await fetch(
+    `${origin}/api/native/knowledge/documents?limit=100`,
+    { headers: { cookie: sessionCookie("smoke-user") } },
+  );
+  assert.equal(
+    knowledgeDocuments.status,
+    200,
+    await knowledgeDocuments.clone().text(),
+  );
+  const knowledgeDocumentsBody = await knowledgeDocuments.json(),
+    orionDocument = knowledgeDocumentsBody.documents.find(
+      (document) => document.source_path === "orion.md",
+    ),
+    supportDocument = knowledgeDocumentsBody.documents.find(
+      (document) => document.source_path === "support.txt",
+    );
+  assert.equal(knowledgeDocumentsBody.documents.length, 2);
+  assert.ok(orionDocument?.id);
+  assert.ok(supportDocument?.id);
+  assert.ok(orionDocument.size > 0);
+
+  const knowledgeDocumentDetail = await fetch(
+    `${origin}/api/native/knowledge/documents/${encodeURIComponent(orionDocument.id)}`,
+    { headers: { cookie: sessionCookie("smoke-user") } },
+  );
+  assert.equal(knowledgeDocumentDetail.status, 200);
+  const knowledgeDocumentDetailBody = await knowledgeDocumentDetail.json();
+  assert.equal(
+    knowledgeDocumentDetailBody.document.meta.source_path,
+    "orion.md",
+  );
+  assert.match(knowledgeDocumentDetailBody.document.content, /14 October/);
+
+  const isolatedKnowledgeDocument = await fetch(
+    `${origin}/api/native/knowledge/documents/${encodeURIComponent(orionDocument.id)}`,
+    { headers: { cookie: sessionCookie("other-smoke-user") } },
+  );
+  assert.equal(isolatedKnowledgeDocument.status, 404);
+
+  const bypassDelete = await fetch(
+    `${origin}/api/native/documents/${encodeURIComponent(supportDocument.id)}`,
+    {
+      method: "DELETE",
+      headers: { origin, cookie: sessionCookie("smoke-user") },
+    },
+  );
+  assert.equal(bypassDelete.status, 405);
+  assert.equal(
+    (await bypassDelete.json()).code,
+    "knowledge_document_approval_required",
+  );
+
+  const updateKnowledgePlan = await fetch(
+    `${origin}/api/native/knowledge/documents/${encodeURIComponent(orionDocument.id)}/update`,
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin,
+        cookie: sessionCookie("smoke-user"),
+      },
+      body: JSON.stringify({
+        title: "Project Orion — approved",
+        tags: ["project", "smoke", "approved"],
+      }),
+    },
+  );
+  assert.equal(updateKnowledgePlan.status, 202);
+  const updateKnowledgePlanBody = await updateKnowledgePlan.json();
+  const confirmKnowledgeUpdate = await fetch(
+    `${origin}/api/native/knowledge/documents/${encodeURIComponent(orionDocument.id)}/update/confirm`,
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin,
+        cookie: sessionCookie("smoke-user"),
+      },
+      body: JSON.stringify({
+        approval_id: updateKnowledgePlanBody.approval.id,
+        approval_token: updateKnowledgePlanBody.approval.token,
+      }),
+    },
+  );
+  assert.equal(
+    confirmKnowledgeUpdate.status,
+    200,
+    await confirmKnowledgeUpdate.clone().text(),
+  );
+  const updatedKnowledgeDocument = await confirmKnowledgeUpdate.json();
+  assert.equal(
+    updatedKnowledgeDocument.document.title,
+    "Project Orion — approved",
+  );
+  assert.equal(updatedKnowledgeDocument.document.version, 2);
+
+  const staleDeletePlan = await fetch(
+    `${origin}/api/native/knowledge/documents/${encodeURIComponent(supportDocument.id)}/delete`,
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin,
+        cookie: sessionCookie("smoke-user"),
+      },
+      body: "{}",
+    },
+  );
+  assert.equal(staleDeletePlan.status, 202);
+  const staleDeletePlanBody = await staleDeletePlan.json();
+
+  const supportUpdatePlan = await fetch(
+    `${origin}/api/native/knowledge/documents/${encodeURIComponent(supportDocument.id)}/update`,
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin,
+        cookie: sessionCookie("smoke-user"),
+      },
+      body: JSON.stringify({
+        title: "Support channel",
+        tags: ["support", "smoke"],
+      }),
+    },
+  );
+  assert.equal(supportUpdatePlan.status, 202);
+  const supportUpdatePlanBody = await supportUpdatePlan.json();
+  const confirmSupportUpdate = await fetch(
+    `${origin}/api/native/knowledge/documents/${encodeURIComponent(supportDocument.id)}/update/confirm`,
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin,
+        cookie: sessionCookie("smoke-user"),
+      },
+      body: JSON.stringify({
+        approval_id: supportUpdatePlanBody.approval.id,
+        approval_token: supportUpdatePlanBody.approval.token,
+      }),
+    },
+  );
+  assert.equal(confirmSupportUpdate.status, 200);
+
+  const rejectedStaleDelete = await fetch(
+    `${origin}/api/native/knowledge/documents/${encodeURIComponent(supportDocument.id)}/delete/confirm`,
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin,
+        cookie: sessionCookie("smoke-user"),
+      },
+      body: JSON.stringify({
+        approval_id: staleDeletePlanBody.approval.id,
+        approval_token: staleDeletePlanBody.approval.token,
+      }),
+    },
+  );
+  assert.equal(rejectedStaleDelete.status, 409);
+  assert.equal(
+    (await rejectedStaleDelete.json()).code,
+    "approved_knowledge_document_changed",
+  );
+
+  const deleteKnowledgePlan = await fetch(
+    `${origin}/api/native/knowledge/documents/${encodeURIComponent(supportDocument.id)}/delete`,
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin,
+        cookie: sessionCookie("smoke-user"),
+      },
+      body: "{}",
+    },
+  );
+  const deleteKnowledgePlanBody = await deleteKnowledgePlan.json();
+  assert.equal(deleteKnowledgePlan.status, 202);
+  const confirmKnowledgeDelete = () =>
+    fetch(
+      `${origin}/api/native/knowledge/documents/${encodeURIComponent(supportDocument.id)}/delete/confirm`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          origin,
+          cookie: sessionCookie("smoke-user"),
+        },
+        body: JSON.stringify({
+          approval_id: deleteKnowledgePlanBody.approval.id,
+          approval_token: deleteKnowledgePlanBody.approval.token,
+        }),
+      },
+    );
+  const deletedKnowledge = await confirmKnowledgeDelete();
+  assert.equal(
+    deletedKnowledge.status,
+    200,
+    await deletedKnowledge.clone().text(),
+  );
+  assert.equal((await deletedKnowledge.json()).deleted, true);
+  const replayedDelete = await confirmKnowledgeDelete();
+  assert.equal(replayedDelete.status, 409);
+
+  const deletedKnowledgeSearch = await fetch(
+    `${origin}/api/native/knowledge/search?q=${encodeURIComponent("Primary support channel")}&limit=5`,
+    { headers: { cookie: sessionCookie("smoke-user") } },
+  );
+  assert.equal(deletedKnowledgeSearch.status, 200);
+  assert.deepEqual((await deletedKnowledgeSearch.json()).results, []);
 
   const replayedKnowledge = await confirmKnowledge();
   assert.equal(replayedKnowledge.status, 409);

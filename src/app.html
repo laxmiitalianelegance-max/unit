@@ -896,6 +896,101 @@
         background: #10243a;
         color: #70c9ff;
       }
+      .u369-knowledge-search {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+      .u369-knowledge-search input {
+        min-width: 0;
+        flex: 1;
+        border: 1px solid #26384e;
+        border-radius: 12px;
+        padding: 11px 12px;
+        background: #070c13;
+        color: #f4f8ff;
+      }
+      .u369-knowledge-layout {
+        display: grid;
+        grid-template-columns: minmax(220px, 0.8fr) minmax(0, 1.4fr);
+        gap: 12px;
+        align-items: start;
+      }
+      .u369-knowledge-list,
+      .u369-knowledge-detail {
+        min-width: 0;
+        border: 1px solid #1f2e41;
+        border-radius: 16px;
+        background: linear-gradient(180deg, #0d1520, #091019);
+        padding: 10px;
+      }
+      .u369-knowledge-list {
+        display: grid;
+        gap: 7px;
+      }
+      .u369-knowledge-doc {
+        width: 100%;
+        border: 1px solid transparent;
+        border-radius: 11px;
+        padding: 10px;
+        background: #08111b;
+        color: #e8eef6;
+        text-align: left;
+      }
+      .u369-knowledge-doc:hover,
+      .u369-knowledge-doc.active {
+        border-color: #2b6fa6;
+        background: #0d1b29;
+      }
+      .u369-knowledge-doc-title {
+        display: block;
+        font-size: 12px;
+        font-weight: 850;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .u369-knowledge-doc-meta {
+        display: block;
+        margin-top: 4px;
+        color: #8292a7;
+        font-size: 10px;
+        overflow-wrap: anywhere;
+      }
+      .u369-knowledge-detail {
+        padding: 14px;
+      }
+      .u369-knowledge-detail-title {
+        margin: 0 0 12px;
+        font-size: 18px;
+        overflow-wrap: anywhere;
+      }
+      .u369-knowledge-content {
+        max-height: 420px;
+        overflow: auto;
+        margin: 12px 0 0;
+        border: 1px solid #172638;
+        border-radius: 11px;
+        padding: 12px;
+        background: #050a11;
+        color: #d7e7f7;
+        font-family:
+          "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+        font-size: 11px;
+        line-height: 1.6;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+      .u369-knowledge-approval {
+        margin-top: 13px;
+        border: 1px solid rgba(242, 189, 101, 0.42);
+        border-radius: 12px;
+        padding: 11px;
+        background: #211a0f;
+        color: #f7d79c;
+        font-size: 11px;
+        line-height: 1.55;
+      }
       .product-list {
         display: grid;
         gap: 8px;
@@ -958,6 +1053,9 @@
         .tool-grid {
           grid-template-columns: 1fr;
         }
+        .u369-knowledge-layout {
+          grid-template-columns: 1fr;
+        }
         .u369-user-msg {
           max-width: 88%;
         }
@@ -997,6 +1095,9 @@
         </button>
         <button type="button" class="u369-side-item" data-page="product">
           ▦ <span data-i18n="products">Products</span>
+        </button>
+        <button type="button" class="u369-side-item" data-page="knowledge">
+          ◫ <span data-i18n="knowledgeManager">Knowledge</span>
         </button>
         <button type="button" class="u369-side-item" data-page="tools">
           ⌘ <span data-i18n="integrations">Integrations</span>
@@ -1203,6 +1304,51 @@
               </button>
             </div>
             <div id="product-list" class="product-list"></div>
+          </div>
+        </div>
+      </section>
+      <section id="page-knowledge" class="page">
+        <div class="section-wrap">
+          <div class="section-title" data-i18n="knowledgeManager">
+            Knowledge
+          </div>
+          <div class="section-sub" data-i18n="knowledgeManagerIntro">
+            Search, inspect and safely manage documents stored in Unit369.
+          </div>
+          <form id="u369-knowledge-search" class="u369-knowledge-search">
+            <input
+              id="u369-knowledge-query"
+              type="search"
+              maxlength="120"
+              autocomplete="off"
+              data-i18n-placeholder="knowledgeManagerSearch"
+              aria-label="Search documents"
+            />
+            <button
+              type="submit"
+              class="btn"
+              data-i18n="knowledgeManagerSearch"
+            >
+              Search documents
+            </button>
+            <button
+              type="button"
+              id="u369-knowledge-refresh"
+              class="btn"
+              data-i18n="refresh"
+            >
+              Refresh
+            </button>
+          </form>
+          <div
+            id="u369-knowledge-status"
+            class="u369-chat-status"
+            role="status"
+            aria-live="polite"
+          ></div>
+          <div class="u369-knowledge-layout">
+            <div id="u369-knowledge-list" class="u369-knowledge-list"></div>
+            <div id="u369-knowledge-detail" class="u369-knowledge-detail"></div>
           </div>
         </div>
       </section>
@@ -1443,7 +1589,7 @@
           CUR = "unit369-current-v1",
           LANG = "u369-lang-all-v4",
           PREF = "unit369-settings-v2",
-          CACHE = "unit369-ui-i18n-v12-";
+          CACHE = "unit369-ui-i18n-v13-";
         const RTL = new Set(["ar", "fa", "he", "ur"]);
         const LANGS = [
           ["auto", "Automatic"],
@@ -1709,6 +1855,27 @@
           knowledgeSearchHint:
             "Use “Search knowledge: question” or “U znanju: pitanje”.",
           knowledgeSource: "Source",
+          knowledgeManager: "Knowledge",
+          knowledgeManagerIntro:
+            "Search, inspect and safely manage documents stored in Unit369.",
+          knowledgeManagerSearch: "Search documents",
+          knowledgeManagerEmpty: "No knowledge documents found.",
+          knowledgeManagerSelect: "Select a document to inspect its source.",
+          knowledgeManagerNoSource: "Created in Unit369",
+          knowledgeManagerContent: "Document content",
+          knowledgeManagerUpdated: "Last updated",
+          knowledgeManagerSave: "Review metadata change",
+          knowledgeManagerDelete: "Review deletion",
+          knowledgeManagerApprovalUpdate:
+            "Approve this exact title and tag change. Document content will not change.",
+          knowledgeManagerApprovalDelete:
+            "Permanently delete this document and remove it from knowledge search?",
+          knowledgeManagerConfirm: "Confirm approved change",
+          knowledgeManagerCancel: "Cancel approval",
+          knowledgeManagerSaved: "Document metadata was updated.",
+          knowledgeManagerDeleted:
+            "Document was deleted from Unit369 knowledge.",
+          knowledgeManagerLoading: "Loading knowledge documents…",
         };
         let D = { ...BASE },
           integrations = {},
@@ -1721,6 +1888,13 @@
             models: { claude: "", openai: "", grok: "" },
           });
         const codeApprovals = new Map();
+        const knowledgeManagerState = {
+          documents: [],
+          selected: null,
+          approval: null,
+          loading: false,
+          request: 0,
+        };
         let projectAttachments = [];
         function loadJson(k, f) {
           try {
@@ -1806,17 +1980,23 @@
           renderIntegrations();
           renderToolkit();
           renderProjectAttachments();
+          renderKnowledgeManager();
         }
         function applyTranslations() {
           $$("[data-i18n]").forEach((e) => (e.textContent = t(e.dataset.i18n)));
+          $$("[data-i18n-placeholder]").forEach(
+            (e) => (e.placeholder = t(e.dataset.i18nPlaceholder)),
+          );
           $("#u369-title").textContent =
             currentPage === "product"
               ? t("products")
-              : currentPage === "tools"
-                ? t("integrations")
-                : currentPage === "settings"
-                  ? t("settings")
-                  : t("chat");
+              : currentPage === "knowledge"
+                ? t("knowledgeManager")
+                : currentPage === "tools"
+                  ? t("integrations")
+                  : currentPage === "settings"
+                    ? t("settings")
+                    : t("chat");
           const input = $("#u369-chat-input");
           input.placeholder = t("messageUnit369");
           input.setAttribute("aria-label", t("messageUnit369"));
@@ -1825,6 +2005,10 @@
           $("#u369-menu").setAttribute(
             "aria-label",
             t("openMenu") || "Open menu",
+          );
+          $("#u369-knowledge-query").setAttribute(
+            "aria-label",
+            t("knowledgeManagerSearch"),
           );
           $("#custom-language").placeholder = t("languageName");
           $$("[data-model]").forEach(
@@ -3759,6 +3943,293 @@
             clearTimeout(timer);
           }
         }
+        function knowledgeManagerStatus(value = "", error = false) {
+          const status = $("#u369-knowledge-status");
+          if (!status) return;
+          status.className = `u369-chat-status${error ? " err" : ""}`;
+          status.textContent = value;
+        }
+        function formatKnowledgeDate(value) {
+          const date = new Date(Number(value) || 0);
+          if (!Number.isFinite(date.getTime()) || date.getTime() <= 0)
+            return "—";
+          try {
+            return new Intl.DateTimeFormat(selectedLanguage(), {
+              dateStyle: "medium",
+              timeStyle: "short",
+            }).format(date);
+          } catch {
+            return date.toLocaleString();
+          }
+        }
+        function renderKnowledgeManager() {
+          const list = $("#u369-knowledge-list"),
+            detail = $("#u369-knowledge-detail");
+          if (!list || !detail) return;
+          const state = knowledgeManagerState;
+          if (
+            state.approval &&
+            Number(state.approval.expiresAt || 0) <= Date.now()
+          ) {
+            state.approval = null;
+          }
+          if (state.loading && !state.documents.length) {
+            list.innerHTML = `<div class="u369-code-note">${esc(t("knowledgeManagerLoading"))}</div>`;
+          } else if (!state.documents.length) {
+            list.innerHTML = `<div class="u369-code-note">${esc(t("knowledgeManagerEmpty"))}</div>`;
+          } else {
+            list.innerHTML = state.documents
+              .map(
+                (document) =>
+                  `<button type="button" class="u369-knowledge-doc${state.selected?.id === document.id ? " active" : ""}" data-knowledge-document="${esc(document.id)}"${state.approval || state.loading ? " disabled" : ""}><span class="u369-knowledge-doc-title">${esc(document.title)}</span><span class="u369-knowledge-doc-meta">${esc(document.source_path || t("knowledgeManagerNoSource"))} · v${esc(document.version || 1)} · ${esc(formatBytes(document.size))}</span></button>`,
+              )
+              .join("");
+          }
+          $$("[data-knowledge-document]").forEach(
+            (button) =>
+              (button.onclick = () =>
+                openKnowledgeDocument(button.dataset.knowledgeDocument)),
+          );
+          const document = state.selected;
+          if (!document) {
+            detail.innerHTML = `<div class="u369-code-note">${esc(t("knowledgeManagerSelect"))}</div>`;
+            return;
+          }
+          const source =
+              document.source_path ||
+              document.meta?.source_path ||
+              t("knowledgeManagerNoSource"),
+            tags = Array.isArray(document.tags) ? document.tags : [],
+            approval = state.approval,
+            approvalMessage =
+              approval?.action === "delete"
+                ? t("knowledgeManagerApprovalDelete")
+                : t("knowledgeManagerApprovalUpdate"),
+            approvalDetail =
+              approval?.action === "update"
+                ? `<div class="u369-code-note">${esc(approval.update?.title || document.title)}${approval.update?.tags?.length ? ` · ${approval.update.tags.map(esc).join(" · ")}` : ""}</div>`
+                : "",
+            approvalPanel = approval
+              ? `<div class="u369-knowledge-approval"><strong>${esc(approvalMessage)}</strong>${approvalDetail}<div class="actions"><button type="button" id="u369-knowledge-confirm" class="btn primary">${esc(t("knowledgeManagerConfirm"))}</button><button type="button" id="u369-knowledge-cancel" class="btn">${esc(t("knowledgeManagerCancel"))}</button></div></div>`
+              : "";
+          detail.innerHTML = `<h2 class="u369-knowledge-detail-title">${esc(document.title)}</h2><div class="form-grid"><div class="field full"><label for="u369-knowledge-title">${esc(t("name"))}</label><input id="u369-knowledge-title" maxlength="160" value="${esc(document.title)}"${approval || state.loading ? " disabled" : ""}></div><div class="field full"><label for="u369-knowledge-tags">${esc(t("tags"))}</label><input id="u369-knowledge-tags" maxlength="1000" value="${esc(tags.join(", "))}"${approval || state.loading ? " disabled" : ""}></div></div><div class="u369-code-meta"><div class="u369-code-meta-row"><span class="u369-code-meta-label">${esc(t("knowledgeSource"))}</span><code class="u369-code-meta-value" title="${esc(source)}">${esc(source)}</code></div><div class="u369-code-meta-row"><span class="u369-code-meta-label">${esc(t("version"))}</span><code class="u369-code-meta-value">${esc(document.version || 1)}</code></div><div class="u369-code-meta-row"><span class="u369-code-meta-label">${esc(t("type"))}</span><code class="u369-code-meta-value">${esc(document.format || "text")}</code></div><div class="u369-code-meta-row"><span class="u369-code-meta-label">${esc(t("knowledgeManagerUpdated"))}</span><code class="u369-code-meta-value" title="${esc(formatKnowledgeDate(document.updated_at))}">${esc(formatKnowledgeDate(document.updated_at))}</code></div></div><div class="actions"><button type="button" id="u369-knowledge-save" class="btn"${approval || state.loading ? " disabled" : ""}>${esc(t("knowledgeManagerSave"))}</button><button type="button" id="u369-knowledge-delete" class="btn"${approval || state.loading ? " disabled" : ""}>${esc(t("knowledgeManagerDelete"))}</button></div>${approvalPanel}<div class="u369-code-output-title" style="margin-top:16px">${esc(t("knowledgeManagerContent"))}</div><pre class="u369-knowledge-content">${esc(document.content || "")}</pre>`;
+          const save = $("#u369-knowledge-save"),
+            remove = $("#u369-knowledge-delete"),
+            confirm = $("#u369-knowledge-confirm"),
+            cancel = $("#u369-knowledge-cancel");
+          if (save) save.onclick = planKnowledgeMetadataUpdate;
+          if (remove) remove.onclick = planKnowledgeDocumentDelete;
+          if (confirm) confirm.onclick = confirmKnowledgeManagerMutation;
+          if (cancel) cancel.onclick = cancelKnowledgeManagerMutation;
+        }
+        async function loadKnowledgeDocuments() {
+          const state = knowledgeManagerState,
+            requestId = ++state.request,
+            query = String($("#u369-knowledge-query")?.value || "")
+              .trim()
+              .slice(0, 120);
+          state.loading = true;
+          knowledgeManagerStatus(t("knowledgeManagerLoading"));
+          renderKnowledgeManager();
+          try {
+            const search = new URLSearchParams({
+                limit: "100",
+                ...(query ? { q: query } : {}),
+              }),
+              data = await callKnowledgeApi(
+                `documents?${search.toString()}`,
+                undefined,
+                30_000,
+                "GET",
+              );
+            if (requestId !== state.request) return;
+            state.documents = Array.isArray(data.documents)
+              ? data.documents
+              : [];
+            if (
+              state.selected &&
+              !state.documents.some(
+                (document) => document.id === state.selected.id,
+              )
+            ) {
+              state.selected = null;
+              state.approval = null;
+            }
+            state.loading = false;
+            knowledgeManagerStatus("");
+            renderKnowledgeManager();
+            if (!state.selected && state.documents[0]) {
+              await openKnowledgeDocument(state.documents[0].id);
+            }
+          } catch (error) {
+            if (requestId !== state.request) return;
+            state.loading = false;
+            knowledgeManagerStatus(
+              Number(error?.status) === 401
+                ? t("signInRequired")
+                : error?.message || t("requestFailed"),
+              true,
+            );
+            renderKnowledgeManager();
+          }
+        }
+        async function openKnowledgeDocument(documentId) {
+          const state = knowledgeManagerState;
+          if (
+            state.loading ||
+            state.approval ||
+            !/^[A-Za-z0-9._:-]{1,180}$/.test(String(documentId || ""))
+          )
+            return;
+          state.loading = true;
+          renderKnowledgeManager();
+          try {
+            const data = await callKnowledgeApi(
+              `documents/${encodeURIComponent(documentId)}`,
+              undefined,
+              30_000,
+              "GET",
+            );
+            state.selected = data.document || null;
+            knowledgeManagerStatus("");
+          } catch (error) {
+            state.selected = null;
+            knowledgeManagerStatus(error?.message || t("requestFailed"), true);
+          } finally {
+            state.loading = false;
+            renderKnowledgeManager();
+          }
+        }
+        async function planKnowledgeMetadataUpdate() {
+          const state = knowledgeManagerState,
+            document = state.selected;
+          if (!document || state.loading || state.approval) return;
+          const title = String($("#u369-knowledge-title")?.value || "").trim(),
+            tags = String($("#u369-knowledge-tags")?.value || "")
+              .split(",")
+              .map((value) => value.trim())
+              .filter(Boolean)
+              .slice(0, 16);
+          state.loading = true;
+          renderKnowledgeManager();
+          try {
+            const data = await callKnowledgeApi(
+              `documents/${encodeURIComponent(document.id)}/update`,
+              { title, tags },
+              30_000,
+            );
+            if (
+              data.approval_required !== true ||
+              !data.approval?.id ||
+              !data.approval?.token
+            )
+              throw new Error(t("requestFailed"));
+            state.approval = {
+              action: "update",
+              documentId: document.id,
+              id: String(data.approval.id),
+              token: String(data.approval.token),
+              expiresAt: Number(data.approval.expires_at) || 0,
+              update: data.update || { title, tags },
+            };
+            knowledgeManagerStatus(t("knowledgeManagerApprovalUpdate"));
+          } catch (error) {
+            knowledgeManagerStatus(error?.message || t("requestFailed"), true);
+          } finally {
+            state.loading = false;
+            renderKnowledgeManager();
+          }
+        }
+        async function planKnowledgeDocumentDelete() {
+          const state = knowledgeManagerState,
+            document = state.selected;
+          if (!document || state.loading || state.approval) return;
+          state.loading = true;
+          renderKnowledgeManager();
+          try {
+            const data = await callKnowledgeApi(
+              `documents/${encodeURIComponent(document.id)}/delete`,
+              {},
+              30_000,
+            );
+            if (
+              data.approval_required !== true ||
+              !data.approval?.id ||
+              !data.approval?.token
+            )
+              throw new Error(t("requestFailed"));
+            state.approval = {
+              action: "delete",
+              documentId: document.id,
+              id: String(data.approval.id),
+              token: String(data.approval.token),
+              expiresAt: Number(data.approval.expires_at) || 0,
+            };
+            knowledgeManagerStatus(t("knowledgeManagerApprovalDelete"));
+          } catch (error) {
+            knowledgeManagerStatus(error?.message || t("requestFailed"), true);
+          } finally {
+            state.loading = false;
+            renderKnowledgeManager();
+          }
+        }
+        async function confirmKnowledgeManagerMutation() {
+          const state = knowledgeManagerState,
+            approval = state.approval;
+          if (!approval || state.loading) return;
+          state.loading = true;
+          renderKnowledgeManager();
+          try {
+            await callKnowledgeApi(
+              `documents/${encodeURIComponent(approval.documentId)}/${approval.action}/confirm`,
+              {
+                approval_id: approval.id,
+                approval_token: approval.token,
+              },
+              45_000,
+            );
+            state.approval = null;
+            state.selected = null;
+            state.documents = [];
+            state.loading = false;
+            await loadKnowledgeDocuments();
+            knowledgeManagerStatus(
+              approval.action === "delete"
+                ? t("knowledgeManagerDeleted")
+                : t("knowledgeManagerSaved"),
+            );
+          } catch (error) {
+            state.approval = null;
+            knowledgeManagerStatus(error?.message || t("requestFailed"), true);
+          } finally {
+            state.loading = false;
+            renderKnowledgeManager();
+          }
+        }
+        async function cancelKnowledgeManagerMutation() {
+          const state = knowledgeManagerState,
+            approval = state.approval;
+          if (!approval || state.loading) return;
+          state.loading = true;
+          renderKnowledgeManager();
+          try {
+            await callKnowledgeApi(
+              `documents/${encodeURIComponent(approval.documentId)}/${approval.action}/cancel`,
+              {
+                approval_id: approval.id,
+                approval_token: approval.token,
+              },
+              20_000,
+            );
+            knowledgeManagerStatus("");
+          } catch (error) {
+            knowledgeManagerStatus(error?.message || t("requestFailed"), true);
+          } finally {
+            state.approval = null;
+            state.loading = false;
+            renderKnowledgeManager();
+          }
+        }
         async function planCodeExecution(session, turn, message) {
           const data = await callCodeApi("plan", { message }, 25_000);
           if (
@@ -4986,6 +5457,7 @@
             e.classList.toggle("active", e.dataset.page === p),
           );
           applyTranslations();
+          if (p === "knowledge") loadKnowledgeDocuments();
           if (p === "settings") renderSettings();
           if (p === "tools") renderToolkit();
         }
@@ -5322,6 +5794,13 @@
           $("#product-ai").onclick = prepareProduct;
           $("#product-review").onclick = reviewProduct;
           $("#products-load").onclick = loadProducts;
+          $("#u369-knowledge-search").onsubmit = (event) => {
+            event.preventDefault();
+            if (!knowledgeManagerState.approval) loadKnowledgeDocuments();
+          };
+          $("#u369-knowledge-refresh").onclick = () => {
+            if (!knowledgeManagerState.approval) loadKnowledgeDocuments();
+          };
           $$('[form="product-form"]').forEach((e) => {
             e.addEventListener("input", () => (productArmed = false));
             e.addEventListener("change", () => (productArmed = false));
@@ -5337,6 +5816,7 @@
           renderHistory();
           renderConversation();
           renderProjectAttachments();
+          renderKnowledgeManager();
           networkState();
           await refreshStatus();
           await loadLanguage();

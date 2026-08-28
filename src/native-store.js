@@ -38,6 +38,36 @@ function pageInfo(limit, offset, count) {
     has_more: count === limit,
   };
 }
+function documentMutationCondition(url, meta, updatedAt) {
+  const expectedVersion = Number(url.searchParams.get("expected_version")),
+    expectedUpdatedAt = Number(url.searchParams.get("expected_updated_at"));
+  if (
+    !Number.isSafeInteger(expectedVersion) ||
+    expectedVersion < 1 ||
+    !Number.isSafeInteger(expectedUpdatedAt) ||
+    expectedUpdatedAt < 1
+  ) {
+    return {
+      ok: false,
+      status: 428,
+      code: "document_precondition_required",
+      error:
+        "Document changes require an approved version and update timestamp.",
+    };
+  }
+  if (
+    expectedVersion !== Number(meta.version || 1) ||
+    expectedUpdatedAt !== Number(updatedAt || 0)
+  ) {
+    return {
+      ok: false,
+      status: 409,
+      code: "document_changed_after_approval",
+      error: "Document changed after approval was created.",
+    };
+  }
+  return { ok: true };
+}
 function obj(v) {
   return v && typeof v === "object" && !Array.isArray(v) ? v : {};
 }
@@ -532,7 +562,7 @@ export class NativeStore {
         rows = q
           ? this.rows(
               this.sql.exec(
-                "SELECT id,name,mime,meta,created_at,updated_at FROM native_items WHERE kind=? AND (name LIKE ? OR body LIKE ? OR meta LIKE ?) ORDER BY updated_at DESC LIMIT ? OFFSET ?",
+                "SELECT id,name,mime,meta,length(CAST(body AS BLOB)) size,created_at,updated_at FROM native_items WHERE kind=? AND (name LIKE ? OR body LIKE ? OR meta LIKE ?) ORDER BY updated_at DESC LIMIT ? OFFSET ?",
                 "document",
                 "%" + q + "%",
                 "%" + q + "%",
@@ -543,7 +573,7 @@ export class NativeStore {
             )
           : this.rows(
               this.sql.exec(
-                "SELECT id,name,mime,meta,created_at,updated_at FROM native_items WHERE kind=? ORDER BY updated_at DESC LIMIT ? OFFSET ?",
+                "SELECT id,name,mime,meta,length(CAST(body AS BLOB)) size,created_at,updated_at FROM native_items WHERE kind=? ORDER BY updated_at DESC LIMIT ? OFFSET ?",
                 "document",
                 limit,
                 offset,
@@ -558,6 +588,8 @@ export class NativeStore {
             format: m.format || r.mime.replace(/^text\//, ""),
             tags: m.tags || [],
             version: m.version || 1,
+            source_path: m.source_path || "",
+            size: Math.max(0, Number(r.size) || 0),
             created_at: r.created_at,
             updated_at: r.updated_at,
           };
@@ -585,6 +617,12 @@ export class NativeStore {
         },
       });
     if (request.method === "PUT") {
+      const condition = documentMutationCondition(u, oldMeta, r.updated_at);
+      if (!condition.ok)
+        return json(
+          { error: condition.error, code: condition.code },
+          condition.status,
+        );
       const b = await readJsonLimited(request, 384 * 1024),
         title = cleanName(b.title || r.name),
         content = b.content === undefined ? r.body : String(b.content),
@@ -626,6 +664,12 @@ export class NativeStore {
       });
     }
     if (request.method === "DELETE") {
+      const condition = documentMutationCondition(u, oldMeta, r.updated_at);
+      if (!condition.ok)
+        return json(
+          { error: condition.error, code: condition.code },
+          condition.status,
+        );
       this.state.storage.transactionSync(() => {
         this.sql.exec(
           "DELETE FROM native_items WHERE kind=? AND id=?",

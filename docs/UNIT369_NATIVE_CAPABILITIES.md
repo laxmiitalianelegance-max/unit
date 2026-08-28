@@ -119,6 +119,9 @@ Unit369 Core must remain useful without any third-party account connection. Exte
 - atomic document persistence and FTS5 index updates in the same Durable Object transaction
 - Unicode tokenization, prefix matching and BM25 ranking with title/content/tag weights
 - bounded excerpts and source paths returned directly in the chat result card
+- mobile Knowledge Manager for list, search, source inspection and content preview
+- immutable one-time approvals for title/tag updates and document deletion
+- raw public document update/delete routes blocked
 - no external AI, embedding provider, Sandbox container or third-party account required
 
 ## External connections
