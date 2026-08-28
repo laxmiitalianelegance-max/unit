@@ -218,6 +218,170 @@ try {
     "sandbox_not_configured",
   );
 
+  const knowledgeCapabilities = await fetch(
+    `${origin}/api/native/knowledge/capabilities`,
+    { headers: { cookie: sessionCookie("smoke-user") } },
+  );
+  assert.equal(knowledgeCapabilities.status, 200);
+  const knowledgeCapabilitiesBody = await knowledgeCapabilities.json();
+  assert.equal(knowledgeCapabilitiesBody.owner_scoped, true);
+  assert.equal(knowledgeCapabilitiesBody.external_required, false);
+  assert.equal(knowledgeCapabilitiesBody.ranking, "fts5-bm25");
+  assert.equal(knowledgeCapabilitiesBody.import_approval_required, true);
+
+  const knowledgeImport = await fetch(`${origin}/api/native/knowledge/import`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      origin,
+      cookie: sessionCookie("smoke-user"),
+    },
+    body: JSON.stringify({
+      name: "Smoke knowledge",
+      tags: ["project", "smoke"],
+      files: [
+        {
+          path: "orion.md",
+          content:
+            "# Project Orion\nLaunch window is 14 October. Owner is Mila.\n",
+        },
+        {
+          path: "support.txt",
+          content: "Primary support channel is the Unit369 owner chat.\n",
+        },
+      ],
+    }),
+  });
+  assert.equal(
+    knowledgeImport.status,
+    202,
+    await knowledgeImport.clone().text(),
+  );
+  const knowledgeImportBody = await knowledgeImport.json();
+  assert.equal(knowledgeImportBody.approval_required, true);
+  assert.equal(knowledgeImportBody.knowledge_import.file_count, 2);
+  assert.ok(knowledgeImportBody.knowledge_import.manifest_hash);
+
+  const confirmKnowledge = () =>
+    fetch(
+      `${origin}/api/native/knowledge/imports/${encodeURIComponent(knowledgeImportBody.knowledge_import.id)}/confirm`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          origin,
+          cookie: sessionCookie("smoke-user"),
+        },
+        body: JSON.stringify({
+          approval_id: knowledgeImportBody.approval.id,
+          approval_token: knowledgeImportBody.approval.token,
+        }),
+      },
+    );
+  const confirmedKnowledge = await confirmKnowledge();
+  assert.equal(
+    confirmedKnowledge.status,
+    200,
+    await confirmedKnowledge.clone().text(),
+  );
+  const confirmedKnowledgeBody = await confirmedKnowledge.json();
+  assert.equal(confirmedKnowledgeBody.status, "completed");
+  assert.equal(confirmedKnowledgeBody.documents.length, 2);
+
+  const knowledgeSearch = await fetch(
+    `${origin}/api/native/knowledge/search?q=${encodeURIComponent("Orion launch")}&limit=5`,
+    { headers: { cookie: sessionCookie("smoke-user") } },
+  );
+  if (!knowledgeSearch.ok) {
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 500));
+  }
+  assert.equal(
+    knowledgeSearch.status,
+    200,
+    `${await knowledgeSearch.clone().text()}\n${logs}`,
+  );
+  const knowledgeSearchBody = await knowledgeSearch.json();
+  assert.equal(
+    knowledgeSearchBody.source,
+    "unit369-durable-object-sqlite-fts5",
+  );
+  assert.equal(knowledgeSearchBody.results[0].title, "Project Orion");
+  assert.equal(knowledgeSearchBody.results[0].source_path, "orion.md");
+  assert.match(knowledgeSearchBody.results[0].excerpt, /launch|october/i);
+
+  const isolatedKnowledgeSearch = await fetch(
+    `${origin}/api/native/knowledge/search?q=${encodeURIComponent("Orion launch")}&limit=5`,
+    { headers: { cookie: sessionCookie("other-smoke-user") } },
+  );
+  assert.equal(isolatedKnowledgeSearch.status, 200);
+  assert.deepEqual((await isolatedKnowledgeSearch.json()).results, []);
+
+  const replayedKnowledge = await confirmKnowledge();
+  assert.equal(replayedKnowledge.status, 409);
+
+  const mutableKnowledgeImport = await fetch(
+    `${origin}/api/native/knowledge/import`,
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin,
+        cookie: sessionCookie("smoke-user"),
+      },
+      body: JSON.stringify({
+        name: "Immutable knowledge",
+        files: [
+          {
+            path: "immutable.md",
+            content: "# Immutable source\nApproved content.\n",
+          },
+        ],
+      }),
+    },
+  );
+  assert.equal(mutableKnowledgeImport.status, 202);
+  const mutableKnowledgeBody = await mutableKnowledgeImport.json();
+  const stagedFiles = await fetch(
+    `${origin}/api/native/files?parent_id=${encodeURIComponent(mutableKnowledgeBody.knowledge_import.id)}`,
+    { headers: { cookie: sessionCookie("smoke-user") } },
+  );
+  assert.equal(stagedFiles.status, 200);
+  const stagedFile = (await stagedFiles.json()).files[0];
+  assert.ok(stagedFile?.id);
+  const mutateStagedFile = await fetch(
+    `${origin}/api/native/files/${encodeURIComponent(stagedFile.id)}`,
+    {
+      method: "PUT",
+      headers: {
+        "content-type": "application/json",
+        origin,
+        cookie: sessionCookie("smoke-user"),
+      },
+      body: JSON.stringify({ content: "# Changed after approval\n" }),
+    },
+  );
+  assert.equal(mutateStagedFile.status, 200);
+  const rejectedMutableKnowledge = await fetch(
+    `${origin}/api/native/knowledge/imports/${encodeURIComponent(mutableKnowledgeBody.knowledge_import.id)}/confirm`,
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin,
+        cookie: sessionCookie("smoke-user"),
+      },
+      body: JSON.stringify({
+        approval_id: mutableKnowledgeBody.approval.id,
+        approval_token: mutableKnowledgeBody.approval.token,
+      }),
+    },
+  );
+  assert.equal(rejectedMutableKnowledge.status, 409);
+  assert.equal(
+    (await rejectedMutableKnowledge.json()).code,
+    "approved_knowledge_digest_mismatch",
+  );
+
   const productForm = new FormData();
   productForm.append("title", "Smoke product");
   productForm.append("price", "19.90");

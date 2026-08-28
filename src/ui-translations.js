@@ -184,6 +184,30 @@ export const UI_BASE = Object.freeze({
   dataOperationClean: "Clean and export",
   dataOperationChart: "Create a chart",
   dataOperationPredict: "Evaluate a prediction",
+  knowledgeFilesReady: "Knowledge documents selected",
+  knowledgeFileLimits:
+    "Knowledge accepts up to 5 UTF-8 TXT or Markdown files, 128 KiB each and 512 KiB total.",
+  knowledgeApprovalTitle: "Unit369 Knowledge",
+  knowledgeApprovalRequired:
+    "Review the documents. They are indexed only after you approve them.",
+  knowledgeImport: "Knowledge import",
+  knowledgeImporting: "Staging knowledge documents…",
+  knowledgeRunning: "Indexing the approved documents…",
+  knowledgeCompleted: "Documents added to Unit369 knowledge.",
+  knowledgeFailed: "Knowledge operation failed.",
+  knowledgeCancelled:
+    "Knowledge import was cancelled. No document was indexed.",
+  knowledgeApprovalExpired:
+    "This knowledge approval is no longer available. Attach the documents again.",
+  knowledgeUnknown:
+    "The connection ended before indexing was confirmed. Unit369 will not repeat it automatically.",
+  knowledgeDocuments: "Documents",
+  knowledgeSearchTitle: "Knowledge search",
+  knowledgeSearching: "Searching Unit369 knowledge…",
+  knowledgeSearchEmpty: "No matching knowledge source was found.",
+  knowledgeSearchHint:
+    "Use “Search knowledge: question” or “U znanju: pitanje”.",
+  knowledgeSource: "Source",
 });
 
 const UI_SR = Object.freeze({
@@ -374,6 +398,30 @@ const UI_SR = Object.freeze({
   dataOperationClean: "Čišćenje i izvoz",
   dataOperationChart: "Pravljenje grafikona",
   dataOperationPredict: "Provera predikcije",
+  knowledgeFilesReady: "Dokumenti za znanje su izabrani",
+  knowledgeFileLimits:
+    "Znanje prihvata najviše 5 UTF-8 TXT ili Markdown fajlova, do 128 KiB po fajlu i 512 KiB ukupno.",
+  knowledgeApprovalTitle: "Unit369 znanje",
+  knowledgeApprovalRequired:
+    "Pregledajte dokumente. Indeksiraju se tek kada ih odobrite.",
+  knowledgeImport: "Uvoz znanja",
+  knowledgeImporting: "Privremeno čuvam dokumente za znanje…",
+  knowledgeRunning: "Indeksiram odobrene dokumente…",
+  knowledgeCompleted: "Dokumenti su dodati u Unit369 znanje.",
+  knowledgeFailed: "Operacija nad znanjem nije uspela.",
+  knowledgeCancelled:
+    "Uvoz znanja je otkazan. Nijedan dokument nije indeksiran.",
+  knowledgeApprovalExpired:
+    "Odobrenje za znanje više nije dostupno. Ponovo dodajte dokumente.",
+  knowledgeUnknown:
+    "Veza je prekinuta pre potvrde indeksiranja. Unit369 ga neće automatski ponoviti.",
+  knowledgeDocuments: "Dokumenti",
+  knowledgeSearchTitle: "Pretraga znanja",
+  knowledgeSearching: "Pretražujem Unit369 znanje…",
+  knowledgeSearchEmpty: "Nije pronađen odgovarajući izvor u znanju.",
+  knowledgeSearchHint:
+    "Koristite „U znanju: pitanje“ ili „Pretraži znanje: pitanje“.",
+  knowledgeSource: "Izvor",
 });
 
 export function normalizeLanguage(value) {

@@ -1051,7 +1051,7 @@
             type="file"
             multiple
             hidden
-            accept=".py,.js,.mjs,.cjs,.json,.md,.txt,.html,.css,.yaml,.yml,.toml,.csv,.tsv,.xlsx"
+            accept=".py,.js,.mjs,.cjs,.json,.md,.markdown,.txt,.html,.css,.yaml,.yml,.toml,.csv,.tsv,.xlsx"
           />
           <button
             type="button"
@@ -1443,7 +1443,7 @@
           CUR = "unit369-current-v1",
           LANG = "u369-lang-all-v4",
           PREF = "unit369-settings-v2",
-          CACHE = "unit369-ui-i18n-v11-";
+          CACHE = "unit369-ui-i18n-v12-";
         const RTL = new Set(["ar", "fa", "he", "ur"]);
         const LANGS = [
           ["auto", "Automatic"],
@@ -1685,6 +1685,30 @@
           dataOperationClean: "Clean and export",
           dataOperationChart: "Create a chart",
           dataOperationPredict: "Evaluate a prediction",
+          knowledgeFilesReady: "Knowledge documents selected",
+          knowledgeFileLimits:
+            "Knowledge accepts up to 5 UTF-8 TXT or Markdown files, 128 KiB each and 512 KiB total.",
+          knowledgeApprovalTitle: "Unit369 Knowledge",
+          knowledgeApprovalRequired:
+            "Review the documents. They are indexed only after you approve them.",
+          knowledgeImport: "Knowledge import",
+          knowledgeImporting: "Staging knowledge documents…",
+          knowledgeRunning: "Indexing the approved documents…",
+          knowledgeCompleted: "Documents added to Unit369 knowledge.",
+          knowledgeFailed: "Knowledge operation failed.",
+          knowledgeCancelled:
+            "Knowledge import was cancelled. No document was indexed.",
+          knowledgeApprovalExpired:
+            "This knowledge approval is no longer available. Attach the documents again.",
+          knowledgeUnknown:
+            "The connection ended before indexing was confirmed. Unit369 will not repeat it automatically.",
+          knowledgeDocuments: "Documents",
+          knowledgeSearchTitle: "Knowledge search",
+          knowledgeSearching: "Searching Unit369 knowledge…",
+          knowledgeSearchEmpty: "No matching knowledge source was found.",
+          knowledgeSearchHint:
+            "Use “Search knowledge: question” or “U znanju: pitanje”.",
+          knowledgeSource: "Source",
         };
         let D = { ...BASE },
           integrations = {},
@@ -2242,6 +2266,71 @@
             ),
           };
         }
+        function compactKnowledgeTool(value) {
+          if (!value || value.kind !== "knowledge") return null;
+          const allowedStatuses = new Set([
+            "approval_required",
+            "cancelling",
+            "running",
+            "completed",
+            "failed",
+            "cancelled",
+            "expired",
+            "unknown",
+          ]);
+          return {
+            kind: "knowledge",
+            status: allowedStatuses.has(value.status)
+              ? value.status
+              : "unknown",
+            operation: ["import", "search"].includes(value.operation)
+              ? value.operation
+              : "search",
+            import_id: boundedText(value.import_id, 180),
+            import_name: boundedText(value.import_name, 180),
+            manifest_hash: boundedText(value.manifest_hash, 64),
+            file_count: Math.max(0, Number(value.file_count) || 0),
+            total_bytes: Math.max(0, Number(value.total_bytes) || 0),
+            approval_expires_at: Math.max(
+              0,
+              Number(value.approval_expires_at) || 0,
+            ),
+            files: (Array.isArray(value.files) ? value.files : [])
+              .slice(0, 5)
+              .map((file) => ({
+                path: boundedText(file?.path, 240),
+                title: boundedText(file?.title, 160),
+                size: Math.max(0, Number(file?.size) || 0),
+                sha256: boundedText(file?.sha256, 64),
+              })),
+            query: boundedText(value.query, 240),
+            documents: (Array.isArray(value.documents) ? value.documents : [])
+              .slice(0, 5)
+              .map((document) => ({
+                id: boundedText(document?.id, 180),
+                title: boundedText(document?.title, 160),
+                source_path: boundedText(document?.source_path, 240),
+                format: boundedText(document?.format, 24),
+              })),
+            results: (Array.isArray(value.results) ? value.results : [])
+              .slice(0, 10)
+              .map((result) => ({
+                document_id: boundedText(result?.document_id, 180),
+                title: boundedText(result?.title, 160),
+                excerpt: boundedText(result?.excerpt, 700),
+                source_path: boundedText(result?.source_path, 240),
+                rank: Math.max(1, Number(result?.rank) || 1),
+                version: Math.max(1, Number(result?.version) || 1),
+              })),
+            error:
+              value.error && typeof value.error === "object"
+                ? {
+                    name: boundedText(value.error.name, 160),
+                    message: boundedText(value.error.message, 2_000),
+                  }
+                : null,
+          };
+        }
         function compactSession(session) {
           const providerKeys = [
             "unit369",
@@ -2290,7 +2379,9 @@
                     ? { tool: compactProjectTool(turn.tool) }
                     : turn?.tool?.kind === "data"
                       ? { tool: compactDataTool(turn.tool) }
-                      : {}),
+                      : turn?.tool?.kind === "knowledge"
+                        ? { tool: compactKnowledgeTool(turn.tool) }
+                        : {}),
               })),
           };
         }
@@ -2458,6 +2549,37 @@
                 ),
             )
           );
+        }
+        function knowledgeAttachmentNames(files) {
+          return (
+            files.length > 0 &&
+            files.every((file) =>
+              [".txt", ".md", ".markdown"].includes(
+                attachmentExtension(file.path || file.name),
+              ),
+            )
+          );
+        }
+        function isKnowledgeImportRequest(files, message = "") {
+          return (
+            knowledgeAttachmentNames(files) &&
+            /\b(knowledge|remember|index|znanj|zapamt|sačuv|sacuv|indeksir)\w*/i.test(
+              String(message || ""),
+            )
+          );
+        }
+        function knowledgeSearchPrefix(value) {
+          return String(value || "").match(
+            /^\s*(?:search\s+(?:my\s+)?knowledge|knowledge\s+search|pretra(?:ž|z)\w*\s+znanj\w*|u\s+znanju|iz\s+znanja)\s*[:\-]?\s*/i,
+          );
+        }
+        function isKnowledgeSearchRequest(value) {
+          return !!knowledgeSearchPrefix(value);
+        }
+        function knowledgeSearchQuery(value) {
+          const message = String(value || ""),
+            prefix = knowledgeSearchPrefix(message);
+          return prefix ? message.slice(prefix[0].length).trim() : "";
         }
         function jsonLooksLikeDataset(value) {
           try {
@@ -3093,6 +3215,135 @@
             : "";
           return `<div class="u369-code-card"><div class="u369-code-card-top"><div class="u369-code-card-title">${esc(t("dataApprovalTitle"))}</div><span class="u369-code-badge ${esc(displayStatus)}">${esc(codeStatusLabel(displayStatus))}</span></div><div class="u369-code-card-body"><div class="u369-code-summary">${esc(dataStatusText(displayStatus))}</div><div class="u369-code-meta">${meta}</div>${fileList}${controls}${output}</div></div>`;
         }
+        function knowledgeStatusText(tool, status) {
+          if (tool?.operation === "search") {
+            if (status === "running") return t("knowledgeSearching");
+            if (status === "completed")
+              return tool.results?.length
+                ? t("knowledgeSearchTitle")
+                : t("knowledgeSearchEmpty");
+          }
+          return (
+            {
+              approval_required: t("knowledgeApprovalRequired"),
+              cancelling: t("codeCancelling"),
+              running: t("knowledgeRunning"),
+              completed: t("knowledgeCompleted"),
+              failed: t("knowledgeFailed"),
+              cancelled: t("knowledgeCancelled"),
+              expired: t("knowledgeApprovalExpired"),
+              unknown: t("knowledgeUnknown"),
+            }[status] || t("knowledgeUnknown")
+          );
+        }
+        function renderKnowledgeOutput(tool) {
+          const blocks = [];
+          if (tool.operation === "import" && tool.documents?.length) {
+            blocks.push(
+              `<div class="u369-code-output-title">${esc(t("knowledgeDocuments"))}</div><div class="u369-code-note">${tool.documents
+                .map(
+                  (document, index) =>
+                    `${index + 1}. ${esc(document.title)}${document.source_path ? ` · ${esc(document.source_path)}` : ""}`,
+                )
+                .join("<br>")}</div>`,
+            );
+          }
+          if (tool.operation === "search") {
+            if (!tool.results?.length) {
+              blocks.push(
+                `<div class="u369-code-note">${esc(t("knowledgeSearchEmpty"))}</div>`,
+              );
+            } else {
+              blocks.push(
+                ...tool.results.map(
+                  (result, index) =>
+                    `<div class="u369-data-file"><div class="u369-code-output-title">[${index + 1}] ${esc(result.title)}</div><div class="u369-code-note">${esc(result.excerpt)}</div>${result.source_path ? `<div class="u369-code-meta"><div class="u369-code-meta-row"><span class="u369-code-meta-label">${esc(t("knowledgeSource"))}</span><code class="u369-code-meta-value">${esc(result.source_path)}</code></div></div>` : ""}</div>`,
+                ),
+              );
+            }
+          }
+          if (tool.error?.message) {
+            blocks.push(
+              `<div class="u369-code-output-title">${esc(tool.error.name || t("knowledgeFailed"))}</div><pre class="err">${esc(tool.error.message)}</pre>`,
+            );
+          }
+          return blocks.length
+            ? `<div class="u369-code-output">${blocks.join("")}</div>`
+            : "";
+        }
+        function renderKnowledgeCard(session, turn, index) {
+          const tool = compactKnowledgeTool(turn.tool) || {
+              kind: "knowledge",
+              status: "unknown",
+              operation: "search",
+              files: [],
+              documents: [],
+              results: [],
+            },
+            key = codeTurnKey(session, turn);
+          let approval = codeApprovals.get(key);
+          if (
+            approval &&
+            Number(approval.expiresAt || 0) > 0 &&
+            Number(approval.expiresAt) <= Date.now()
+          ) {
+            codeApprovals.delete(key);
+            approval = null;
+          }
+          const approvalReady =
+              tool.status === "approval_required" && !!approval,
+            displayStatus =
+              tool.status === "approval_required" && !approvalReady
+                ? "expired"
+                : tool.status,
+            shortHash = tool.manifest_hash
+              ? `${tool.manifest_hash.slice(0, 16)}…`
+              : "—",
+            meta =
+              tool.operation === "search"
+                ? [
+                    [t("knowledgeSearchTitle"), tool.query || "—"],
+                    [
+                      t("knowledgeDocuments"),
+                      String(tool.results?.length || 0),
+                    ],
+                  ]
+                : [
+                    [t("knowledgeImport"), tool.import_name || "—"],
+                    [t("knowledgeDocuments"), String(tool.file_count || 0)],
+                    [t("projectSize"), formatBytes(tool.total_bytes)],
+                    [t("codeFingerprint"), shortHash, tool.manifest_hash],
+                  ],
+            metaHtml = meta
+              .map(
+                ([label, value, title]) =>
+                  `<div class="u369-code-meta-row"><span class="u369-code-meta-label">${esc(label)}</span><code class="u369-code-meta-value"${title ? ` title="${esc(title)}"` : ""}>${esc(value)}</code></div>`,
+              )
+              .join(""),
+            fileList = tool.files?.length
+              ? `<div class="u369-code-note">${tool.files.map((file) => esc(file.path)).join(" · ")}</div>`
+              : "";
+          let controls = "";
+          if (approvalReady) {
+            controls = `<div class="u369-code-actions"><button type="button" class="u369-code-btn primary" data-knowledge-approve="${index}">${esc(t("codeApprove"))}</button><button type="button" class="u369-code-btn danger" data-knowledge-cancel="${index}">${esc(t("codeCancel"))}</button></div>`;
+          } else if (
+            [
+              "running",
+              "cancelling",
+              "cancelled",
+              "expired",
+              "unknown",
+            ].includes(displayStatus)
+          ) {
+            controls = `<div class="u369-code-note">${esc(knowledgeStatusText(tool, displayStatus))}</div>`;
+          }
+          const output = ["completed", "failed", "unknown"].includes(
+            displayStatus,
+          )
+            ? renderKnowledgeOutput(tool)
+            : "";
+          return `<div class="u369-code-card"><div class="u369-code-card-top"><div class="u369-code-card-title">${esc(tool.operation === "search" ? t("knowledgeSearchTitle") : t("knowledgeApprovalTitle"))}</div><span class="u369-code-badge ${esc(displayStatus)}">${esc(codeStatusLabel(displayStatus))}</span></div><div class="u369-code-card-body"><div class="u369-code-summary">${esc(knowledgeStatusText(tool, displayStatus))}</div><div class="u369-code-meta">${metaHtml}</div>${fileList}${controls}${output}</div></div>`;
+        }
         function recoverInterruptedTurns() {
           const all = sessions();
           let changed = false;
@@ -3103,7 +3354,11 @@
                 if (!answerFor(turn)) turn.final = t("requestInterrupted");
                 changed = true;
               }
-              if (!["code", "project", "data"].includes(turn.tool?.kind))
+              if (
+                !["code", "project", "data", "knowledge"].includes(
+                  turn.tool?.kind,
+                )
+              )
                 return;
               if (turn.tool.status === "approval_required") {
                 turn.tool.status = "expired";
@@ -3112,7 +3367,9 @@
                     ? t("projectApprovalExpired")
                     : turn.tool.kind === "data"
                       ? t("dataApprovalExpired")
-                      : t("codeApprovalExpired");
+                      : turn.tool.kind === "knowledge"
+                        ? t("knowledgeApprovalExpired")
+                        : t("codeApprovalExpired");
                 changed = true;
               } else if (["running", "cancelling"].includes(turn.tool.status)) {
                 turn.tool.status = "unknown";
@@ -3121,7 +3378,9 @@
                     ? t("projectUnknown")
                     : turn.tool.kind === "data"
                       ? t("dataUnknown")
-                      : t("codeUnknown");
+                      : turn.tool.kind === "knowledge"
+                        ? t("knowledgeUnknown")
+                        : t("codeUnknown");
                 changed = true;
               }
             }),
@@ -3138,7 +3397,7 @@
             { s } = currentSession(false),
             turns = s?.turns || [];
           if (!turns.length) {
-            box.innerHTML = `<div class="u369-empty"><img src="/app-icon-192.png" alt=""><div class="u369-empty-title">${esc(t("howHelp"))}</div><div class="u369-code-hint">${esc(t("codeCommandHint"))}<br>${esc(t("projectFileLimits"))}<br>${esc(t("dataFileLimits"))}</div></div>`;
+            box.innerHTML = `<div class="u369-empty"><img src="/app-icon-192.png" alt=""><div class="u369-empty-title">${esc(t("howHelp"))}</div><div class="u369-code-hint">${esc(t("codeCommandHint"))}<br>${esc(t("projectFileLimits"))}<br>${esc(t("dataFileLimits"))}<br>${esc(t("knowledgeFileLimits"))}<br>${esc(t("knowledgeSearchHint"))}</div></div>`;
             return;
           }
           box.innerHTML = turns
@@ -3166,7 +3425,9 @@
                       ? renderProjectCard(s, tr, i)
                       : tr.tool?.kind === "data"
                         ? renderDataCard(s, tr, i)
-                        : "",
+                        : tr.tool?.kind === "knowledge"
+                          ? renderKnowledgeCard(s, tr, i)
+                          : "",
                 assistant = toolCard
                   ? `<div class="u369-assistant-msg"><div class="u369-assistant-head"><img src="/app-icon-192.png" alt=""><span>Unit369</span></div>${toolCard}</div>`
                   : ans || tr.pending || failure
@@ -3247,6 +3508,16 @@
                   .map(Number);
                 downloadDataArtifact(turnIndex, artifactIndex);
               }),
+          );
+          $$("[data-knowledge-approve]").forEach(
+            (button) =>
+              (button.onclick = () =>
+                confirmKnowledgeImport(+button.dataset.knowledgeApprove)),
+          );
+          $$("[data-knowledge-cancel]").forEach(
+            (button) =>
+              (button.onclick = () =>
+                cancelKnowledgeImport(+button.dataset.knowledgeCancel)),
           );
           requestAnimationFrame(() =>
             window.scrollTo({
@@ -3420,6 +3691,50 @@
               const error = new Error(data.error || t("requestFailed"));
               error.status = response.status;
               error.code = data.code || "data_lab_request_failed";
+              throw error;
+            }
+            return data;
+          } catch (error) {
+            if (error?.name === "AbortError") {
+              const timeout = new Error(t("requestTimeout"));
+              timeout.status = 504;
+              timeout.code = "client_timeout";
+              timeout.uncertain = path.endsWith("/confirm");
+              throw timeout;
+            }
+            if (path.endsWith("/confirm") && !Number(error?.status)) {
+              const uncertainError =
+                error instanceof Error
+                  ? error
+                  : new Error(String(error || t("requestFailed")));
+              uncertainError.uncertain = true;
+              throw uncertainError;
+            }
+            throw error;
+          } finally {
+            clearTimeout(timer);
+          }
+        }
+        async function callKnowledgeApi(
+          path,
+          body,
+          timeoutMs = 30_000,
+          method = "POST",
+        ) {
+          const controller = new AbortController(),
+            timer = setTimeout(() => controller.abort(), timeoutMs),
+            init = { method, signal: controller.signal, cache: "no-store" };
+          if (body !== undefined) {
+            init.headers = { "content-type": "application/json" };
+            init.body = JSON.stringify(body);
+          }
+          try {
+            const response = await fetch(`/api/native/knowledge/${path}`, init),
+              data = await response.json().catch(() => ({}));
+            if (!response.ok || data.error) {
+              const error = new Error(data.error || t("requestFailed"));
+              error.status = response.status;
+              error.code = data.code || "knowledge_request_failed";
               throw error;
             }
             return data;
@@ -3636,6 +3951,89 @@
             artifacts: [],
           };
           turn.final = t("dataApprovalRequired");
+          status.textContent = turn.final;
+        }
+        async function planKnowledgeImport(session, turn, files, message) {
+          const status = $("#u369-chat-status");
+          status.textContent = t("knowledgeImporting");
+          const data = await callKnowledgeApi(
+            "import",
+            {
+              name:
+                boundedText(message, 120) ||
+                boundedText(files[0]?.path, 120) ||
+                "Unit369 knowledge",
+              tags: ["unit369", "knowledge"],
+              files: files.map((file) => ({
+                path: file.path,
+                content: file.content,
+                title: file.title,
+              })),
+            },
+            45_000,
+          );
+          const knowledgeImport = data.knowledge_import || {};
+          if (
+            data.approval_required !== true ||
+            !data.approval?.id ||
+            !data.approval?.token ||
+            !knowledgeImport.id
+          )
+            throw new Error(t("requestFailed"));
+          const key = codeTurnKey(session, turn);
+          codeApprovals.set(key, {
+            id: String(data.approval.id),
+            token: String(data.approval.token),
+            expiresAt: Number(data.approval.expires_at) || 0,
+          });
+          turn.tool = {
+            kind: "knowledge",
+            status: "approval_required",
+            operation: "import",
+            import_id: String(knowledgeImport.id),
+            import_name: String(knowledgeImport.name || "Unit369 knowledge"),
+            manifest_hash: String(knowledgeImport.manifest_hash || ""),
+            file_count: Number(knowledgeImport.file_count) || files.length,
+            total_bytes: Number(knowledgeImport.total_bytes) || 0,
+            files: knowledgeImport.files || [],
+            approval_expires_at: Number(data.approval.expires_at) || 0,
+            documents: [],
+            results: [],
+          };
+          turn.final = t("knowledgeApprovalRequired");
+          status.textContent = turn.final;
+        }
+        async function searchNativeKnowledge(turn, message) {
+          const query = knowledgeSearchQuery(message),
+            status = $("#u369-chat-status");
+          if (!query) throw new Error(t("knowledgeSearchHint"));
+          turn.tool = {
+            kind: "knowledge",
+            status: "running",
+            operation: "search",
+            query,
+            files: [],
+            documents: [],
+            results: [],
+          };
+          turn.final = t("knowledgeSearching");
+          status.textContent = turn.final;
+          renderConversation();
+          const data = await callKnowledgeApi(
+            `search?q=${encodeURIComponent(query)}&limit=5`,
+            undefined,
+            30_000,
+            "GET",
+          );
+          turn.tool = {
+            ...turn.tool,
+            status: "completed",
+            query: data.query || query,
+            results: Array.isArray(data.results) ? data.results : [],
+          };
+          turn.final = turn.tool.results.length
+            ? t("knowledgeSearchTitle")
+            : t("knowledgeSearchEmpty");
           status.textContent = turn.final;
         }
         function codeActionContext(index) {
@@ -4151,6 +4549,154 @@
             renderHistory();
           }
         }
+        function knowledgeActionContext(index) {
+          const { a, s } = currentSession(false),
+            turn = s?.turns?.[index];
+          if (!s || !turn || turn.tool?.kind !== "knowledge") return null;
+          return {
+            a,
+            s,
+            turn,
+            key: codeTurnKey(s, turn),
+          };
+        }
+        async function confirmKnowledgeImport(index) {
+          if (sending) return;
+          const context = knowledgeActionContext(index);
+          if (!context) return;
+          const { a, s, turn, key } = context,
+            approval = codeApprovals.get(key),
+            status = $("#u369-chat-status");
+          if (!approval || Number(approval.expiresAt || 0) <= Date.now()) {
+            codeApprovals.delete(key);
+            turn.tool.status = "expired";
+            turn.final = t("knowledgeApprovalExpired");
+            saveActiveSession(a, s);
+            renderConversation();
+            return;
+          }
+          sending = true;
+          $("#u369-chat-send").disabled = true;
+          $("#u369-chat-attach").disabled = true;
+          status.className = "u369-chat-status";
+          status.textContent = t("knowledgeRunning");
+          turn.tool.status = "running";
+          turn.final = t("knowledgeRunning");
+          saveActiveSession(a, s);
+          renderConversation();
+          try {
+            const data = await callKnowledgeApi(
+              `imports/${encodeURIComponent(turn.tool.import_id)}/confirm`,
+              {
+                approval_id: approval.id,
+                approval_token: approval.token,
+              },
+              60_000,
+            );
+            turn.tool = {
+              ...turn.tool,
+              status: data.status === "completed" ? "completed" : "failed",
+              manifest_hash:
+                data.manifest_hash || turn.tool.manifest_hash || "",
+              documents: Array.isArray(data.documents) ? data.documents : [],
+            };
+            turn.final =
+              turn.tool.status === "completed"
+                ? t("knowledgeCompleted")
+                : t("knowledgeFailed");
+            status.textContent = turn.final;
+          } catch (error) {
+            const expired = Number(error?.status) === 410,
+              uncertain =
+                error?.uncertain ||
+                Number(error?.status) >= 500 ||
+                !Number(error?.status);
+            turn.tool.status = expired
+              ? "expired"
+              : uncertain
+                ? "unknown"
+                : "failed";
+            turn.tool.error = {
+              name: boundedText(error?.code || "KnowledgeImportError", 160),
+              message: boundedText(
+                error?.message || t("knowledgeFailed"),
+                2_000,
+              ),
+            };
+            turn.final = expired
+              ? t("knowledgeApprovalExpired")
+              : uncertain
+                ? t("knowledgeUnknown")
+                : t("knowledgeFailed");
+            status.className = "u369-chat-status err";
+            status.textContent = turn.final;
+          } finally {
+            codeApprovals.delete(key);
+            saveActiveSession(a, s);
+            sending = false;
+            $("#u369-chat-send").disabled = false;
+            $("#u369-chat-attach").disabled = false;
+            renderConversation();
+            renderHistory();
+          }
+        }
+        async function cancelKnowledgeImport(index) {
+          if (sending) return;
+          const context = knowledgeActionContext(index);
+          if (!context) return;
+          const { a, s, turn, key } = context,
+            approval = codeApprovals.get(key),
+            status = $("#u369-chat-status");
+          if (!approval) {
+            turn.tool.status = "expired";
+            turn.final = t("knowledgeApprovalExpired");
+            saveActiveSession(a, s);
+            renderConversation();
+            return;
+          }
+          sending = true;
+          $("#u369-chat-send").disabled = true;
+          $("#u369-chat-attach").disabled = true;
+          turn.tool.status = "cancelling";
+          turn.final = t("codeCancelling");
+          status.textContent = turn.final;
+          saveActiveSession(a, s);
+          renderConversation();
+          try {
+            const data = await callKnowledgeApi(
+              `imports/${encodeURIComponent(turn.tool.import_id)}/cancel`,
+              {
+                approval_id: approval.id,
+                approval_token: approval.token,
+              },
+              20_000,
+            );
+            if (data.cancelled !== true) throw new Error(t("requestFailed"));
+            turn.tool.status = "cancelled";
+            turn.final = t("knowledgeCancelled");
+            status.textContent = turn.final;
+          } catch (error) {
+            turn.tool.status = "expired";
+            turn.tool.error = {
+              name: boundedText(error?.code || "CancellationError", 160),
+              message: boundedText(
+                error?.message || t("codeCancelFailed"),
+                2_000,
+              ),
+            };
+            turn.final = t("knowledgeApprovalExpired");
+            status.className = "u369-chat-status err";
+            status.textContent = t("codeCancelFailed");
+          } finally {
+            codeApprovals.delete(key);
+            saveActiveSession(a, s);
+            sending = false;
+            $("#u369-chat-send").disabled = false;
+            $("#u369-chat-attach").disabled = false;
+            renderConversation();
+            renderHistory();
+          }
+        }
         async function downloadDataArtifact(turnIndex, artifactIndex) {
           const context = dataActionContext(turnIndex),
             artifact = context?.turn?.tool?.artifacts?.[artifactIndex],
@@ -4195,11 +4741,19 @@
           const input = $("#u369-chat-input"),
             typedMessage = input.value.trim(),
             attachedFiles = projectAttachments.map((file) => ({ ...file })),
-            dataRequest = isDataAttachmentSet(attachedFiles, typedMessage),
+            knowledgeImportRequest = isKnowledgeImportRequest(
+              attachedFiles,
+              typedMessage,
+            ),
+            dataRequest =
+              !knowledgeImportRequest &&
+              isDataAttachmentSet(attachedFiles, typedMessage),
+            knowledgeSearchRequest =
+              !attachedFiles.length && isKnowledgeSearchRequest(typedMessage),
             q =
               typedMessage ||
               (attachedFiles.length
-                ? `${dataRequest ? "Data Lab" : "Project"}: ${attachedFiles.map((file) => file.path).join(", ")}`
+                ? `${knowledgeImportRequest ? "Knowledge" : dataRequest ? "Data Lab" : "Project"}: ${attachedFiles.map((file) => file.path).join(", ")}`
                 : "");
           if (!q) return;
           sending = true;
@@ -4230,7 +4784,9 @@
           try {
             if (attachedFiles.length) {
               try {
-                if (dataRequest)
+                if (knowledgeImportRequest)
+                  await planKnowledgeImport(s, tr, attachedFiles, typedMessage);
+                else if (dataRequest)
                   await planDataLab(s, tr, attachedFiles, typedMessage);
                 else
                   await planProjectExecution(
@@ -4240,18 +4796,36 @@
                     typedMessage,
                   );
               } catch (error) {
+                const toolKind = knowledgeImportRequest
+                  ? "knowledge"
+                  : dataRequest
+                    ? "data"
+                    : "project";
                 tr.tool = {
-                  ...(tr.tool?.kind === (dataRequest ? "data" : "project")
-                    ? tr.tool
-                    : {}),
-                  kind: dataRequest ? "data" : "project",
+                  ...(tr.tool?.kind === toolKind ? tr.tool : {}),
+                  kind: toolKind,
                   status: "failed",
-                  logs: tr.tool?.logs || { stdout: [], stderr: [] },
-                  artifacts: tr.tool?.artifacts || [],
+                  operation:
+                    toolKind === "knowledge" ? "import" : tr.tool?.operation,
+                  files: tr.tool?.files || [],
+                  documents: tr.tool?.documents || [],
+                  results: tr.tool?.results || [],
+                  logs:
+                    toolKind === "knowledge"
+                      ? undefined
+                      : tr.tool?.logs || { stdout: [], stderr: [] },
+                  artifacts:
+                    toolKind === "knowledge"
+                      ? undefined
+                      : tr.tool?.artifacts || [],
                   error: {
                     name: boundedText(
                       error?.code ||
-                        (dataRequest ? "DataLabPlanError" : "ProjectPlanError"),
+                        (knowledgeImportRequest
+                          ? "KnowledgeImportPlanError"
+                          : dataRequest
+                            ? "DataLabPlanError"
+                            : "ProjectPlanError"),
                       160,
                     ),
                     message: boundedText(
@@ -4262,6 +4836,39 @@
                   },
                 };
                 tr.final = error?.message || t("requestFailed");
+                status.className = "u369-chat-status err";
+                status.textContent =
+                  Number(error?.status) === 401
+                    ? t("signInRequired")
+                    : tr.final;
+              }
+              return;
+            }
+            if (knowledgeSearchRequest) {
+              try {
+                await searchNativeKnowledge(tr, q);
+              } catch (error) {
+                tr.tool = {
+                  ...(tr.tool?.kind === "knowledge" ? tr.tool : {}),
+                  kind: "knowledge",
+                  status: "failed",
+                  operation: "search",
+                  query: knowledgeSearchQuery(q),
+                  files: [],
+                  documents: [],
+                  results: [],
+                  error: {
+                    name: boundedText(
+                      error?.code || "KnowledgeSearchError",
+                      160,
+                    ),
+                    message: boundedText(
+                      error?.message || t("knowledgeFailed"),
+                      2_000,
+                    ),
+                  },
+                };
+                tr.final = error?.message || t("knowledgeFailed");
                 status.className = "u369-chat-status err";
                 status.textContent =
                   Number(error?.status) === 401

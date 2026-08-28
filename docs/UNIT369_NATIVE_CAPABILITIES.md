@@ -110,6 +110,17 @@ Unit369 Core must remain useful without any third-party account connection. Exte
 - explicit target-column approval, deterministic train/test split and baseline metrics
 - temporary logistic/ridge models that are never persisted
 
+### 13. Native Knowledge
+
+- owner-scoped UTF-8 TXT and Markdown import
+- at most 5 documents per import, 128 KiB per document and 512 KiB total
+- private staging before any document becomes searchable
+- immutable SHA-256 manifest and one-time approval before indexing
+- atomic document persistence and FTS5 index updates in the same Durable Object transaction
+- Unicode tokenization, prefix matching and BM25 ranking with title/content/tag weights
+- bounded excerpts and source paths returned directly in the chat result card
+- no external AI, embedding provider, Sandbox container or third-party account required
+
 ## External connections
 
 External connections are adapters only. Examples: Google Drive for a user's existing Drive files, GitHub for publishing to an existing GitHub repository, Shopify for an existing Shopify store, Slack for an existing Slack workspace, and payment processors for card-network payment execution.
@@ -146,7 +157,7 @@ No external adapter may become a required dependency for a native Unit369 capabi
 9. Native visual/content creation.
 10. Reduce third-party catalog to optional External Connections.
 
-The isolated interpreter, multi-file workspace runner and first guided Data Lab are complete. Repository checkout and package installation remain separate follow-up work because they need narrower permission and supply-chain controls than an imported workspace or fixed analysis pipeline.
+The isolated interpreter, multi-file workspace runner, guided Data Lab and first native Knowledge retrieval layer are complete. Knowledge retrieval is currently deterministic lexical FTS5 search, not semantic embeddings or an unsupported claim of document understanding. Repository checkout and package installation remain separate follow-up work because they need narrower permission and supply-chain controls than an imported workspace or fixed analysis pipeline.
 
 ## Definition of done for a third-party replacement
 

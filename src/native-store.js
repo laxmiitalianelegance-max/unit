@@ -41,16 +41,46 @@ function pageInfo(limit, offset, count) {
 function obj(v) {
   return v && typeof v === "object" && !Array.isArray(v) ? v : {};
 }
-function excerpt(text, query, max = 320) {
-  const s = String(text || "")
-    .replace(/\s+/g, " ")
-    .trim();
-  if (!s) return "";
-  const q = String(query || "").toLowerCase();
-  const at = q ? s.toLowerCase().indexOf(q) : -1;
-  if (at < 0) return s.slice(0, max);
-  const start = Math.max(0, at - Math.floor(max / 3));
-  return s.slice(start, start + max);
+const KNOWLEDGE_STOP_WORDS = new Set([
+  "a",
+  "an",
+  "and",
+  "are",
+  "for",
+  "from",
+  "in",
+  "is",
+  "of",
+  "on",
+  "the",
+  "to",
+  "what",
+  "with",
+  "da",
+  "do",
+  "iz",
+  "je",
+  "ko",
+  "na",
+  "od",
+  "se",
+  "sta",
+  "šta",
+  "u",
+  "za",
+]);
+const KNOWLEDGE_IMPORT_COLLECTION = "__unit369_knowledge_import_v1";
+
+export function knowledgeMatchQuery(value) {
+  const normalized = String(value || "")
+    .normalize("NFKC")
+    .toLocaleLowerCase("en");
+  const all = [
+    ...new Set((normalized.match(/[\p{L}\p{N}]{2,48}/gu) || []).slice(0, 20)),
+  ];
+  const useful = all.filter((token) => !KNOWLEDGE_STOP_WORDS.has(token));
+  const tokens = (useful.length ? useful : all).slice(0, 12);
+  return tokens.map((token) => `"${token.replace(/"/g, '""')}"*`).join(" OR ");
 }
 
 import { HttpError, readJsonLimited } from "./runtime-utils.js";
@@ -72,7 +102,14 @@ export class NativeStore {
       PRIMARY KEY(kind,id)
     );
     CREATE INDEX IF NOT EXISTS idx_native_kind_parent ON native_items(kind,parent_id);
-    CREATE INDEX IF NOT EXISTS idx_native_kind_updated ON native_items(kind,updated_at DESC);`);
+    CREATE INDEX IF NOT EXISTS idx_native_kind_updated ON native_items(kind,updated_at DESC);
+    CREATE VIRTUAL TABLE IF NOT EXISTS knowledge_fts USING fts5(
+      document_id UNINDEXED,
+      title,
+      content,
+      tags,
+      tokenize='unicode61 remove_diacritics 2'
+    );`);
   }
   rows(cursor) {
     return Array.from(cursor || []);
@@ -87,6 +124,68 @@ export class NativeStore {
         ),
       )[0] || null
     );
+  }
+  indexDocument(documentId, title, content, tags) {
+    this.sql.exec("DELETE FROM knowledge_fts WHERE document_id=?", documentId);
+    this.sql.exec(
+      "INSERT INTO knowledge_fts(document_id,title,content,tags) VALUES(?,?,?,?)",
+      documentId,
+      title,
+      content,
+      Array.isArray(tags) ? tags.join(" ") : String(tags || ""),
+    );
+  }
+  backfillKnowledgeIndex() {
+    this.sql.exec(`INSERT INTO knowledge_fts(document_id,title,content,tags)
+      SELECT item.id,item.name,item.body,item.meta
+      FROM native_items item
+      WHERE item.kind='document'
+        AND NOT EXISTS (
+          SELECT 1 FROM knowledge_fts AS fts
+          WHERE fts.document_id=item.id
+        )`);
+  }
+  async scheduleKnowledgeImportAlarm(record) {
+    if (record?.type !== "knowledge-import") return;
+    const expiresAt = Number(record.expires_at || 0);
+    if (!Number.isFinite(expiresAt) || expiresAt <= 0) return;
+    const existing = await this.state.storage.getAlarm?.();
+    if (!existing || existing > expiresAt) {
+      await this.state.storage.setAlarm?.(expiresAt);
+    }
+  }
+  async alarm() {
+    const now = Date.now(),
+      rows = this.rows(
+        this.sql.exec("SELECT id,body FROM native_items WHERE kind='record'"),
+      );
+    let next = null;
+    this.state.storage.transactionSync(() => {
+      for (const row of rows) {
+        let record;
+        try {
+          record = JSON.parse(row.body || "{}");
+        } catch {
+          continue;
+        }
+        if (record.type !== "knowledge-import") continue;
+        const expiresAt = Number(record.expires_at || 0);
+        if (!Number.isFinite(expiresAt) || expiresAt <= 0) continue;
+        if (expiresAt <= now) {
+          this.sql.exec(
+            "DELETE FROM native_items WHERE kind='file' AND parent_id=?",
+            row.id,
+          );
+          this.sql.exec(
+            "DELETE FROM native_items WHERE kind='record' AND id=?",
+            row.id,
+          );
+        } else if (next === null || expiresAt < next) {
+          next = expiresAt;
+        }
+      }
+    });
+    if (next !== null) await this.state.storage.setAlarm?.(next);
   }
   async fetch(request) {
     const u = new URL(request.url),
@@ -286,6 +385,7 @@ export class NativeStore {
         now,
         now,
       );
+      await this.scheduleKnowledgeImportAlarm(record);
       return json(
         {
           record: {
@@ -393,18 +493,21 @@ export class NativeStore {
               .filter(Boolean)
               .slice(0, 32)
           : [],
-        meta = { tags, format, version: 1, ...obj(b.meta) };
-      this.sql.exec(
-        "INSERT INTO native_items(kind,id,name,mime,body,meta,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)",
-        "document",
-        did,
-        title,
-        "text/" + format,
-        content,
-        JSON.stringify(meta),
-        now,
-        now,
-      );
+        meta = { ...obj(b.meta), tags, format, version: 1 };
+      this.state.storage.transactionSync(() => {
+        this.sql.exec(
+          "INSERT INTO native_items(kind,id,name,mime,body,meta,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)",
+          "document",
+          did,
+          title,
+          "text/" + format,
+          content,
+          JSON.stringify(meta),
+          now,
+          now,
+        );
+        this.indexDocument(did, title, content, tags);
+      });
       return json(
         {
           document: {
@@ -497,16 +600,19 @@ export class NativeStore {
               : [],
         version = (oldMeta.version || 1) + 1,
         meta = { ...oldMeta, ...obj(b.meta), tags, format, version };
-      this.sql.exec(
-        "UPDATE native_items SET name=?,mime=?,body=?,meta=?,updated_at=? WHERE kind=? AND id=?",
-        title,
-        "text/" + format,
-        content,
-        JSON.stringify(meta),
-        now,
-        "document",
-        did,
-      );
+      this.state.storage.transactionSync(() => {
+        this.sql.exec(
+          "UPDATE native_items SET name=?,mime=?,body=?,meta=?,updated_at=? WHERE kind=? AND id=?",
+          title,
+          "text/" + format,
+          content,
+          JSON.stringify(meta),
+          now,
+          "document",
+          did,
+        );
+        this.indexDocument(did, title, content, tags);
+      });
       return json({
         document: {
           id: did,
@@ -520,46 +626,223 @@ export class NativeStore {
       });
     }
     if (request.method === "DELETE") {
-      this.sql.exec(
-        "DELETE FROM native_items WHERE kind=? AND id=?",
-        "document",
-        did,
-      );
+      this.state.storage.transactionSync(() => {
+        this.sql.exec(
+          "DELETE FROM native_items WHERE kind=? AND id=?",
+          "document",
+          did,
+        );
+        this.sql.exec("DELETE FROM knowledge_fts WHERE document_id=?", did);
+      });
       return json({ ok: true });
     }
     return json({ error: "Method not allowed." }, 405);
   }
   async knowledge(request, u, p) {
+    if (request.method === "GET" && p[0] === "staging") {
+      let collection = this.rows(
+        this.sql.exec(
+          "SELECT id,name,body schema,created_at,updated_at FROM native_items WHERE kind='collection' AND name=? ORDER BY created_at ASC LIMIT 1",
+          KNOWLEDGE_IMPORT_COLLECTION,
+        ),
+      )[0];
+      if (!collection) {
+        const now = Date.now(),
+          collectionId = id("c"),
+          schema = JSON.stringify({
+            type: "knowledge-import",
+            manifest_hash: "string",
+            status: "staged",
+          });
+        this.state.storage.transactionSync(() => {
+          collection = this.rows(
+            this.sql.exec(
+              "SELECT id,name,body schema,created_at,updated_at FROM native_items WHERE kind='collection' AND name=? ORDER BY created_at ASC LIMIT 1",
+              KNOWLEDGE_IMPORT_COLLECTION,
+            ),
+          )[0];
+          if (collection) return;
+          this.sql.exec(
+            "INSERT INTO native_items(kind,id,name,body,created_at,updated_at) VALUES(?,?,?,?,?,?)",
+            "collection",
+            collectionId,
+            KNOWLEDGE_IMPORT_COLLECTION,
+            schema,
+            now,
+            now,
+          );
+          collection = {
+            id: collectionId,
+            name: KNOWLEDGE_IMPORT_COLLECTION,
+            schema,
+            created_at: now,
+            updated_at: now,
+          };
+        });
+      }
+      return json({
+        collection: {
+          ...collection,
+          schema:
+            typeof collection.schema === "string"
+              ? JSON.parse(collection.schema || "{}")
+              : collection.schema,
+        },
+      });
+    }
+    if (request.method === "POST" && p[0] === "import") {
+      const b = await readJsonLimited(request, 768 * 1024),
+        tags = Array.isArray(b.tags)
+          ? b.tags
+              .map((item) => cleanName(item, 60))
+              .filter(Boolean)
+              .slice(0, 16)
+          : [],
+        sourceImportId = safeKey(b.source_import_id),
+        files = Array.isArray(b.files) ? b.files : [];
+      if (!files.length)
+        return json({ error: "Knowledge files are required." }, 400);
+      if (files.length > 5) {
+        throw new HttpError(
+          413,
+          "Knowledge import accepts at most 5 documents.",
+          "too_many_knowledge_documents",
+        );
+      }
+      if (!sourceImportId) {
+        throw new HttpError(
+          400,
+          "Knowledge import source is invalid.",
+          "invalid_knowledge_import_source",
+        );
+      }
+      let totalBytes = 0;
+      const documents = files.map((file) => {
+        const title = cleanName(file?.title, 160),
+          content = String(file?.content ?? ""),
+          format = ["text", "markdown"].includes(file?.format)
+            ? file.format
+            : "text",
+          path = cleanName(file?.path, 240);
+        if (!title || !content.trim() || content.includes("\u0000")) {
+          throw new HttpError(
+            400,
+            "Knowledge document is invalid.",
+            "invalid_knowledge_document",
+          );
+        }
+        const contentBytes = new TextEncoder().encode(content).byteLength;
+        if (contentBytes > 128 * 1024) {
+          throw new HttpError(
+            413,
+            "Knowledge document exceeds the storage limit.",
+            "knowledge_document_too_large",
+          );
+        }
+        totalBytes += contentBytes;
+        if (totalBytes > 512 * 1024) {
+          throw new HttpError(
+            413,
+            "Knowledge import exceeds the aggregate storage limit.",
+            "knowledge_import_too_large",
+          );
+        }
+        return {
+          id: id("d"),
+          title,
+          content,
+          format,
+          path,
+          meta: {
+            tags,
+            format,
+            version: 1,
+            source_path: path,
+            source_import_id: sourceImportId,
+          },
+        };
+      });
+      const now = Date.now();
+      this.state.storage.transactionSync(() => {
+        for (const document of documents) {
+          this.sql.exec(
+            "INSERT INTO native_items(kind,id,name,mime,body,meta,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)",
+            "document",
+            document.id,
+            document.title,
+            document.format === "markdown" ? "text/markdown" : "text/plain",
+            document.content,
+            JSON.stringify(document.meta),
+            now,
+            now,
+          );
+          this.indexDocument(
+            document.id,
+            document.title,
+            document.content,
+            tags,
+          );
+        }
+      });
+      return json(
+        {
+          documents: documents.map((document) => ({
+            id: document.id,
+            title: document.title,
+            format: document.format,
+            source_path: document.path,
+            tags,
+            version: 1,
+            created_at: now,
+            updated_at: now,
+          })),
+        },
+        201,
+      );
+    }
     if (request.method !== "GET" || p[0] !== "search")
       return json({ error: "Knowledge route not found." }, 404);
     const q = String(u.searchParams.get("q") || "")
       .trim()
-      .slice(0, 160);
+      .slice(0, 240);
     if (!q) return json({ error: "Search query is required." }, 400);
-    const { limit, offset } = pageParams(u, 25, 50),
-      like = "%" + q + "%",
+    const match = knowledgeMatchQuery(q);
+    if (!match)
+      return json({ error: "Search query needs a searchable term." }, 400);
+    this.backfillKnowledgeIndex();
+    const { limit, offset } = pageParams(u, 5, 10),
       rows = this.rows(
         this.sql.exec(
-          "SELECT id,name,body,meta,updated_at FROM native_items WHERE kind=? AND (name LIKE ? OR body LIKE ? OR meta LIKE ?) ORDER BY updated_at DESC LIMIT ? OFFSET ?",
-          "document",
-          like,
-          like,
-          like,
+          `SELECT item.id,item.name,
+             snippet(knowledge_fts,2,'','',' … ',40) excerpt,
+             item.meta,item.updated_at,
+             bm25(knowledge_fts,0.0,6.0,1.0,2.0) score
+           FROM knowledge_fts
+           JOIN native_items item
+             ON item.kind='document' AND item.id=knowledge_fts.document_id
+           WHERE knowledge_fts MATCH ?
+           ORDER BY score ASC,item.updated_at DESC
+           LIMIT ? OFFSET ?`,
+          match,
           limit,
           offset,
         ),
       );
     return json({
       query: q,
-      source: "unit369-native-documents",
-      results: rows.map((r) => {
+      source: "unit369-durable-object-sqlite-fts5",
+      results: rows.map((r, index) => {
         const m = JSON.parse(r.meta || "{}");
         return {
           document_id: r.id,
           title: r.name,
-          excerpt: excerpt(r.body, q),
+          excerpt: String(r.excerpt || "")
+            .replace(/\s+/g, " ")
+            .slice(0, 700),
           tags: m.tags || [],
           version: m.version || 1,
+          source_path: m.source_path || "",
+          rank: offset + index + 1,
           updated_at: r.updated_at,
         };
       }),
