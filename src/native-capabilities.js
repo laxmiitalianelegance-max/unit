@@ -21,7 +21,7 @@ import { HttpError, errorResponse, readJsonLimited } from "./runtime-utils.js";
 export const NATIVE_CAPABILITIES = Object.freeze({
   intelligence: {
     name: "Intelligence",
-    version: 2,
+    version: 3,
     operations: [
       "chat",
       "research",
@@ -30,6 +30,10 @@ export const NATIVE_CAPABILITIES = Object.freeze({
       "verify",
       "knowledge.import",
       "knowledge.search",
+      "knowledge.document.list",
+      "knowledge.document.read",
+      "knowledge.document.update",
+      "knowledge.document.delete",
     ],
     native: true,
   },
@@ -376,6 +380,18 @@ async function proxyNative(request, env, account, url) {
     /^\/api\/native\/(data|documents|knowledge)(.*)$/,
   );
   if (!match) return json({ error: "Native capability route not found." }, 404);
+  if (
+    match[1] === "documents" &&
+    ["PUT", "PATCH", "DELETE"].includes(request.method)
+  ) {
+    return json(
+      {
+        error: "Document changes require the Unit369 Knowledge approval flow.",
+        code: "knowledge_document_approval_required",
+      },
+      405,
+    );
+  }
   const limited = await payloadLimit(request, match[1]);
   if (limited) return limited;
   return store(env, account.uid).fetch(

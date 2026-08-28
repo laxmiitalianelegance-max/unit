@@ -208,6 +208,26 @@ export const UI_BASE = Object.freeze({
   knowledgeSearchHint:
     "Use “Search knowledge: question” or “U znanju: pitanje”.",
   knowledgeSource: "Source",
+  knowledgeManager: "Knowledge",
+  knowledgeManagerIntro:
+    "Search, inspect and safely manage documents stored in Unit369.",
+  knowledgeManagerSearch: "Search documents",
+  knowledgeManagerEmpty: "No knowledge documents found.",
+  knowledgeManagerSelect: "Select a document to inspect its source.",
+  knowledgeManagerNoSource: "Created in Unit369",
+  knowledgeManagerContent: "Document content",
+  knowledgeManagerUpdated: "Last updated",
+  knowledgeManagerSave: "Review metadata change",
+  knowledgeManagerDelete: "Review deletion",
+  knowledgeManagerApprovalUpdate:
+    "Approve this exact title and tag change. Document content will not change.",
+  knowledgeManagerApprovalDelete:
+    "Permanently delete this document and remove it from knowledge search?",
+  knowledgeManagerConfirm: "Confirm approved change",
+  knowledgeManagerCancel: "Cancel approval",
+  knowledgeManagerSaved: "Document metadata was updated.",
+  knowledgeManagerDeleted: "Document was deleted from Unit369 knowledge.",
+  knowledgeManagerLoading: "Loading knowledge documents…",
 });
 
 const UI_SR = Object.freeze({
@@ -422,6 +442,26 @@ const UI_SR = Object.freeze({
   knowledgeSearchHint:
     "Koristite „U znanju: pitanje“ ili „Pretraži znanje: pitanje“.",
   knowledgeSource: "Izvor",
+  knowledgeManager: "Znanje",
+  knowledgeManagerIntro:
+    "Pretražite, pregledajte i bezbedno upravljajte dokumentima sačuvanim u Unit369.",
+  knowledgeManagerSearch: "Pretraži dokumente",
+  knowledgeManagerEmpty: "Nema pronađenih dokumenata znanja.",
+  knowledgeManagerSelect: "Izaberite dokument da pregledate njegov izvor.",
+  knowledgeManagerNoSource: "Napravljeno u Unit369",
+  knowledgeManagerContent: "Sadržaj dokumenta",
+  knowledgeManagerUpdated: "Poslednja izmena",
+  knowledgeManagerSave: "Pregledaj izmenu podataka",
+  knowledgeManagerDelete: "Pregledaj brisanje",
+  knowledgeManagerApprovalUpdate:
+    "Odobrite tačno ovu izmenu naziva i oznaka. Sadržaj dokumenta se ne menja.",
+  knowledgeManagerApprovalDelete:
+    "Trajno obrisati ovaj dokument i ukloniti ga iz pretrage znanja?",
+  knowledgeManagerConfirm: "Potvrdi odobrenu izmenu",
+  knowledgeManagerCancel: "Otkaži odobrenje",
+  knowledgeManagerSaved: "Podaci dokumenta su izmenjeni.",
+  knowledgeManagerDeleted: "Dokument je obrisan iz Unit369 znanja.",
+  knowledgeManagerLoading: "Učitavam dokumente znanja…",
 });
 
 export function normalizeLanguage(value) {

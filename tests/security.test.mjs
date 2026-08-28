@@ -45,6 +45,8 @@ import {
 } from "../src/native-project-execution.js";
 import {
   createKnowledgeManifest,
+  createKnowledgeDocumentSnapshot,
+  handleNativeKnowledge,
   knowledgeCapabilities,
   normalizeKnowledgeImport,
 } from "../src/native-knowledge.js";
@@ -123,6 +125,141 @@ function toolStoreNamespace() {
             input instanceof Request ? input : new Request(input, init),
           ),
       };
+    },
+  };
+}
+
+function knowledgeDocumentNamespace(initial = {}) {
+  const owners = new Map(
+    Object.entries(initial).map(([owner, documents]) => [
+      owner,
+      new Map(
+        documents.map((document) => [document.id, structuredClone(document)]),
+      ),
+    ]),
+  );
+  const ownerDocuments = (owner) => {
+    if (!owners.has(owner)) owners.set(owner, new Map());
+    return owners.get(owner);
+  };
+  function summary(document) {
+    return {
+      id: document.id,
+      title: document.title,
+      format: document.format,
+      tags: document.tags || [],
+      source_path: document.meta?.source_path || "",
+      size: new TextEncoder().encode(document.content || "").byteLength,
+      version: document.version || 1,
+      created_at: document.created_at,
+      updated_at: document.updated_at,
+    };
+  }
+  return {
+    idFromName(name) {
+      return String(name);
+    },
+    get(owner) {
+      return {
+        async fetch(input) {
+          const storeRequest =
+              input instanceof Request ? input : new Request(input),
+            url = new URL(storeRequest.url),
+            path = url.pathname.replace(/^\/native-store\/?/, ""),
+            parts = path.split("/").filter(Boolean),
+            documents = ownerDocuments(String(owner));
+          if (parts[0] !== "documents") {
+            return Response.json(
+              { error: "Unexpected store request." },
+              {
+                status: 500,
+              },
+            );
+          }
+          if (parts.length === 1 && storeRequest.method === "GET") {
+            const query = String(url.searchParams.get("q") || "")
+                .trim()
+                .toLowerCase(),
+              all = [...documents.values()].filter((document) =>
+                query
+                  ? [document.title, document.content, ...(document.tags || [])]
+                      .join(" ")
+                      .toLowerCase()
+                      .includes(query)
+                  : true,
+              );
+            return Response.json({
+              documents: all.map(summary),
+              pagination: {
+                limit: 100,
+                offset: 0,
+                next_offset: null,
+                has_more: false,
+              },
+            });
+          }
+          const documentId = decodeURIComponent(parts[1] || ""),
+            document = documents.get(documentId);
+          if (!document)
+            return Response.json(
+              { error: "Document not found." },
+              { status: 404 },
+            );
+          if (storeRequest.method === "GET") {
+            return Response.json({ document: structuredClone(document) });
+          }
+          const expectedVersion = Number(
+              url.searchParams.get("expected_version"),
+            ),
+            expectedUpdatedAt = Number(
+              url.searchParams.get("expected_updated_at"),
+            );
+          if (
+            expectedVersion !== Number(document.version || 1) ||
+            expectedUpdatedAt !== Number(document.updated_at)
+          ) {
+            return Response.json(
+              {
+                error: "Document changed after approval was created.",
+                code: "document_changed_after_approval",
+              },
+              { status: 409 },
+            );
+          }
+          if (storeRequest.method === "PUT") {
+            const update = await storeRequest.json();
+            document.title = update.title;
+            document.tags = update.tags;
+            document.version = Number(document.version || 1) + 1;
+            document.meta = {
+              ...(document.meta || {}),
+              tags: update.tags,
+              version: document.version,
+            };
+            document.updated_at += 1;
+            return Response.json({ document: structuredClone(document) });
+          }
+          if (storeRequest.method === "DELETE") {
+            documents.delete(documentId);
+            return Response.json({ ok: true });
+          }
+          return Response.json(
+            { error: "Method not allowed." },
+            {
+              status: 405,
+            },
+          );
+        },
+      };
+    },
+    mutate(owner, documentId, update) {
+      const document = ownerDocuments(owner).get(documentId);
+      Object.assign(document, update);
+      document.version = Number(document.version || 1) + 1;
+      document.updated_at = Number(document.updated_at || 0) + 1;
+    },
+    read(owner, documentId) {
+      return ownerDocuments(owner).get(documentId);
     },
   };
 }
@@ -806,6 +943,172 @@ test("native knowledge approvals bind an order-stable content manifest", async (
     first.entries.map((entry) => entry.path),
     ["a.md", "b.txt"],
   );
+});
+
+test("knowledge document fingerprints bind content, metadata and version", async () => {
+  const document = {
+    id: "d_fingerprint",
+    title: "Project Orion",
+    content: "Launch window is 14 October.",
+    format: "markdown",
+    tags: ["project", "orion"],
+    meta: { source_path: "orion.md" },
+    version: 1,
+    created_at: 1_700_000_000_000,
+    updated_at: 1_700_000_000_100,
+  };
+  const first = await createKnowledgeDocumentSnapshot(document),
+    same = await createKnowledgeDocumentSnapshot(structuredClone(document)),
+    changed = await createKnowledgeDocumentSnapshot({
+      ...document,
+      content: "Launch window changed.",
+      version: 2,
+      updated_at: document.updated_at + 1,
+    });
+  assert.equal(first.fingerprint, same.fingerprint);
+  assert.notEqual(first.fingerprint, changed.fingerprint);
+  assert.equal(first.document_id, document.id);
+  assert.equal(first.source_path, "orion.md");
+  assert.equal(first.content_sha256.length, 64);
+});
+
+test("Knowledge Manager isolates owners and requires immutable one-time approvals", async () => {
+  const timestamp = 1_700_000_000_000,
+    nativeStore = knowledgeDocumentNamespace({
+      owner_manager: [
+        {
+          id: "d_orion",
+          title: "Project Orion",
+          content: "Launch window is 14 October.",
+          format: "markdown",
+          tags: ["project"],
+          meta: {
+            source_path: "orion.md",
+            format: "markdown",
+            tags: ["project"],
+            version: 1,
+          },
+          version: 1,
+          created_at: timestamp,
+          updated_at: timestamp,
+        },
+      ],
+    }),
+    env = {
+      NATIVE_STORE: nativeStore,
+      TOOL_STORE: toolStoreNamespace(),
+    },
+    account = { uid: "owner_manager" };
+
+  const listed = await handleNativeKnowledge(
+    new Request("https://unit.test/api/native/knowledge/documents?limit=100"),
+    env,
+    account,
+  );
+  assert.equal(listed.status, 200);
+  assert.equal((await listed.json()).documents[0].source_path, "orion.md");
+
+  const isolated = await handleNativeKnowledge(
+    new Request("https://unit.test/api/native/knowledge/documents"),
+    env,
+    { uid: "other_owner" },
+  );
+  assert.equal(isolated.status, 200);
+  assert.deepEqual((await isolated.json()).documents, []);
+
+  const updatePlanResponse = await handleNativeKnowledge(
+    request("/api/native/knowledge/documents/d_orion/update", {
+      title: "Project Orion — approved",
+      tags: ["project", "approved"],
+    }),
+    env,
+    account,
+  );
+  assert.equal(updatePlanResponse.status, 202);
+  const updatePlan = await updatePlanResponse.json();
+  assert.equal(updatePlan.approval_required, true);
+  assert.equal(nativeStore.read("owner_manager", "d_orion").version, 1);
+
+  const updatedResponse = await handleNativeKnowledge(
+    request("/api/native/knowledge/documents/d_orion/update/confirm", {
+      approval_id: updatePlan.approval.id,
+      approval_token: updatePlan.approval.token,
+    }),
+    env,
+    account,
+  );
+  assert.equal(
+    updatedResponse.status,
+    200,
+    await updatedResponse.clone().text(),
+  );
+  const updated = await updatedResponse.json();
+  assert.equal(updated.document.title, "Project Orion — approved");
+  assert.equal(updated.document.version, 2);
+  assert.deepEqual(updated.document.tags, ["project", "approved"]);
+
+  const updateReplay = await handleNativeKnowledge(
+    request("/api/native/knowledge/documents/d_orion/update/confirm", {
+      approval_id: updatePlan.approval.id,
+      approval_token: updatePlan.approval.token,
+    }),
+    env,
+    account,
+  );
+  assert.equal(updateReplay.status, 409);
+
+  const staleDeletePlanResponse = await handleNativeKnowledge(
+    request("/api/native/knowledge/documents/d_orion/delete", {}),
+    env,
+    account,
+  );
+  const staleDeletePlan = await staleDeletePlanResponse.json();
+  nativeStore.mutate("owner_manager", "d_orion", {
+    content: "Changed after delete approval.",
+  });
+  const staleDelete = await handleNativeKnowledge(
+    request("/api/native/knowledge/documents/d_orion/delete/confirm", {
+      approval_id: staleDeletePlan.approval.id,
+      approval_token: staleDeletePlan.approval.token,
+    }),
+    env,
+    account,
+  );
+  assert.equal(staleDelete.status, 409);
+  assert.equal(
+    (await staleDelete.json()).code,
+    "approved_knowledge_document_changed",
+  );
+  assert.ok(nativeStore.read("owner_manager", "d_orion"));
+
+  const deletePlanResponse = await handleNativeKnowledge(
+    request("/api/native/knowledge/documents/d_orion/delete", {}),
+    env,
+    account,
+  );
+  const deletePlan = await deletePlanResponse.json();
+  assert.ok(nativeStore.read("owner_manager", "d_orion"));
+  const deletedResponse = await handleNativeKnowledge(
+    request("/api/native/knowledge/documents/d_orion/delete/confirm", {
+      approval_id: deletePlan.approval.id,
+      approval_token: deletePlan.approval.token,
+    }),
+    env,
+    account,
+  );
+  assert.equal(deletedResponse.status, 200);
+  assert.equal((await deletedResponse.json()).deleted, true);
+  assert.equal(nativeStore.read("owner_manager", "d_orion"), undefined);
+
+  const deleteReplay = await handleNativeKnowledge(
+    request("/api/native/knowledge/documents/d_orion/delete/confirm", {
+      approval_id: deletePlan.approval.id,
+      approval_token: deletePlan.approval.token,
+    }),
+    env,
+    account,
+  );
+  assert.equal(deleteReplay.status, 409);
 });
 
 test("native knowledge search builds operator-safe FTS5 queries", () => {

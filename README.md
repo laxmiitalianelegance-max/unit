@@ -31,7 +31,7 @@ There is one active runtime graph. Historical wrappers and branch-specific valid
 - Native and external mutations use short-lived, immutable, one-time approval tokens.
 - Code execution additionally forbids arbitrary shell access, forwards no Worker secrets and bounds code, time, rate and output.
 - Data Lab runs only a fixed Unit369-authored Python pipeline, verifies the dataset digest again at confirmation, validates XLSX archives before parsing and neutralizes spreadsheet formulas in CSV exports.
-- Native Knowledge accepts only bounded UTF-8 TXT/Markdown input, verifies an immutable content manifest at confirmation, indexes atomically per owner and never requires an external AI provider.
+- Native Knowledge accepts only bounded UTF-8 TXT/Markdown input, verifies immutable import and document-mutation approvals, indexes atomically per owner, includes a mobile list/search/source manager and never requires an external AI provider.
 - Provider credentials never enter the browser bundle or local storage.
 
 ## Required production bindings and secrets

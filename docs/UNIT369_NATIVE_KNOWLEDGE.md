@@ -39,6 +39,14 @@ Chat search is explicit:
 
 Search does not require a mutation approval because it is read-only. It does require an authenticated Unit369 session and is rate-limited per owner.
 
+## Knowledge Manager
+
+The authenticated owner can open **Knowledge** from the application menu to list and search all native documents, inspect the stored content and original source path, and see tags, byte size, version and last-update time.
+
+Changing a title or tags and deleting a document both use separate short-lived, one-time approvals. The approval binds the document content hash, metadata, version and update timestamp. Confirmation reloads the document and fails closed if anything changed. The underlying SQLite mutation also requires the approved version and timestamp, preventing a race between verification and the atomic index update or deletion.
+
+Raw public `PUT`, `PATCH` and `DELETE` document routes are blocked. Approval tokens remain only in browser memory. Content replacement is not exposed by this manager version; a later parser/staging flow must preserve the same immutable approval guarantee.
+
 ## Security properties
 
 - owner-scoped Durable Object storage
@@ -49,6 +57,8 @@ Search does not require a mutation approval because it is read-only. It does req
 - order-stable SHA-256 manifest checked again at confirmation
 - one-time approval replay rejection
 - atomic document/index writes
+- conditional document metadata updates and deletion
+- stale-approval rejection when content, metadata or version changes
 - HTML output escaped by the chat UI
 
 ## Current boundary

@@ -63,7 +63,7 @@ for (const match of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)) {
 }
 assert.ok(html.includes('data-mode="auto"'), "Auto fallback mode is missing");
 assert.ok(
-  html.includes("unit369-ui-i18n-v12-"),
+  html.includes("unit369-ui-i18n-v13-"),
   "Translation cache version is stale",
 );
 assert.ok(
@@ -108,6 +108,15 @@ assert.ok(
     html.includes("data-knowledge-cancel") &&
     html.includes("compactKnowledgeTool"),
   "Native knowledge import, approval or cited-search UI is missing",
+);
+assert.ok(
+  html.includes('data-page="knowledge"') &&
+    html.includes('id="u369-knowledge-list"') &&
+    html.includes("planKnowledgeMetadataUpdate") &&
+    html.includes("planKnowledgeDocumentDelete") &&
+    html.includes("confirmKnowledgeManagerMutation") &&
+    html.includes("const knowledgeManagerState = {"),
+  "Knowledge Manager or its in-memory approval flow is missing",
 );
 const knowledgeSource = readFileSync(
   join(sourceRoot, "native-knowledge.js"),
