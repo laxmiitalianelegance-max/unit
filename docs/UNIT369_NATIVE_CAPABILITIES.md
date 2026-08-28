@@ -99,6 +99,15 @@ Unit369 Core must remain useful without any third-party account connection. Exte
 - owner-scoped containers with no Worker secrets forwarded
 - future workspace build/test runners reuse this contract instead of exposing a general shell endpoint
 
+### 12. Data Lab
+
+- owner-scoped CSV, TSV and record-oriented JSON imports
+- guided profiling, cleaning and Matplotlib chart generation
+- fixed server-authored analysis code instead of generated shell access
+- immutable dataset manifest and one-time approval before analysis
+- bounded table previews, statistics, chart previews and downloadable artifacts
+- spreadsheet-formula neutralization in cleaned CSV exports
+
 ## External connections
 
 External connections are adapters only. Examples: Google Drive for a user's existing Drive files, GitHub for publishing to an existing GitHub repository, Shopify for an existing Shopify store, Slack for an existing Slack workspace, and payment processors for card-network payment execution.
@@ -135,7 +144,7 @@ No external adapter may become a required dependency for a native Unit369 capabi
 9. Native visual/content creation.
 10. Reduce third-party catalog to optional External Connections.
 
-The isolated interpreter is the first completed part of migration step 5. Repository checkout, package installation and multi-file build/test execution remain separate follow-up work because they need narrower permission and supply-chain controls than a single code cell.
+The isolated interpreter, multi-file workspace runner and first guided Data Lab are complete. Repository checkout and package installation remain separate follow-up work because they need narrower permission and supply-chain controls than an imported workspace or fixed analysis pipeline.
 
 ## Definition of done for a third-party replacement
 

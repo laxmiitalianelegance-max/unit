@@ -160,6 +160,57 @@ try {
   assert.equal(plan.status, 200);
   assert.ok((await plan.json()).steps.length >= 2);
 
+  const dataCapabilities = await fetch(
+    `${origin}/api/native/data-lab/capabilities`,
+    { headers: { cookie: sessionCookie("smoke-user") } },
+  );
+  assert.equal(dataCapabilities.status, 200);
+  const dataCapabilitiesBody = await dataCapabilities.json();
+  assert.equal(dataCapabilitiesBody.configured, false);
+  assert.deepEqual(dataCapabilitiesBody.formats, ["csv", "tsv", "json"]);
+  assert.equal(dataCapabilitiesBody.approval_required, true);
+
+  const dataImport = await fetch(`${origin}/api/native/data-lab/import`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      origin,
+      cookie: sessionCookie("smoke-user"),
+    },
+    body: JSON.stringify({
+      name: "Smoke dataset",
+      files: [
+        {
+          path: "sales.csv",
+          content: "month,total\nJan,10\nFeb,20\n",
+          mime: "text/csv",
+        },
+      ],
+    }),
+  });
+  assert.equal(dataImport.status, 201, await dataImport.clone().text());
+  const dataImportBody = await dataImport.json();
+  assert.ok(dataImportBody.dataset.id);
+  assert.equal(dataImportBody.files.length, 1);
+
+  const unavailableDataPlan = await fetch(
+    `${origin}/api/native/data-lab/${encodeURIComponent(dataImportBody.dataset.id)}/executions/plan`,
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin,
+        cookie: sessionCookie("smoke-user"),
+      },
+      body: JSON.stringify({ operation: "profile" }),
+    },
+  );
+  assert.equal(unavailableDataPlan.status, 503);
+  assert.equal(
+    (await unavailableDataPlan.json()).code,
+    "sandbox_not_configured",
+  );
+
   const productForm = new FormData();
   productForm.append("title", "Smoke product");
   productForm.append("price", "19.90");

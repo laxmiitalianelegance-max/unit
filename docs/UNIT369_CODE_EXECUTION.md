@@ -99,6 +99,32 @@ files to the directory named by `UNIT369_OUTPUT_DIR`; Unit369 stores at most
 eight files, 256 KiB each and 1 MiB total, and exposes them only as owner-scoped
 downloads.
 
+## Guided Data Lab
+
+The chat composer recognizes record-oriented CSV, TSV and JSON attachments as a
+Data Lab dataset. The first release supports three server-defined operations:
+`profile`, `clean` and `chart`. It returns bounded row previews, column types,
+missing/unique counts, numeric summaries and owner-scoped downloadable output.
+Cleaning removes fully empty and duplicate rows and neutralizes string cells
+that spreadsheet software could interpret as formulas. Chart mode selects a
+bounded Matplotlib chart and returns both an in-chat PNG preview and the source
+artifact.
+
+Data Lab accepts at most five UTF-8 files, 1 MiB per file and 3 MiB total. Each
+file is limited to 100,000 rows and 100 columns during analysis. Unit369 stores
+the input first, hashes every path, size and file content, and places only that
+manifest plus the chosen operation in the approval. Confirmation reloads the
+stored inputs and rejects any changed manifest before a Sandbox is created.
+
+The Sandbox receives a fixed Unit369-authored Python script and fixed command;
+the browser cannot provide Python or shell text through the Data Lab API. Only
+six non-secret runtime variables identify input, output and configuration
+paths. The temporary Sandbox is destroyed in `finally`, including after an
+error or timeout. Results are limited to eight artifacts, 2 MiB each and 4 MiB
+total. Excel import and predictive-model workflows are intentionally deferred
+until their parsers, target selection and model evaluation contracts have
+separate tests.
+
 ## Runtime and cost boundary
 
 The Worker pins both `@cloudflare/sandbox` and the container image to `0.12.8`. The Python image includes NumPy, Pandas and Matplotlib; Unit369 adds scikit-learn.

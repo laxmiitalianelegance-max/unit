@@ -63,7 +63,7 @@ for (const match of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)) {
 }
 assert.ok(html.includes('data-mode="auto"'), "Auto fallback mode is missing");
 assert.ok(
-  html.includes("unit369-ui-i18n-v9-"),
+  html.includes("unit369-ui-i18n-v10-"),
   "Translation cache version is stale",
 );
 assert.ok(
@@ -86,6 +86,15 @@ assert.ok(
     html.includes("data-project-cancel") &&
     html.includes("data-project-download"),
   "Multi-file project approval or artifact UI is missing",
+);
+assert.ok(
+  html.includes("/api/native/data-lab/${path}") &&
+    html.includes("isDataAttachmentSet") &&
+    html.includes("data-data-approve") &&
+    html.includes("data-data-cancel") &&
+    html.includes("data-data-download") &&
+    html.includes("compactDataTool"),
+  "Data Lab import, approval, result or artifact UI is missing",
 );
 assert.ok(!html.includes(".jpg"), "The UI still references legacy JPG icons");
 assert.ok(

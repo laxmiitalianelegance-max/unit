@@ -25,6 +25,15 @@ import {
 } from "../src/native-code-execution.js";
 import { handleNativeBuild } from "../src/native-build.js";
 import {
+  createDataLabManifest,
+  DATA_LAB_COMMAND,
+  dataLabCapabilities,
+  handleDataLabExecution,
+  normalizeDataLabImport,
+  normalizeDataLabRequest,
+  normalizeDataLabReport,
+} from "../src/native-data-lab.js";
+import {
   createProjectManifest,
   handleProjectExecution,
   inspectProjectDependencies,
@@ -1251,4 +1260,374 @@ test("project approval fails closed when any workspace file changes", async () =
   );
   assert.equal(confirmed.status, 409);
   assert.equal(sandboxCalls, 0);
+});
+
+test("Data Lab validates bounded CSV, TSV, and record-oriented JSON imports", async () => {
+  const imported = normalizeDataLabImport({
+    name: "Sales",
+    files: [
+      { path: "sales.csv", content: "month,total\nJan,10\nFeb,20\n" },
+      {
+        path: "regions.json",
+        content: JSON.stringify({ records: [{ region: "North", total: 30 }] }),
+      },
+    ],
+  });
+  assert.equal(imported.name, "Sales");
+  assert.equal(imported.files.length, 2);
+  assert.ok(imported.total_bytes > 0);
+  assert.throws(
+    () =>
+      normalizeDataLabImport({
+        files: [{ path: "../private.csv", content: "x\n1" }],
+      }),
+    (error) =>
+      error instanceof HttpError && error.code === "invalid_workspace_path",
+  );
+  assert.throws(
+    () =>
+      normalizeDataLabImport({
+        files: [{ path: "object.json", content: '{"name":"not rows"}' }],
+      }),
+    (error) =>
+      error instanceof HttpError && error.code === "invalid_data_json_shape",
+  );
+  assert.throws(
+    () =>
+      normalizeDataLabImport({
+        files: [
+          {
+            path: "nested.json",
+            content: JSON.stringify([{ name: "row", nested: { value: 1 } }]),
+          },
+        ],
+      }),
+    (error) =>
+      error instanceof HttpError && error.code === "invalid_data_json_shape",
+  );
+  assert.throws(
+    () =>
+      normalizeDataLabImport({
+        files: [{ path: "data.xlsx", content: "not supported yet" }],
+      }),
+    (error) =>
+      error instanceof HttpError && error.code === "unsupported_data_file",
+  );
+  const first = await createDataLabManifest(imported.files);
+  const second = await createDataLabManifest([...imported.files].reverse());
+  assert.equal(first.digest, second.digest);
+  assert.equal(first.file_count, 2);
+});
+
+test("Data Lab exposes only server-defined analysis operations", () => {
+  assert.equal(
+    normalizeDataLabRequest({ message: "Analiziraj ovaj CSV" }).operation,
+    "profile",
+  );
+  assert.equal(
+    normalizeDataLabRequest({ message: "Očisti duplikate" }).operation,
+    "clean",
+  );
+  assert.equal(
+    normalizeDataLabRequest({ message: "Napravi grafikon" }).operation,
+    "chart",
+  );
+  assert.throws(
+    () => normalizeDataLabRequest({ operation: "python" }),
+    (error) =>
+      error instanceof HttpError && error.code === "invalid_data_operation",
+  );
+  assert.throws(
+    () => normalizeDataLabRequest({ operation: "chart", x_column: "hidden" }),
+    (error) =>
+      error instanceof HttpError &&
+      error.code === "custom_chart_options_not_supported",
+  );
+  const capabilities = dataLabCapabilities(true);
+  assert.equal(capabilities.configured, true);
+  assert.equal(capabilities.arbitrary_code_enabled, false);
+  assert.equal(capabilities.arbitrary_shell_enabled, false);
+  assert.equal(capabilities.secrets_forwarded, false);
+  assert.deepEqual(capabilities.formats, ["csv", "tsv", "json"]);
+});
+
+test("Data Lab executes a fixed script only after immutable one-time approval", async () => {
+  const calls = [];
+  const persisted = [];
+  let outputDirectory = "";
+  const sources = [
+    {
+      path: "sales.csv",
+      content: "month,total\nJan,10\nFeb,20\n",
+      mime: "text/csv",
+    },
+  ];
+  const report = {
+    version: 1,
+    operation: "chart",
+    warnings: [],
+    files: [
+      {
+        path: "sales.csv",
+        format: "csv",
+        row_count: 2,
+        column_count: 2,
+        columns: [
+          { name: "month", dtype: "object", missing: 0, unique: 2 },
+          {
+            name: "total",
+            dtype: "int64",
+            missing: 0,
+            unique: 2,
+            numeric: { mean: 15, median: 15, min: 10, max: 20 },
+          },
+        ],
+        preview: [
+          { month: "Jan", total: 10 },
+          { month: "Feb", total: 20 },
+        ],
+        chart: {
+          type: "bar",
+          x_column: "month",
+          y_column: "total",
+          artifact: "chart.png",
+        },
+      },
+    ],
+  };
+  const env = {
+    UNIT369_SANDBOX: {},
+    TOOL_STORE: toolStoreNamespace(),
+  };
+  const services = {
+    datasetName: "Sales",
+    async readInputFiles() {
+      return sources;
+    },
+    async persistArtifact(artifact) {
+      persisted.push(artifact);
+      return {
+        id: `f_${persisted.length}`,
+        path: artifact.path,
+        mime: artifact.mime,
+        size: artifact.size,
+        encoding: artifact.encoding,
+      };
+    },
+  };
+  const runtime = {
+    getSandbox(_binding, id, options) {
+      calls.push({ type: "sandbox", id, options });
+      return {
+        async mkdir(path) {
+          calls.push({ type: "mkdir", path });
+          if (path.endsWith("/output")) outputDirectory = path;
+        },
+        async writeFile(path, content, options) {
+          calls.push({ type: "write", path, content, options });
+        },
+        async exec(command, options) {
+          calls.push({ type: "exec", command, options });
+          assert.equal(command, DATA_LAB_COMMAND);
+          assert.deepEqual(Object.keys(options.env).sort(), [
+            "MPLBACKEND",
+            "NO_COLOR",
+            "PYTHONDONTWRITEBYTECODE",
+            "UNIT369_DATA_CONFIG",
+            "UNIT369_DATA_INPUT_DIR",
+            "UNIT369_DATA_OUTPUT_DIR",
+          ]);
+          return {
+            success: true,
+            exitCode: 0,
+            stdout: '{"status":"completed"}\n',
+            stderr: "",
+          };
+        },
+        async readFile(path, options) {
+          if (path === `${outputDirectory}/report.json`) {
+            return options.encoding === "utf-8"
+              ? {
+                  content: JSON.stringify(report),
+                  mimeType: "application/json",
+                }
+              : {
+                  content: "eyJ2ZXJzaW9uIjoxfQ==",
+                  mimeType: "application/json",
+                };
+          }
+          assert.equal(path, `${outputDirectory}/chart.png`);
+          assert.deepEqual(options, { encoding: "base64" });
+          return { content: "iVBORw0KGgo=", mimeType: "image/png" };
+        },
+        async listFiles(path) {
+          assert.equal(path, outputDirectory);
+          return {
+            files: [
+              {
+                type: "file",
+                relativePath: "chart.png",
+                absolutePath: `${outputDirectory}/chart.png`,
+                size: 8,
+              },
+              {
+                type: "file",
+                relativePath: "report.json",
+                absolutePath: `${outputDirectory}/report.json`,
+                size: 13,
+              },
+            ],
+          };
+        },
+        async destroy() {
+          calls.push({ type: "destroy" });
+        },
+      };
+    },
+  };
+  const account = { uid: "owner-data-lab" };
+  const plannedResponse = await handleDataLabExecution(
+    request("/api/native/data-lab/dataset_1/executions/plan", {
+      operation: "chart",
+    }),
+    env,
+    account,
+    runtime,
+    services,
+    "dataset_1",
+    "plan",
+  );
+  assert.equal(plannedResponse.status, 202);
+  const planned = await plannedResponse.json();
+  assert.equal(planned.approval_required, true);
+  assert.equal(planned.execution.operation, "chart");
+  assert.equal(calls.length, 0);
+
+  const confirmedResponse = await handleDataLabExecution(
+    request("/api/native/data-lab/dataset_1/executions/confirm", {
+      approval_id: planned.approval.id,
+      approval_token: planned.approval.token,
+    }),
+    env,
+    account,
+    runtime,
+    services,
+    "dataset_1",
+    "confirm",
+  );
+  assert.equal(
+    confirmedResponse.status,
+    200,
+    await confirmedResponse.clone().text(),
+  );
+  const confirmed = await confirmedResponse.json();
+  assert.equal(confirmed.status, "completed");
+  assert.equal(confirmed.report.files[0].row_count, 2);
+  assert.equal(confirmed.artifacts[0].mime, "image/png");
+  assert.equal(confirmed.artifacts[0].preview_base64, "iVBORw0KGgo=");
+  assert.equal(persisted.length, 2);
+  assert.equal(calls.filter((entry) => entry.type === "exec").length, 1);
+  assert.equal(calls.at(-1).type, "destroy");
+  assert.ok(
+    calls
+      .filter((entry) => entry.type === "write")
+      .every(
+        (entry) => !String(entry.content).includes("CLOUDFLARE_API_TOKEN"),
+      ),
+  );
+
+  const replayResponse = await handleDataLabExecution(
+    request("/api/native/data-lab/dataset_1/executions/confirm", {
+      approval_id: planned.approval.id,
+      approval_token: planned.approval.token,
+    }),
+    env,
+    account,
+    runtime,
+    services,
+    "dataset_1",
+    "confirm",
+  );
+  assert.equal(replayResponse.status, 409);
+  assert.equal(calls.filter((entry) => entry.type === "exec").length, 1);
+});
+
+test("Data Lab approval fails closed when dataset contents change", async () => {
+  let content = "value\n1\n";
+  let sandboxCalls = 0;
+  const env = {
+    UNIT369_SANDBOX: {},
+    TOOL_STORE: toolStoreNamespace(),
+  };
+  const services = {
+    datasetName: "Changing data",
+    async readInputFiles() {
+      return [{ path: "values.csv", content }];
+    },
+    async persistArtifact() {
+      throw new Error("should not persist");
+    },
+  };
+  const runtime = {
+    getSandbox() {
+      sandboxCalls += 1;
+      throw new Error("should not execute");
+    },
+  };
+  const account = { uid: "owner-changing-data" };
+  const plannedResponse = await handleDataLabExecution(
+    request("/api/native/data-lab/dataset_2/executions/plan", {
+      operation: "profile",
+    }),
+    env,
+    account,
+    runtime,
+    services,
+    "dataset_2",
+    "plan",
+  );
+  const planned = await plannedResponse.json();
+  content = "value\n2\n";
+  const confirmed = await handleDataLabExecution(
+    request("/api/native/data-lab/dataset_2/executions/confirm", {
+      approval_id: planned.approval.id,
+      approval_token: planned.approval.token,
+    }),
+    env,
+    account,
+    runtime,
+    services,
+    "dataset_2",
+    "confirm",
+  );
+  assert.equal(confirmed.status, 409);
+  assert.equal(sandboxCalls, 0);
+});
+
+test("Data Lab report normalization bounds previews and statistics", () => {
+  const normalized = normalizeDataLabReport({
+    version: 1,
+    operation: "profile",
+    warnings: ["x".repeat(700)],
+    files: [
+      {
+        path: "data.csv",
+        row_count: 2,
+        column_count: 1,
+        columns: [
+          {
+            name: "value",
+            dtype: "float64",
+            missing: 0,
+            unique: 2,
+            numeric: { mean: Infinity, median: 2, min: 1, max: 3 },
+          },
+        ],
+        preview: [{ value: "y".repeat(900) }],
+      },
+    ],
+  });
+  assert.equal(normalized.warnings[0].length, 500);
+  assert.equal(normalized.files[0].columns[0].numeric.mean, null);
+  assert.equal(normalized.files[0].preview[0].value.length, 500);
 });
