@@ -44,12 +44,17 @@ After the endpoint answers a direct test, configure Cloudflare production with:
 UNIT369_INFERENCE_URL=https://api.runpod.ai/v2/ENDPOINT_ID/openai/v1/chat/completions
 UNIT369_INFERENCE_MODEL=unit369-qwen36
 UNIT369_INFERENCE_THINKING=false
+UNIT369_INFERENCE_TIMEOUT_MS=180000
 UNIT369_INFERENCE_TOKEN=<Runpod API key, stored only as a Cloudflare secret>
 ```
 
 The Worker must send `unit369-qwen36` unchanged in the OpenAI-compatible
 `model` field. `OPENAI_SERVED_MODEL_NAME_OVERRIDE` makes that alias the accepted
 request model; it must not be rewritten to the underlying Hugging Face model ID.
+The production and browser request windows default to 180 and 190 seconds so a
+zero-minimum-worker endpoint can complete a cold start. Runpod recommends a
+longer client timeout for large models; the UI must show the warm-up state
+instead of silently replacing the answer after ten seconds.
 
 Never commit the endpoint ID/API key pair together with a live token. The API key is sent only from the Worker to Runpod and never enters the browser bundle.
 
@@ -58,11 +63,13 @@ Never commit the endpoint ID/API key pair together with a live token. The API ke
 1. Direct endpoint verification passes in Serbian without exposing reasoning tags.
 2. Unit369 sends `model: unit369-qwen36`, and authenticated chat returns
    `provider: unit369-owned`.
-3. Invalid token, timeout, rate-limit and stopped-worker behavior fall back safely.
-4. Prompt contents do not appear in public logs.
-5. Billing shows a hard evaluation ceiling and no automatic payment.
-6. Active workers return to zero after the test window.
-7. Removing all commercial model credentials still leaves Unit369 Native operational.
+3. The release health gate performs one cached owned-model probe per application
+   version and cannot report `ready` unless it receives `provider: unit369-owned`.
+4. Invalid token, timeout, rate-limit and stopped-worker behavior fall back safely.
+5. Prompt contents do not appear in public logs.
+6. Billing shows a hard evaluation ceiling and no automatic payment.
+7. Active workers return to zero after the test window.
+8. Removing all commercial model credentials still leaves Unit369 Native operational.
 
 ## Cost shutdown rule
 

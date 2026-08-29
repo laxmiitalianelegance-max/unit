@@ -8,6 +8,7 @@ import {
   configuredProviders,
   normalizeMessages,
   probeAi,
+  probeOwnedAi,
   runExternalProvider,
   runPreferredAi,
 } from "./ai-providers.js";
@@ -32,9 +33,10 @@ import {
   validateTranslation,
 } from "./ui-translations.js";
 
-export const APP_VERSION = "2026.08.29.1";
+export const APP_VERSION = "2026.08.29.2";
 const HEALTH_CACHE_KEY = `native-intelligence-health-${APP_VERSION}`;
-const TRANSLATION_CACHE_VERSION = "ui-v13";
+const OWNED_HEALTH_CACHE_KEY = `owned-intelligence-health-${APP_VERSION}`;
+const TRANSLATION_CACHE_VERSION = "ui-v14";
 
 const QUOTAS = Object.freeze({
   chat: [
@@ -378,7 +380,7 @@ async function healthCheck(name, check) {
   }
 }
 
-async function releaseHealth(env) {
+async function releaseHealth(env, options = {}) {
   const providers = configuredProviders(env);
   const externalAiConfigured =
     providers.workersAi ||
@@ -474,6 +476,34 @@ async function releaseHealth(env) {
     }
   }
   checks.native_intelligence = ai?.operational === true;
+  let ownedAi = null;
+  if (providers.unit369Owned) {
+    try {
+      const cached = await getSharedCache(env, OWNED_HEALTH_CACHE_KEY);
+      if (cached && typeof cached.operational === "boolean") ownedAi = cached;
+    } catch (error) {
+      logEvent("warn", "owned_health_cache_read_failed", {
+        error: safeError(error),
+      });
+    }
+    if (!ownedAi && options.probeOwned === true) {
+      ownedAi = await probeOwnedAi(env);
+      try {
+        await putSharedCache(
+          env,
+          OWNED_HEALTH_CACHE_KEY,
+          ownedAi,
+          30 * 24 * 60 * 60 * 1000,
+        );
+      } catch (error) {
+        logEvent("warn", "owned_health_cache_write_failed", {
+          error: safeError(error),
+        });
+      }
+    }
+  }
+  checks.owned_inference =
+    !providers.unit369Owned || ownedAi?.operational === true;
   const requiredChecks = [
     "assets",
     "self",
@@ -484,6 +514,7 @@ async function releaseHealth(env) {
     "encryption_key",
     "authentication",
     "native_intelligence",
+    "owned_inference",
     "sandbox_binding",
   ];
   const operational = requiredChecks.every((name) => checks[name] === true);
@@ -493,6 +524,7 @@ async function releaseHealth(env) {
     core_ready: operational,
     auth_ready: checks.authentication,
     ai_operational: ai?.operational === true,
+    owned_ai_operational: ownedAi?.operational === true,
     intelligence_mode: providers.unit369Owned
       ? "owned-model"
       : externalAiConfigured
@@ -502,6 +534,15 @@ async function releaseHealth(env) {
     ai: ai || {
       operational: false,
       error: "Unit369 native intelligence is unavailable.",
+    },
+    owned_ai: ownedAi || {
+      operational: false,
+      code: providers.unit369Owned
+        ? "owned_inference_not_probed"
+        : "owned_inference_not_configured",
+      error: providers.unit369Owned
+        ? "Unit369 owned inference has not passed the release probe."
+        : "Unit369 owned inference is not configured.",
     },
     file_storage: env.FILES ? "r2" : "durable_object",
     required_checks: requiredChecks,
@@ -531,7 +572,9 @@ export default {
       if (url.pathname === "/api/status" && request.method === "GET")
         return json(integrationStatus(env));
       if (url.pathname === "/api/health/release" && request.method === "GET") {
-        const health = await releaseHealth(env);
+        const health = await releaseHealth(env, {
+          probeOwned: url.searchParams.get("probe_owned") === "1",
+        });
         return json(health, health.core_ready ? 200 : 503);
       }
       if (url.pathname === "/api/free-ai" && request.method === "POST")

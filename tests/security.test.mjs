@@ -52,8 +52,11 @@ import {
 } from "../src/native-knowledge.js";
 import { knowledgeMatchQuery } from "../src/native-store.js";
 import {
+  ownedInferenceTimeoutMs,
+  probeOwnedIntelligence,
   runOwnedModel,
   shouldUseNativeChatFastPath,
+  UNIT369_OWNED_TIMEOUT_MS,
 } from "../src/owned-inference.js";
 import {
   HttpError,
@@ -433,6 +436,36 @@ test("Unit369 preserves the RunPod served-model alias", async (t) => {
   assert.equal(result.content, "RunPod model is ready.");
 });
 
+test("owned inference allows the documented cold-start window", () => {
+  assert.equal(UNIT369_OWNED_TIMEOUT_MS, 180_000);
+  assert.equal(ownedInferenceTimeoutMs(), 180_000);
+  assert.equal(ownedInferenceTimeoutMs("5000"), 10_000);
+  assert.equal(ownedInferenceTimeoutMs("45000"), 45_000);
+  assert.equal(ownedInferenceTimeoutMs("999999"), 300_000);
+});
+
+test("owned inference release probe verifies the generative provider", async (t) => {
+  t.mock.method(globalThis, "fetch", async (_input, init) => {
+    const body = JSON.parse(init.body);
+    assert.equal(body.model, "unit369-qwen36");
+    assert.equal(body.max_tokens, 16);
+    return Response.json({
+      choices: [{ message: { content: "OK" } }],
+    });
+  });
+
+  const probe = await probeOwnedIntelligence({
+    UNIT369_INFERENCE_URL:
+      "https://api.runpod.ai/v2/test/openai/v1/chat/completions",
+    UNIT369_INFERENCE_MODEL: "unit369-qwen36",
+    UNIT369_INFERENCE_TOKEN: "test-owned-token",
+  });
+  assert.equal(probe.operational, true);
+  assert.equal(probe.provider, "unit369-owned");
+  assert.equal(probe.model, "unit369-qwen36");
+  assert.equal(probe.external_required, false);
+});
+
 test("short conversational messages use the instant Unit369 Native path", async (t) => {
   let ownedCalled = false;
   t.mock.method(globalThis, "fetch", async () => {
@@ -650,6 +683,33 @@ test("capability questions receive an immediate useful native response", async (
   assert.equal(english.provider, "unit369-native");
   assert.equal(english.fast_path, true);
   assert.match(english.content, /approved Python\/JavaScript code/);
+  assert.equal(ownedCalled, false);
+});
+
+test("self-improvement questions receive an immediate honest answer", async (t) => {
+  let ownedCalled = false;
+  t.mock.method(globalThis, "fetch", async () => {
+    ownedCalled = true;
+    return Response.json({
+      choices: [{ message: { content: "Slow owned response" } }],
+    });
+  });
+
+  const result = await runPreferredAi(
+    {
+      UNIT369_INFERENCE_URL:
+        "https://api.runpod.ai/v2/test/openai/v1/chat/completions",
+      UNIT369_INFERENCE_MODEL: "unit369-qwen36",
+      UNIT369_INFERENCE_TOKEN: "test-owned-token",
+    },
+    [{ role: "user", content: "Mozes li sam sebe da unapredjujes?" }],
+    { purpose: "chat", externalFallback: false },
+  );
+
+  assert.equal(result.provider, "unit369-native");
+  assert.equal(result.fast_path, true);
+  assert.match(result.content, /analiziram svoje greške/);
+  assert.match(result.content, /odobrenje i proveru/);
   assert.equal(ownedCalled, false);
 });
 

@@ -7,6 +7,7 @@ import {
 import {
   ownedInferenceConfiguration,
   probeNativeIntelligence,
+  probeOwnedIntelligence,
   runNativeIntelligence,
   runOwnedModel,
   shouldUseNativeChatFastPath,
@@ -376,4 +377,8 @@ export async function runPreferredAi(env, messages, options = {}) {
 
 export async function probeAi(env) {
   return probeNativeIntelligence(env);
+}
+
+export async function probeOwnedAi(env) {
+  return probeOwnedIntelligence(env);
 }

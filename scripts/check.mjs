@@ -63,12 +63,14 @@ for (const match of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)) {
 }
 assert.ok(html.includes('data-mode="auto"'), "Auto fallback mode is missing");
 assert.ok(
-  html.includes("unit369-ui-i18n-v15-"),
+  html.includes("unit369-ui-i18n-v16-"),
   "Translation cache version is stale",
 );
 assert.ok(
   html.includes("recoverInterruptedTurns") &&
-    html.includes("controller.abort()"),
+    html.includes("controller.abort()") &&
+    html.includes("190_000") &&
+    html.includes('pendingState = "modelStarting"'),
   "Chat recovery and request timeout safeguards are missing",
 );
 assert.ok(
@@ -226,6 +228,28 @@ assert.deepEqual(
   workflows.sort(),
   ["deploy-production.yml", "validate.yml"],
   "Only the canonical validation and deployment workflows should remain",
+);
+const ownedInferenceSource = readFileSync(
+  join(sourceRoot, "owned-inference.js"),
+  "utf8",
+);
+const coreSource = readFileSync(join(sourceRoot, "unit369-core.js"), "utf8");
+const deployWorkflow = readFileSync(
+  join(root, ".github/workflows/deploy-production.yml"),
+  "utf8",
+);
+assert.ok(
+  ownedInferenceSource.includes(
+    "export const UNIT369_OWNED_TIMEOUT_MS = 180_000",
+  ) && ownedInferenceSource.includes("probeOwnedIntelligence"),
+  "Owned inference cold-start window or release probe is missing",
+);
+assert.ok(
+  coreSource.includes('"owned_inference"') &&
+    coreSource.includes("owned_ai_operational") &&
+    deployWorkflow.includes("probe_owned=1") &&
+    deployWorkflow.includes("h.owned_ai_operational===true"),
+  "Production does not require a successful owned-model release probe",
 );
 
 console.log(

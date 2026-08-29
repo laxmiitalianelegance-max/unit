@@ -96,6 +96,9 @@ try {
   assert.equal(releaseHealthBody.core_ready, false);
   assert.equal(releaseHealthBody.ai.provider, "unit369-native");
   assert.equal(releaseHealthBody.checks.external_ai_configured, false);
+  assert.equal(releaseHealthBody.checks.owned_inference_configured, false);
+  assert.equal(releaseHealthBody.checks.owned_inference, true);
+  assert.equal(releaseHealthBody.owned_ai_operational, false);
   assert.equal(releaseHealthBody.checks.owner_auth, true);
   assert.equal(releaseHealthBody.checks.google_oauth, false);
   assert.equal(releaseHealthBody.checks.authentication, true);

@@ -116,11 +116,11 @@ jobs:
           )
           export EXPECTED_VERSION
           for i in $(seq 1 12); do
-            code=$(curl -sS -o /tmp/release-health.json -w '%{http_code}' "$BASE/api/health/release" || true)
+            code=$(curl -sS --max-time 210 -o /tmp/release-health.json -w '%{http_code}' "$BASE/api/health/release?probe_owned=1" || true)
             if [ "$code" = "200" ] && node <<'JS'
           const fs=require('fs');
           const h=JSON.parse(fs.readFileSync('/tmp/release-health.json','utf8'));
-          process.exit(h.version===process.env.EXPECTED_VERSION&&h.status==='ready'&&h.core_ready===true?0:1);
+          process.exit(h.version===process.env.EXPECTED_VERSION&&h.status==='ready'&&h.core_ready===true&&h.owned_ai_operational===true?0:1);
           JS
             then break; fi
             sleep 5
@@ -132,11 +132,12 @@ jobs:
           const h=JSON.parse(fs.readFileSync('/tmp/release-health.json','utf8'));
           if(h.version!==process.env.EXPECTED_VERSION)throw Error(`Expected ${process.env.EXPECTED_VERSION}, received ${h.version}`);
           if(h.status!=='ready'||h.core_ready!==true)throw Error('Unit369 Core is not production-ready: '+JSON.stringify(h));
-          const required=['assets','self','native_store','tool_store','files','app_secret','encryption_key','authentication','native_intelligence','sandbox_binding'];
+          const required=['assets','self','native_store','tool_store','files','app_secret','encryption_key','authentication','native_intelligence','owned_inference','sandbox_binding'];
           for(const k of required)if(h.checks?.[k]!==true)throw Error('Missing production requirement: '+k);
           if(h.auth_ready!==true)throw Error('Unit369 authentication is not configured in production.');
           if(h.checks?.owner_auth!==true)throw Error('Unit369 owner authentication is not configured in production.');
           if(h.ai?.provider!=='unit369-native'||h.ai?.external_required!==false)throw Error('Unit369 Native intelligence probe did not pass.');
+          if(h.owned_ai_operational!==true||h.owned_ai?.provider!=='unit369-owned'||h.owned_ai?.external_required!==false)throw Error('Unit369 owned inference probe did not pass: '+JSON.stringify(h.owned_ai));
           console.log('Unit369 production health passed',h.version);
           JS
           echo health_verified > /tmp/deploy-stage
