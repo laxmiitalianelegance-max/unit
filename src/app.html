@@ -1589,7 +1589,7 @@
           CUR = "unit369-current-v1",
           LANG = "u369-lang-all-v4",
           PREF = "unit369-settings-v2",
-          CACHE = "unit369-ui-i18n-v15-";
+          CACHE = "unit369-ui-i18n-v16-";
         const RTL = new Set(["ar", "fa", "he", "ur"]);
         const LANGS = [
           ["auto", "Automatic"],
@@ -1659,6 +1659,8 @@
           send: "Send",
           copy: "Copy",
           thinking: "Thinking…",
+          modelStarting:
+            "Starting the main model… The first answer after idle can take up to three minutes.",
           aiTeamDetails: "AI Team details",
           integrations: "Integrations",
           refresh: "Refresh",
@@ -1720,7 +1722,7 @@
             "Sign in with Google to translate the interface into this language.",
           requestFailed: "The request failed. Try again.",
           requestTimeout:
-            "The model took too long to answer. Unit369 stopped waiting safely; try again.",
+            "The main model did not answer within three minutes. Try again.",
           requestInterrupted:
             "The previous request was interrupted. Please send it again.",
           codeCommandHint:
@@ -3754,7 +3756,7 @@
                 assistant = toolCard
                   ? `<div class="u369-assistant-msg"><div class="u369-assistant-head"><img src="/app-icon-192.png" alt=""><span>Unit369</span></div>${toolCard}</div>`
                   : ans || tr.pending || failure
-                    ? `<div class="u369-assistant-msg"><div class="u369-assistant-head"><img src="/app-icon-192.png" alt=""><span>Unit369</span></div><div class="u369-answer${tr.pending ? " u369-thinking" : ""}">${esc(ans || (tr.pending ? t("thinking") : failure))}</div>${details}${ans ? `<button class="u369-msg-action" data-copy="${i}">${esc(t("copy"))}</button>` : ""}</div>`
+                    ? `<div class="u369-assistant-msg"><div class="u369-assistant-head"><img src="/app-icon-192.png" alt=""><span>Unit369</span></div><div class="u369-answer${tr.pending ? " u369-thinking" : ""}">${esc(ans || (tr.pending ? t(tr.pendingState || "thinking") : failure))}</div>${details}${ans ? `<button class="u369-msg-action" data-copy="${i}">${esc(t("copy"))}</button>` : ""}</div>`
                     : "";
               return `<div class="u369-turn"><div class="u369-user-msg">${esc(tr.q)}</div>${assistant}</div>`;
             })
@@ -3892,7 +3894,7 @@
                     ...(prefs.models?.[p] ? { model: prefs.models[p] } : {}),
                   };
           const controller = new AbortController(),
-            timer = setTimeout(() => controller.abort(), 50_000);
+            timer = setTimeout(() => controller.abort(), 190_000);
           try {
             const r = await fetch(url, {
                 method: "POST",
@@ -5523,16 +5525,26 @@
                       (p) => integrations[p],
                     ),
                   ];
-            await Promise.all(
-              active.map(async (p) => {
-                try {
-                  tr.answers[p] = await callProvider(p, s, q);
-                } catch (e) {
-                  tr.errors[p] = String(e.message || e);
-                  tr.errorStatuses[p] = Number(e.status) || 0;
-                }
-              }),
-            );
+            const modelWarmupTimer = setTimeout(() => {
+              if (!tr.pending) return;
+              tr.pendingState = "modelStarting";
+              renderConversation();
+            }, 8_000);
+            try {
+              await Promise.all(
+                active.map(async (p) => {
+                  try {
+                    tr.answers[p] = await callProvider(p, s, q);
+                  } catch (e) {
+                    tr.errors[p] = String(e.message || e);
+                    tr.errorStatuses[p] = Number(e.status) || 0;
+                  }
+                }),
+              );
+            } finally {
+              clearTimeout(modelWarmupTimer);
+              delete tr.pendingState;
+            }
             if (
               (mode === "combine" || mode === "critique") &&
               Object.values(tr.answers).filter(Boolean).length > 1

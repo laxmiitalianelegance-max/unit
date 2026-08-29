@@ -18,6 +18,8 @@ export const UI_BASE = Object.freeze({
   send: "Send",
   copy: "Copy",
   thinking: "Thinking…",
+  modelStarting:
+    "Starting the main model… The first answer after idle can take up to three minutes.",
   aiTeamDetails: "AI Team details",
   integrations: "Integrations",
   refresh: "Refresh",
@@ -75,7 +77,7 @@ export const UI_BASE = Object.freeze({
     "Sign in with Google to translate the interface into this language.",
   requestFailed: "The request failed. Try again.",
   requestTimeout:
-    "The model took too long to answer. Unit369 stopped waiting safely; try again.",
+    "The main model did not answer within three minutes. Try again.",
   requestInterrupted:
     "The previous request was interrupted. Please send it again.",
   codeCommandHint:
@@ -265,6 +267,8 @@ const UI_SR = Object.freeze({
   send: "Pošalji",
   copy: "Kopiraj",
   thinking: "Razmišljam…",
+  modelStarting:
+    "Pokrećem glavni model… Prvi odgovor posle mirovanja može da traje do tri minuta.",
   aiTeamDetails: "Detalji AI tima",
   integrations: "Integracije",
   refresh: "Osveži",
@@ -326,7 +330,7 @@ const UI_SR = Object.freeze({
     "Prijavite se Google nalogom da biste preveli interfejs na ovaj jezik.",
   requestFailed: "Zahtev nije uspeo. Pokušajte ponovo.",
   requestTimeout:
-    "Modelu je trebalo predugo da odgovori. Unit369 je bezbedno prekinuo čekanje; pokušajte ponovo.",
+    "Glavni model nije odgovorio u roku od tri minuta. Pokušajte ponovo.",
   requestInterrupted: "Prethodni zahtev je prekinut. Pošaljite ga ponovo.",
   codeCommandHint:
     "Za izvršavanje izolovanog koda pošaljite /run python, /run javascript ili /run typescript, pa u sledećem redu unesite kod.",

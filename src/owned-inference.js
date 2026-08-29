@@ -6,7 +6,9 @@ import {
   safeError,
 } from "./runtime-utils.js";
 
-const OWNED_TIMEOUT_MS = 10_000;
+const MIN_OWNED_TIMEOUT_MS = 10_000;
+const MAX_OWNED_TIMEOUT_MS = 300_000;
+export const UNIT369_OWNED_TIMEOUT_MS = 180_000;
 const MAX_OWNED_RESPONSE_BYTES = 768 * 1024;
 export const UNIT369_NATIVE_MODEL = "unit369-native-foundation-v1";
 export const UNIT369_OWNED_DEFAULT_MODEL = "Qwen/Qwen3.6-35B-A3B-FP8";
@@ -28,6 +30,15 @@ function cleanModel(value, fallback = UNIT369_OWNED_DEFAULT_MODEL) {
 
 function ownedModel(value) {
   return cleanModel(value);
+}
+
+export function ownedInferenceTimeoutMs(value) {
+  const configured = Number(value);
+  if (!Number.isFinite(configured) || configured <= 0)
+    return UNIT369_OWNED_TIMEOUT_MS;
+  return Math.trunc(
+    Math.max(MIN_OWNED_TIMEOUT_MS, Math.min(MAX_OWNED_TIMEOUT_MS, configured)),
+  );
 }
 
 function ownedEndpoint(value) {
@@ -73,6 +84,9 @@ const SERBIAN_STATUS_PATTERN =
 const CAPABILITIES_PATTERN =
   /^(?:(?:šta|sta)\s+(?:sve\s+)?(?:možeš|mozes)\s+(?:da\s+)?(?:radiš|radis|uradiš|uradis)|(?:šta|sta)\s+(?:sve\s+)?(?:znaš|znas)|koje\s+su\s+(?:tvoje\s+)?(?:mogućnosti|mogucnosti|sposobnosti)|what\s+(?:all\s+)?can\s+you\s+do|what\s+are\s+your\s+(?:capabilities|skills))[?.!…]*$/i;
 
+const SELF_IMPROVEMENT_PATTERN =
+  /^(?:(?:možeš|mozes)\s+li\s+(?:sam\s+sebe|sebe)\s+da\s+(?:unapređuješ|unapredjujes|poboljšavaš|poboljsavas)|(?:da\s+li|je\s+li|jel)\s+(?:možeš|mozes)\s+(?:sam\s+sebe|sebe)\s+da\s+(?:unapređuješ|unapredjujes|poboljšavaš|poboljsavas)|can\s+you\s+(?:improve|upgrade)\s+yourself)[?.!…]*$/i;
+
 const QUICK_CHAT_PATTERN =
   /^(?:(?:ć|c)ao|zdravo|hej|pozdrav|hello|hi|hey|sta ima|šta ima|tu si|jesi tu|jel si tu|radiš|radis|radi li|hvala|thanks|thank you)[?.!…]*$/i;
 
@@ -86,7 +100,8 @@ export function shouldUseNativeChatFastPath(messages) {
     SERBIAN_HELP_PATTERN.test(request) ||
     SERBIAN_QUESTION_PATTERN.test(request) ||
     SERBIAN_STATUS_PATTERN.test(request) ||
-    CAPABILITIES_PATTERN.test(request)
+    CAPABILITIES_PATTERN.test(request) ||
+    SELF_IMPROVEMENT_PATTERN.test(request)
   );
 }
 
@@ -122,6 +137,13 @@ function nativeChat(messages, context) {
       content: serbian
         ? "Mogu da razgovaram i planiram, pravim dokumente i vizuale, vodim projekte i zadatke, pokrećem odobren Python/JavaScript kod, analiziram CSV/TSV/JSON/XLSX podatke (profil, čišćenje, grafikoni, trendovi i predikcija) i pretražujem tvoje odobreno TXT/Markdown znanje. Za izvršne ili osetljive promene prvo tražim tvoje odobrenje. Reci šta želiš da uradimo."
         : "I can chat and plan, create documents and visuals, manage projects and tasks, run approved Python/JavaScript code, analyze CSV/TSV/JSON/XLSX data (profiles, cleaning, charts, trends and prediction), and search your approved TXT/Markdown knowledge. I ask for approval before executable or sensitive changes. Tell me what you want to do.",
+    };
+  }
+  if (SELF_IMPROVEMENT_PATTERN.test(request)) {
+    return {
+      content: serbian
+        ? "Mogu da analiziram svoje greške i pripremim poboljšanja, ali ne menjam samovoljno svoj kod, dozvole ili produkciju. Takve promene moraju da prođu tvoje odobrenje i proveru."
+        : "I can analyze my mistakes and prepare improvements, but I do not change my own code, permissions, or production environment without approval and verification.",
     };
   }
   if (
@@ -196,6 +218,7 @@ export function ownedInferenceConfiguration(env = {}) {
     native: true,
     endpoint_configured: !!String(env.UNIT369_INFERENCE_URL || "").trim(),
     model: ownedModel(env.UNIT369_INFERENCE_MODEL),
+    timeout_ms: ownedInferenceTimeoutMs(env.UNIT369_INFERENCE_TIMEOUT_MS),
     ...(thinking === undefined ? {} : { thinking }),
   };
 }
@@ -266,7 +289,12 @@ export async function runOwnedModel(env, messages, options = {}) {
   const endpoint = ownedEndpoint(env.UNIT369_INFERENCE_URL);
   const model = ownedModel(options.model || env.UNIT369_INFERENCE_MODEL);
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), OWNED_TIMEOUT_MS);
+  const timer = setTimeout(
+    () => controller.abort(),
+    ownedInferenceTimeoutMs(
+      options.timeoutMs || env.UNIT369_INFERENCE_TIMEOUT_MS,
+    ),
+  );
   try {
     const token = String(env.UNIT369_INFERENCE_TOKEN || "").trim();
     const thinking = optionalBoolean(env.UNIT369_INFERENCE_THINKING);
@@ -348,6 +376,40 @@ export async function runOwnedModel(env, messages, options = {}) {
     throw error;
   } finally {
     clearTimeout(timer);
+  }
+}
+
+export async function probeOwnedIntelligence(env) {
+  const started = Date.now();
+  try {
+    const result = await runOwnedModel(
+      env,
+      [
+        {
+          role: "system",
+          content: "You are Unit369. Reply with only OK.",
+        },
+        { role: "user", content: "Health check." },
+      ],
+      { maxTokens: 16 },
+    );
+    return {
+      operational: true,
+      provider: result.provider,
+      model: result.model,
+      capability_level: result.capability_level,
+      external_required: false,
+      latency_ms: Date.now() - started,
+      checked_at: new Date().toISOString(),
+    };
+  } catch (error) {
+    return {
+      operational: false,
+      code: error?.code || "owned_inference_probe_failed",
+      error: safeError(error),
+      latency_ms: Date.now() - started,
+      checked_at: new Date().toISOString(),
+    };
   }
 }
 
