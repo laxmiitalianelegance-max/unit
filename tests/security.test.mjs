@@ -507,6 +507,37 @@ test("owned inference probe exposes only bounded upstream diagnostics", async (t
   assert.doesNotMatch(JSON.stringify(probe), /private provider detail/i);
 });
 
+test("owned inference retries transient RunPod server errors", async (t) => {
+  let attempts = 0;
+  t.mock.method(globalThis, "fetch", async (_input, init) => {
+    attempts += 1;
+    assert.equal(JSON.parse(init.body).model, "unit369-qwen36");
+    if (attempts < 3) {
+      return Response.json(
+        { error: { message: "Worker is still starting." } },
+        { status: 500 },
+      );
+    }
+    return Response.json({
+      choices: [{ message: { content: "Worker recovered." } }],
+    });
+  });
+
+  const result = await runOwnedModel(
+    {
+      UNIT369_INFERENCE_URL:
+        "https://api.runpod.ai/v2/retry-test/openai/v1/chat/completions",
+      UNIT369_INFERENCE_MODEL: "unit369-qwen36",
+      UNIT369_INFERENCE_TOKEN: "test-owned-token",
+    },
+    [{ role: "user", content: "Hello" }],
+    { retryDelaysMs: [0, 0] },
+  );
+  assert.equal(attempts, 3);
+  assert.equal(result.provider, "unit369-owned");
+  assert.equal(result.content, "Worker recovered.");
+});
+
 test("owned inference allows the documented cold-start window", () => {
   assert.equal(UNIT369_OWNED_TIMEOUT_MS, 180_000);
   assert.equal(ownedInferenceTimeoutMs(), 180_000);

@@ -11,6 +11,7 @@ const MAX_OWNED_TIMEOUT_MS = 300_000;
 export const UNIT369_OWNED_TIMEOUT_MS = 180_000;
 const MAX_OWNED_RESPONSE_BYTES = 768 * 1024;
 const MAX_DISCOVERED_MODELS = 32;
+const OWNED_RETRY_DELAYS_MS = Object.freeze([1_000, 2_000]);
 export const UNIT369_NATIVE_MODEL = "unit369-native-foundation-v1";
 export const UNIT369_OWNED_DEFAULT_MODEL = "Qwen/Qwen3.6-35B-A3B-FP8";
 const resolvedOwnedModels = new Map();
@@ -100,6 +101,17 @@ function rememberResolvedModel(key, model) {
     resolvedOwnedModels.delete(resolvedOwnedModels.keys().next().value);
   }
   resolvedOwnedModels.set(key, model);
+}
+
+function ownedRetryDelays(value) {
+  if (!Array.isArray(value)) return OWNED_RETRY_DELAYS_MS;
+  return value
+    .slice(0, OWNED_RETRY_DELAYS_MS.length)
+    .map((delay) => Math.max(0, Math.min(10_000, Number(delay) || 0)));
+}
+
+function waitForRetry(delayMs) {
+  return new Promise((resolveDelay) => setTimeout(resolveDelay, delayMs));
 }
 
 async function discoverOwnedModel(endpoint, token, configuredModel, signal) {
@@ -413,18 +425,42 @@ export async function runOwnedModel(env, messages, options = {}) {
         }),
         signal: controller.signal,
       });
-    let response = await request(model);
-    let data = await readResponseJsonLimited(
-      response,
-      MAX_OWNED_RESPONSE_BYTES,
-    );
-    let detail = String(
-      data?.error?.message ||
-        data?.error ||
-        data?.message ||
-        `HTTP ${response.status}`,
-    ).slice(0, 500);
-    let reason = upstreamReason(response.status, detail);
+    const readRequest = async (selectedModel) => {
+      const response = await request(selectedModel);
+      const data = await readResponseJsonLimited(
+        response,
+        MAX_OWNED_RESPONSE_BYTES,
+      );
+      const detail = String(
+        data?.error?.message ||
+          data?.error ||
+          data?.message ||
+          `HTTP ${response.status}`,
+      ).slice(0, 500);
+      return {
+        response,
+        data,
+        detail,
+        reason: upstreamReason(response.status, detail),
+      };
+    };
+    const requestWithRetry = async (selectedModel) => {
+      let result = await readRequest(selectedModel);
+      const retryDelays = ownedRetryDelays(options.retryDelaysMs);
+      for (let attempt = 0; result.response.status >= 500; attempt += 1) {
+        const retryDelay = retryDelays[attempt];
+        if (retryDelay === undefined) break;
+        logEvent("warn", "owned_inference_retry", {
+          status: result.response.status,
+          attempt: attempt + 1,
+          delay_ms: retryDelay,
+        });
+        await waitForRetry(retryDelay);
+        result = await readRequest(selectedModel);
+      }
+      return result;
+    };
+    let { response, data, detail, reason } = await requestWithRetry(model);
     if (!response.ok && reason === "model_not_found") {
       resolvedOwnedModels.delete(modelCacheKey);
       const discoveredModel = await discoverOwnedModel(
@@ -439,18 +475,7 @@ export async function runOwnedModel(env, messages, options = {}) {
           resolved_model: discoveredModel,
         });
         model = discoveredModel;
-        response = await request(model);
-        data = await readResponseJsonLimited(
-          response,
-          MAX_OWNED_RESPONSE_BYTES,
-        );
-        detail = String(
-          data?.error?.message ||
-            data?.error ||
-            data?.message ||
-            `HTTP ${response.status}`,
-        ).slice(0, 500);
-        reason = upstreamReason(response.status, detail);
+        ({ response, data, detail, reason } = await requestWithRetry(model));
         if (response.ok) rememberResolvedModel(modelCacheKey, model);
       }
     }

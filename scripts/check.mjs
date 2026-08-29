@@ -244,8 +244,12 @@ assert.ok(
   ) &&
     ownedInferenceSource.includes("probeOwnedIntelligence") &&
     ownedInferenceSource.includes('/models"') &&
-    ownedInferenceSource.includes('"model_not_found"'),
-  "Owned inference cold-start, model discovery or release probe is missing",
+    ownedInferenceSource.includes('"model_not_found"') &&
+    ownedInferenceSource.includes('"owned_inference_retry"') &&
+    coreSource.includes(
+      "ownedAi.operational ? 30 * 24 * 60 * 60 * 1000 : 4_000",
+    ),
+  "Owned inference cold-start, model discovery, retry or release probe is missing",
 );
 assert.ok(
   coreSource.includes('"owned_inference"') &&

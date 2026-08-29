@@ -33,7 +33,7 @@ import {
   validateTranslation,
 } from "./ui-translations.js";
 
-export const APP_VERSION = "2026.08.29.3";
+export const APP_VERSION = "2026.08.29.4";
 const HEALTH_CACHE_KEY = `native-intelligence-health-${APP_VERSION}`;
 const OWNED_HEALTH_CACHE_KEY = `owned-intelligence-health-${APP_VERSION}`;
 const TRANSLATION_CACHE_VERSION = "ui-v14";
@@ -493,7 +493,7 @@ async function releaseHealth(env, options = {}) {
           env,
           OWNED_HEALTH_CACHE_KEY,
           ownedAi,
-          30 * 24 * 60 * 60 * 1000,
+          ownedAi.operational ? 30 * 24 * 60 * 60 * 1000 : 4_000,
         );
       } catch (error) {
         logEvent("warn", "owned_health_cache_write_failed", {

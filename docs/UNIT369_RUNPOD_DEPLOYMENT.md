@@ -57,6 +57,10 @@ the models from that same authenticated endpoint, selects the only unambiguous
 served model, retries once and caches the resolved identifier in the Worker
 isolate. It never sends the token to another host and never exposes raw provider
 errors through release health.
+Runpod 5xx responses are retried with bounded exponential backoff inside the
+same 180-second request window. A failed release probe is cached for only four
+seconds, so the deployment gate can retry a worker that is still starting;
+successful probes remain cached for the application version.
 The production and browser request windows default to 180 and 190 seconds so a
 zero-minimum-worker endpoint can complete a cold start. Runpod recommends a
 longer client timeout for large models; the UI must show the warm-up state
