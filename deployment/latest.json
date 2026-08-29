@@ -1,14 +1,15 @@
 {
-  "sha": "d2d2c6eebd8bf4a96f9ede502b502df608ab557d",
-  "status": "success",
-  "stage": "auth_verified",
+  "sha": "dc8af2905f41ffc3cb33a8f676e32d786f84f3a5",
+  "status": "failure",
+  "stage": "health_response",
   "url": "https://unit.laxmiitalianelegance.workers.dev",
   "health": {
-    "status": "ready",
-    "version": "2026.08.29.1",
-    "core_ready": true,
+    "status": "not_ready",
+    "version": "2026.08.29.2",
+    "core_ready": false,
     "auth_ready": true,
     "ai_operational": true,
+    "owned_ai_operational": false,
     "intelligence_mode": "owned-model",
     "generative_model_configured": true,
     "ai": {
@@ -18,7 +19,14 @@
       "capability_level": "deterministic-foundation",
       "external_required": false,
       "latency_ms": 0,
-      "checked_at": "2026-08-29T07:10:38.144Z"
+      "checked_at": "2026-08-29T07:35:11.550Z"
+    },
+    "owned_ai": {
+      "operational": false,
+      "code": "owned_inference_upstream_error",
+      "error": "Unit369 owned inference request failed.",
+      "latency_ms": 136,
+      "checked_at": "2026-08-29T07:35:11.773Z"
     },
     "file_storage": "durable_object",
     "required_checks": [
@@ -31,6 +39,7 @@
       "encryption_key",
       "authentication",
       "native_intelligence",
+      "owned_inference",
       "sandbox_binding"
     ],
     "checks": {
@@ -47,9 +56,10 @@
       "external_ai_configured": true,
       "sandbox_binding": true,
       "authentication": true,
-      "native_intelligence": true
+      "native_intelligence": true,
+      "owned_inference": false
     }
   },
   "error": null,
-  "recorded_at": "2026-08-29T07:10:39.659Z"
+  "recorded_at": "2026-08-29T07:36:15.375Z"
 }
