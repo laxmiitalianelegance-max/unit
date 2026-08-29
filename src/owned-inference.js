@@ -11,10 +11,6 @@ const MAX_OWNED_RESPONSE_BYTES = 768 * 1024;
 export const UNIT369_NATIVE_MODEL = "unit369-native-foundation-v1";
 export const UNIT369_OWNED_DEFAULT_MODEL = "Qwen/Qwen3.6-35B-A3B-FP8";
 
-const KNOWN_MODEL_ALIASES = Object.freeze({
-  "unit369-qwen36": UNIT369_OWNED_DEFAULT_MODEL,
-});
-
 function optionalBoolean(value) {
   if (value === true || value === false) return value;
   const normalized = String(value ?? "")
@@ -31,8 +27,7 @@ function cleanModel(value, fallback = UNIT369_OWNED_DEFAULT_MODEL) {
 }
 
 function ownedModel(value) {
-  const configured = cleanModel(value);
-  return KNOWN_MODEL_ALIASES[configured.toLowerCase()] || configured;
+  return cleanModel(value);
 }
 
 function ownedEndpoint(value) {
@@ -73,7 +68,10 @@ const SERBIAN_QUESTION_PATTERN =
   /^(?:imam\s+(?:jedno\s+)?pitanje|mogu\s+li\s+(?:nešto|nesto)\s+da\s+(?:te\s+)?pitam|mogu\s+(?:nešto|nesto)\s+da\s+(?:te\s+)?pitam)[?.!…]*$/i;
 
 const SERBIAN_STATUS_PATTERN =
-  /^(?:kako\s+(?:ide|si)|kako\s+ti\s+ide|ide(?:\s+li)?|(?:da\s+li|je\s+li|jel)\s+ide)(?:\s+(?:sad|sada|kod\s+tebe))?[?.!…]*$/i;
+  /^(?:kako\s+(?:ide|si)|kako\s+ti\s+ide|ide(?:\s+li)?|(?:da\s+li|je\s+li|jel)\s+ide|ima\s*l(?:i)?\s+(?:s?tanje|šta|sta)(?:\s+novo)?)(?:\s+(?:sad|sada|kod\s+tebe))?[?.!…]*$/i;
+
+const CAPABILITIES_PATTERN =
+  /^(?:(?:šta|sta)\s+(?:sve\s+)?(?:možeš|mozes)\s+(?:da\s+)?(?:radiš|radis|uradiš|uradis)|(?:šta|sta)\s+(?:sve\s+)?(?:znaš|znas)|koje\s+su\s+(?:tvoje\s+)?(?:mogućnosti|mogucnosti|sposobnosti)|what\s+(?:all\s+)?can\s+you\s+do|what\s+are\s+your\s+(?:capabilities|skills))[?.!…]*$/i;
 
 const QUICK_CHAT_PATTERN =
   /^(?:(?:ć|c)ao|zdravo|hej|pozdrav|hello|hi|hey|sta ima|šta ima|tu si|jesi tu|jel si tu|radiš|radis|radi li|hvala|thanks|thank you)[?.!…]*$/i;
@@ -87,7 +85,8 @@ export function shouldUseNativeChatFastPath(messages) {
     SERBIAN_HEARING_PATTERN.test(request) ||
     SERBIAN_HELP_PATTERN.test(request) ||
     SERBIAN_QUESTION_PATTERN.test(request) ||
-    SERBIAN_STATUS_PATTERN.test(request)
+    SERBIAN_STATUS_PATTERN.test(request) ||
+    CAPABILITIES_PATTERN.test(request)
   );
 }
 
@@ -116,6 +115,13 @@ function nativeChat(messages, context) {
   if (SERBIAN_STATUS_PATTERN.test(request)) {
     return {
       content: "Ide dobro — tu sam i spreman. Reci šta radimo dalje.",
+    };
+  }
+  if (CAPABILITIES_PATTERN.test(request)) {
+    return {
+      content: serbian
+        ? "Mogu da razgovaram i planiram, pravim dokumente i vizuale, vodim projekte i zadatke, pokrećem odobren Python/JavaScript kod, analiziram CSV/TSV/JSON/XLSX podatke (profil, čišćenje, grafikoni, trendovi i predikcija) i pretražujem tvoje odobreno TXT/Markdown znanje. Za izvršne ili osetljive promene prvo tražim tvoje odobrenje. Reci šta želiš da uradimo."
+        : "I can chat and plan, create documents and visuals, manage projects and tasks, run approved Python/JavaScript code, analyze CSV/TSV/JSON/XLSX data (profiles, cleaning, charts, trends and prediction), and search your approved TXT/Markdown knowledge. I ask for approval before executable or sensitive changes. Tell me what you want to do.",
     };
   }
   if (

@@ -118,6 +118,8 @@ export const UI_BASE = Object.freeze({
   projectClearFiles: "Remove files",
   projectFileLimits:
     "Select up to 20 UTF-8 text files, 128 KiB each and 512 KiB total.",
+  attachmentFileTypes:
+    "Supported attachments: CSV, TSV, JSON or XLSX for Data Lab; or UTF-8 project source files. Images and legacy XLS files are not supported yet.",
   projectApprovalTitle: "Project execution",
   projectApprovalRequired:
     "Review the workspace, files and operation. Nothing runs until you approve it.",
@@ -366,6 +368,8 @@ const UI_SR = Object.freeze({
   projectClearFiles: "Ukloni fajlove",
   projectFileLimits:
     "Izaberite najviše 20 UTF-8 tekstualnih fajlova, do 128 KiB po fajlu i 512 KiB ukupno.",
+  attachmentFileTypes:
+    "Podržani prilozi: CSV, TSV, JSON ili XLSX za Data Lab, ili UTF-8 izvorni fajlovi projekta. Slike i stari XLS fajlovi još nisu podržani.",
   projectApprovalTitle: "Izvršavanje projekta",
   projectApprovalRequired:
     "Pregledajte radni prostor, fajlove i operaciju. Ništa se ne pokreće dok ne odobrite.",

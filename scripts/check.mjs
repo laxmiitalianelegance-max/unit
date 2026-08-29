@@ -63,7 +63,7 @@ for (const match of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)) {
 }
 assert.ok(html.includes('data-mode="auto"'), "Auto fallback mode is missing");
 assert.ok(
-  html.includes("unit369-ui-i18n-v14-"),
+  html.includes("unit369-ui-i18n-v15-"),
   "Translation cache version is stale",
 );
 assert.ok(
@@ -95,6 +95,8 @@ assert.ok(
     html.includes("data-data-download") &&
     html.includes("compactDataTool") &&
     html.includes("renderDataTrend") &&
+    html.includes("projectAttachmentNames") &&
+    html.includes("attachmentFileTypes") &&
     html.includes("inferPredictionTarget") &&
     html.includes(
       'accept=".py,.js,.mjs,.cjs,.json,.md,.markdown,.txt,.html,.css,.yaml,.yml,.toml,.csv,.tsv,.xlsx"',

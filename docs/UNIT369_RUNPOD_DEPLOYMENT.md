@@ -47,12 +47,17 @@ UNIT369_INFERENCE_THINKING=false
 UNIT369_INFERENCE_TOKEN=<Runpod API key, stored only as a Cloudflare secret>
 ```
 
+The Worker must send `unit369-qwen36` unchanged in the OpenAI-compatible
+`model` field. `OPENAI_SERVED_MODEL_NAME_OVERRIDE` makes that alias the accepted
+request model; it must not be rewritten to the underlying Hugging Face model ID.
+
 Never commit the endpoint ID/API key pair together with a live token. The API key is sent only from the Worker to Runpod and never enters the browser bundle.
 
 ## Required gates before production use
 
 1. Direct endpoint verification passes in Serbian without exposing reasoning tags.
-2. Unit369 authenticated chat returns `provider: unit369-owned`.
+2. Unit369 sends `model: unit369-qwen36`, and authenticated chat returns
+   `provider: unit369-owned`.
 3. Invalid token, timeout, rate-limit and stopped-worker behavior fall back safely.
 4. Prompt contents do not appear in public logs.
 5. Billing shows a hard evaluation ceiling and no automatic payment.

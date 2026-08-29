@@ -411,10 +411,10 @@ test("owner-controlled inference is preferred through the bounded HTTPS contract
   assert.equal(result.external_required, false);
 });
 
-test("Unit369 RunPod alias resolves to the deployed Hugging Face model", async (t) => {
+test("Unit369 preserves the RunPod served-model alias", async (t) => {
   t.mock.method(globalThis, "fetch", async (_input, init) => {
     const body = JSON.parse(init.body);
-    assert.equal(body.model, "Qwen/Qwen3.6-35B-A3B-FP8");
+    assert.equal(body.model, "unit369-qwen36");
     return Response.json({
       choices: [{ message: { content: "RunPod model is ready." } }],
     });
@@ -429,7 +429,7 @@ test("Unit369 RunPod alias resolves to the deployed Hugging Face model", async (
     },
     [{ role: "user", content: "Hello" }],
   );
-  assert.equal(result.model, "Qwen/Qwen3.6-35B-A3B-FP8");
+  assert.equal(result.model, "unit369-qwen36");
   assert.equal(result.content, "RunPod model is ready.");
 });
 
@@ -591,7 +591,7 @@ test("Serbian status checks get an immediate natural response", async (t) => {
     });
   });
 
-  for (const message of ["Kako ide", "Ide li"]) {
+  for (const message of ["Kako ide", "Ide li", "Imal stanje"]) {
     const result = await runPreferredAi(
       {
         UNIT369_INFERENCE_URL:
@@ -610,6 +610,46 @@ test("Serbian status checks get an immediate natural response", async (t) => {
       "Ide dobro — tu sam i spreman. Reci šta radimo dalje.",
     );
   }
+  assert.equal(ownedCalled, false);
+});
+
+test("capability questions receive an immediate useful native response", async (t) => {
+  let ownedCalled = false;
+  t.mock.method(globalThis, "fetch", async () => {
+    ownedCalled = true;
+    return Response.json({
+      choices: [{ message: { content: "Slow owned response" } }],
+    });
+  });
+
+  const serbian = await runPreferredAi(
+    {
+      UNIT369_INFERENCE_URL:
+        "https://api.runpod.ai/v2/test/openai/v1/chat/completions",
+      UNIT369_INFERENCE_MODEL: "unit369-qwen36",
+      UNIT369_INFERENCE_TOKEN: "test-owned-token",
+    },
+    [{ role: "user", content: "Šta sve možeš da radiš?" }],
+    { purpose: "chat", externalFallback: false },
+  );
+  assert.equal(serbian.provider, "unit369-native");
+  assert.equal(serbian.fast_path, true);
+  assert.match(serbian.content, /CSV\/TSV\/JSON\/XLSX/);
+  assert.match(serbian.content, /grafikoni, trendovi i predikcija/);
+
+  const english = await runPreferredAi(
+    {
+      UNIT369_INFERENCE_URL:
+        "https://api.runpod.ai/v2/test/openai/v1/chat/completions",
+      UNIT369_INFERENCE_MODEL: "unit369-qwen36",
+      UNIT369_INFERENCE_TOKEN: "test-owned-token",
+    },
+    [{ role: "user", content: "What can you do?" }],
+    { purpose: "chat", externalFallback: false },
+  );
+  assert.equal(english.provider, "unit369-native");
+  assert.equal(english.fast_path, true);
+  assert.match(english.content, /approved Python\/JavaScript code/);
   assert.equal(ownedCalled, false);
 });
 
