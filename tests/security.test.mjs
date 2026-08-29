@@ -436,6 +436,77 @@ test("Unit369 preserves the RunPod served-model alias", async (t) => {
   assert.equal(result.content, "RunPod model is ready.");
 });
 
+test("Unit369 discovers the served RunPod model after a stale alias", async (t) => {
+  let requestNumber = 0;
+  t.mock.method(globalThis, "fetch", async (input, init) => {
+    requestNumber += 1;
+    if (requestNumber === 1) {
+      assert.equal(
+        input,
+        "https://api.runpod.ai/v2/discovery-test/openai/v1/chat/completions",
+      );
+      assert.equal(init.method, "POST");
+      assert.equal(JSON.parse(init.body).model, "unit369-stale-alias");
+      return Response.json(
+        { error: { message: "The requested model does not exist." } },
+        { status: 400 },
+      );
+    }
+    if (requestNumber === 2) {
+      assert.equal(
+        input,
+        "https://api.runpod.ai/v2/discovery-test/openai/v1/models",
+      );
+      assert.equal(init.method, "GET");
+      assert.equal(init.headers.authorization, "Bearer test-owned-token");
+      return Response.json({
+        object: "list",
+        data: [{ id: "Qwen/Qwen3.6-35B-A3B-FP8", object: "model" }],
+      });
+    }
+    assert.equal(requestNumber, 3);
+    assert.equal(init.method, "POST");
+    assert.equal(JSON.parse(init.body).model, "Qwen/Qwen3.6-35B-A3B-FP8");
+    return Response.json({
+      choices: [{ message: { content: "Discovered model response." } }],
+    });
+  });
+
+  const result = await runOwnedModel(
+    {
+      UNIT369_INFERENCE_URL:
+        "https://api.runpod.ai/v2/discovery-test/openai/v1/chat/completions",
+      UNIT369_INFERENCE_MODEL: "unit369-stale-alias",
+      UNIT369_INFERENCE_TOKEN: "test-owned-token",
+    },
+    [{ role: "user", content: "Hello" }],
+  );
+  assert.equal(requestNumber, 3);
+  assert.equal(result.provider, "unit369-owned");
+  assert.equal(result.model, "Qwen/Qwen3.6-35B-A3B-FP8");
+  assert.equal(result.content, "Discovered model response.");
+});
+
+test("owned inference probe exposes only bounded upstream diagnostics", async (t) => {
+  t.mock.method(globalThis, "fetch", async () =>
+    Response.json(
+      { error: { message: "Invalid request with private provider detail." } },
+      { status: 400 },
+    ),
+  );
+
+  const probe = await probeOwnedIntelligence({
+    UNIT369_INFERENCE_URL:
+      "https://api.runpod.ai/v2/diagnostic-test/openai/v1/chat/completions",
+    UNIT369_INFERENCE_MODEL: "unit369-qwen36",
+    UNIT369_INFERENCE_TOKEN: "test-owned-token",
+  });
+  assert.equal(probe.operational, false);
+  assert.equal(probe.upstream_status, 400);
+  assert.equal(probe.upstream_reason, "invalid_request");
+  assert.doesNotMatch(JSON.stringify(probe), /private provider detail/i);
+});
+
 test("owned inference allows the documented cold-start window", () => {
   assert.equal(UNIT369_OWNED_TIMEOUT_MS, 180_000);
   assert.equal(ownedInferenceTimeoutMs(), 180_000);

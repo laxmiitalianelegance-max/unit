@@ -10,8 +10,10 @@ const MIN_OWNED_TIMEOUT_MS = 10_000;
 const MAX_OWNED_TIMEOUT_MS = 300_000;
 export const UNIT369_OWNED_TIMEOUT_MS = 180_000;
 const MAX_OWNED_RESPONSE_BYTES = 768 * 1024;
+const MAX_DISCOVERED_MODELS = 32;
 export const UNIT369_NATIVE_MODEL = "unit369-native-foundation-v1";
 export const UNIT369_OWNED_DEFAULT_MODEL = "Qwen/Qwen3.6-35B-A3B-FP8";
+const resolvedOwnedModels = new Map();
 
 function optionalBoolean(value) {
   if (value === true || value === false) return value;
@@ -60,6 +62,89 @@ function ownedEndpoint(value) {
     );
   }
   return url.toString();
+}
+
+function ownedModelsEndpoint(endpoint) {
+  const url = new URL(endpoint);
+  const modelsPath = url.pathname.replace(
+    /\/chat\/completions\/?$/i,
+    "/models",
+  );
+  if (modelsPath === url.pathname) return "";
+  url.pathname = modelsPath;
+  url.search = "";
+  url.hash = "";
+  return url.toString();
+}
+
+function upstreamReason(status, detail = "") {
+  if (
+    [400, 404].includes(status) &&
+    /(?:requested\s+)?model.{0,80}(?:does\s+not\s+exist|not\s+found|unknown)|(?:does\s+not\s+exist|not\s+found|unknown).{0,80}model/i.test(
+      detail,
+    )
+  ) {
+    return "model_not_found";
+  }
+  if (status === 400) return "invalid_request";
+  if (status === 401) return "authentication_rejected";
+  if (status === 403) return "authorization_rejected";
+  if (status === 404) return "endpoint_not_found";
+  if (status === 429) return "rate_limited";
+  if (status >= 500) return "provider_unavailable";
+  return "upstream_rejected";
+}
+
+function rememberResolvedModel(key, model) {
+  if (resolvedOwnedModels.size >= 16 && !resolvedOwnedModels.has(key)) {
+    resolvedOwnedModels.delete(resolvedOwnedModels.keys().next().value);
+  }
+  resolvedOwnedModels.set(key, model);
+}
+
+async function discoverOwnedModel(endpoint, token, configuredModel, signal) {
+  const modelsEndpoint = ownedModelsEndpoint(endpoint);
+  if (!modelsEndpoint) return "";
+  try {
+    const response = await fetch(modelsEndpoint, {
+      method: "GET",
+      headers: {
+        accept: "application/json",
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
+      },
+      signal,
+    });
+    const data = await readResponseJsonLimited(
+      response,
+      MAX_OWNED_RESPONSE_BYTES,
+    );
+    if (!response.ok) return "";
+    const available = [
+      ...new Set(
+        (Array.isArray(data?.data) ? data.data : [])
+          .slice(0, MAX_DISCOVERED_MODELS)
+          .map((entry) => cleanModel(entry?.id, ""))
+          .filter(Boolean),
+      ),
+    ];
+    if (available.length === 1) return available[0];
+    const exact = available.find(
+      (candidate) => candidate.toLowerCase() === configuredModel.toLowerCase(),
+    );
+    if (exact) return exact;
+    return (
+      available.find(
+        (candidate) =>
+          candidate.toLowerCase() === UNIT369_OWNED_DEFAULT_MODEL.toLowerCase(),
+      ) || ""
+    );
+  } catch (error) {
+    if (error?.name === "AbortError") throw error;
+    logEvent("warn", "owned_model_discovery_failed", {
+      error: safeError(error),
+    });
+    return "";
+  }
 }
 
 function userMessage(messages) {
@@ -287,7 +372,11 @@ export async function runOwnedModel(env, messages, options = {}) {
     );
   }
   const endpoint = ownedEndpoint(env.UNIT369_INFERENCE_URL);
-  const model = ownedModel(options.model || env.UNIT369_INFERENCE_MODEL);
+  const configuredModel = ownedModel(
+    options.model || env.UNIT369_INFERENCE_MODEL,
+  );
+  const modelCacheKey = `${endpoint}\n${configuredModel}`;
+  let model = resolvedOwnedModels.get(modelCacheKey) || configuredModel;
   const controller = new AbortController();
   const timer = setTimeout(
     () => controller.abort(),
@@ -302,41 +391,73 @@ export async function runOwnedModel(env, messages, options = {}) {
       thinking === false
         ? { temperature: 0.7, top_p: 0.8, presence_penalty: 1.5 }
         : {};
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        ...(token ? { authorization: `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify({
-        model,
-        messages,
-        max_tokens: Math.max(
-          1,
-          Math.min(2_500, Number(options.maxTokens) || 900),
-        ),
-        stream: false,
-        ...sampling,
-        ...(thinking === undefined
-          ? {}
-          : { chat_template_kwargs: { enable_thinking: thinking } }),
-      }),
-      signal: controller.signal,
-    });
-    const data = await readResponseJsonLimited(
+    const request = (selectedModel) =>
+      fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          ...(token ? { authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          model: selectedModel,
+          messages,
+          max_tokens: Math.max(
+            1,
+            Math.min(2_500, Number(options.maxTokens) || 900),
+          ),
+          stream: false,
+          ...sampling,
+          ...(thinking === undefined
+            ? {}
+            : { chat_template_kwargs: { enable_thinking: thinking } }),
+        }),
+        signal: controller.signal,
+      });
+    let response = await request(model);
+    let data = await readResponseJsonLimited(
       response,
       MAX_OWNED_RESPONSE_BYTES,
     );
+    let detail = String(
+      data?.error?.message ||
+        data?.error ||
+        data?.message ||
+        `HTTP ${response.status}`,
+    ).slice(0, 500);
+    let reason = upstreamReason(response.status, detail);
+    if (!response.ok && reason === "model_not_found") {
+      resolvedOwnedModels.delete(modelCacheKey);
+      const discoveredModel = await discoverOwnedModel(
+        endpoint,
+        token,
+        configuredModel,
+        controller.signal,
+      );
+      if (discoveredModel && discoveredModel !== model) {
+        logEvent("info", "owned_model_discovered", {
+          configured_model: configuredModel,
+          resolved_model: discoveredModel,
+        });
+        model = discoveredModel;
+        response = await request(model);
+        data = await readResponseJsonLimited(
+          response,
+          MAX_OWNED_RESPONSE_BYTES,
+        );
+        detail = String(
+          data?.error?.message ||
+            data?.error ||
+            data?.message ||
+            `HTTP ${response.status}`,
+        ).slice(0, 500);
+        reason = upstreamReason(response.status, detail);
+        if (response.ok) rememberResolvedModel(modelCacheKey, model);
+      }
+    }
     if (!response.ok) {
-      const detail = String(
-        data?.error?.message ||
-          data?.error ||
-          data?.message ||
-          `HTTP ${response.status}`,
-      ).slice(0, 500);
       logEvent("warn", "owned_inference_rejected", {
         status: response.status,
-        detail,
+        reason,
       });
       const error = new HttpError(
         response.status === 429 ? 429 : 502,
@@ -348,6 +469,8 @@ export async function runOwnedModel(env, messages, options = {}) {
           : "owned_inference_upstream_error",
       );
       error.diagnostic = `HTTP ${response.status}: ${detail}`;
+      error.upstreamStatus = response.status;
+      error.upstreamReason = reason;
       throw error;
     }
     const content = ownedText(data);
@@ -407,6 +530,12 @@ export async function probeOwnedIntelligence(env) {
       operational: false,
       code: error?.code || "owned_inference_probe_failed",
       error: safeError(error),
+      ...(Number.isInteger(error?.upstreamStatus)
+        ? { upstream_status: error.upstreamStatus }
+        : {}),
+      ...(error?.upstreamReason
+        ? { upstream_reason: error.upstreamReason }
+        : {}),
       latency_ms: Date.now() - started,
       checked_at: new Date().toISOString(),
     };
