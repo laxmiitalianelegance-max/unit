@@ -241,8 +241,11 @@ const deployWorkflow = readFileSync(
 assert.ok(
   ownedInferenceSource.includes(
     "export const UNIT369_OWNED_TIMEOUT_MS = 180_000",
-  ) && ownedInferenceSource.includes("probeOwnedIntelligence"),
-  "Owned inference cold-start window or release probe is missing",
+  ) &&
+    ownedInferenceSource.includes("probeOwnedIntelligence") &&
+    ownedInferenceSource.includes('/models"') &&
+    ownedInferenceSource.includes('"model_not_found"'),
+  "Owned inference cold-start, model discovery or release probe is missing",
 );
 assert.ok(
   coreSource.includes('"owned_inference"') &&

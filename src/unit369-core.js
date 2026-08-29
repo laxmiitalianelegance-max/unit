@@ -33,7 +33,7 @@ import {
   validateTranslation,
 } from "./ui-translations.js";
 
-export const APP_VERSION = "2026.08.29.2";
+export const APP_VERSION = "2026.08.29.3";
 const HEALTH_CACHE_KEY = `native-intelligence-health-${APP_VERSION}`;
 const OWNED_HEALTH_CACHE_KEY = `owned-intelligence-health-${APP_VERSION}`;
 const TRANSLATION_CACHE_VERSION = "ui-v14";

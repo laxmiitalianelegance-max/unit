@@ -51,6 +51,12 @@ UNIT369_INFERENCE_TOKEN=<Runpod API key, stored only as a Cloudflare secret>
 The Worker must send `unit369-qwen36` unchanged in the OpenAI-compatible
 `model` field. `OPENAI_SERVED_MODEL_NAME_OVERRIDE` makes that alias the accepted
 request model; it must not be rewritten to the underlying Hugging Face model ID.
+If the configured alias is stale or the override is absent, Unit369 handles the
+documented Runpod `/models` contract: after a model-not-found response it reads
+the models from that same authenticated endpoint, selects the only unambiguous
+served model, retries once and caches the resolved identifier in the Worker
+isolate. It never sends the token to another host and never exposes raw provider
+errors through release health.
 The production and browser request windows default to 180 and 190 seconds so a
 zero-minimum-worker endpoint can complete a cold start. Runpod recommends a
 longer client timeout for large models; the UI must show the warm-up state
