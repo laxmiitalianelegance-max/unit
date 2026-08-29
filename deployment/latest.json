@@ -1,11 +1,11 @@
 {
-  "sha": "dc8af2905f41ffc3cb33a8f676e32d786f84f3a5",
+  "sha": "24f5e0b28816883af3e7c10d592d3e0fe0ab19aa",
   "status": "failure",
   "stage": "health_response",
   "url": "https://unit.laxmiitalianelegance.workers.dev",
   "health": {
     "status": "not_ready",
-    "version": "2026.08.29.2",
+    "version": "2026.08.29.3",
     "core_ready": false,
     "auth_ready": true,
     "ai_operational": true,
@@ -19,14 +19,16 @@
       "capability_level": "deterministic-foundation",
       "external_required": false,
       "latency_ms": 0,
-      "checked_at": "2026-08-29T07:35:11.550Z"
+      "checked_at": "2026-08-29T07:47:56.567Z"
     },
     "owned_ai": {
       "operational": false,
       "code": "owned_inference_upstream_error",
       "error": "Unit369 owned inference request failed.",
-      "latency_ms": 136,
-      "checked_at": "2026-08-29T07:35:11.773Z"
+      "upstream_status": 500,
+      "upstream_reason": "provider_unavailable",
+      "latency_ms": 21,
+      "checked_at": "2026-08-29T07:47:56.674Z"
     },
     "file_storage": "durable_object",
     "required_checks": [
@@ -61,5 +63,5 @@
     }
   },
   "error": null,
-  "recorded_at": "2026-08-29T07:36:15.375Z"
+  "recorded_at": "2026-08-29T07:49:00.184Z"
 }
