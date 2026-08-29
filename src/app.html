@@ -1589,7 +1589,7 @@
           CUR = "unit369-current-v1",
           LANG = "u369-lang-all-v4",
           PREF = "unit369-settings-v2",
-          CACHE = "unit369-ui-i18n-v14-";
+          CACHE = "unit369-ui-i18n-v15-";
         const RTL = new Set(["ar", "fa", "he", "ur"]);
         const LANGS = [
           ["auto", "Automatic"],
@@ -1763,6 +1763,8 @@
           projectClearFiles: "Remove files",
           projectFileLimits:
             "Select up to 20 UTF-8 text files, 128 KiB each and 512 KiB total.",
+          attachmentFileTypes:
+            "Supported attachments: CSV, TSV, JSON or XLSX for Data Lab; or UTF-8 project source files. Images and legacy XLS files are not supported yet.",
           projectApprovalTitle: "Project execution",
           projectApprovalRequired:
             "Review the workspace, files and operation. Nothing runs until you approve it.",
@@ -2800,6 +2802,38 @@
             )
           );
         }
+        function projectAttachmentNames(files) {
+          const extensions = new Set([
+            ".cjs",
+            ".css",
+            ".csv",
+            ".html",
+            ".js",
+            ".json",
+            ".md",
+            ".markdown",
+            ".mjs",
+            ".py",
+            ".toml",
+            ".ts",
+            ".tsx",
+            ".tsv",
+            ".txt",
+            ".yaml",
+            ".yml",
+          ]);
+          return (
+            files.length > 0 &&
+            files.every((file) => {
+              const path = String(file.path || file.name || "").toLowerCase(),
+                name = path.split("/").pop();
+              return (
+                extensions.has(attachmentExtension(path)) ||
+                ["dockerfile", "makefile"].includes(name)
+              );
+            })
+          );
+        }
         function knowledgeAttachmentNames(files) {
           return (
             files.length > 0 &&
@@ -2955,8 +2989,10 @@
           const status = $("#u369-chat-status");
           try {
             if (!files.length) return;
-            const dataCandidate = dataAttachmentNames(files),
-              maxFiles = dataCandidate ? 5 : 20,
+            const dataCandidate = dataAttachmentNames(files);
+            if (!dataCandidate && !projectAttachmentNames(files))
+              throw new Error(t("attachmentFileTypes"));
+            const maxFiles = dataCandidate ? 5 : 20,
               maxFileBytes = dataCandidate ? 1024 * 1024 : 128 * 1024,
               maxTotalBytes = dataCandidate ? 3 * 1024 * 1024 : 512 * 1024,
               limitMessage = dataCandidate
