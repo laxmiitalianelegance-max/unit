@@ -1,16 +1,16 @@
 {
-  "sha": "70abd5b85c3e103d29c840a4eedc0053fd0e95e5",
-  "status": "failure",
-  "stage": "health_response",
+  "sha": "6650d148ca75ed2dee0b4b1ede135118a7b86d8e",
+  "status": "success",
+  "stage": "auth_verified",
   "url": "https://unit.laxmiitalianelegance.workers.dev",
   "health": {
-    "status": "not_ready",
-    "version": "2026.08.29.4",
-    "core_ready": false,
+    "status": "ready",
+    "version": "2026.08.30.1",
+    "core_ready": true,
     "auth_ready": true,
     "ai_operational": true,
     "owned_ai_operational": false,
-    "intelligence_mode": "owned-model",
+    "intelligence_mode": "workers-ai-native-fallback",
     "generative_model_configured": true,
     "ai": {
       "operational": true,
@@ -19,16 +19,12 @@
       "capability_level": "deterministic-foundation",
       "external_required": false,
       "latency_ms": 0,
-      "checked_at": "2026-08-29T07:56:42.098Z"
+      "checked_at": "2026-08-30T08:55:07.229Z"
     },
     "owned_ai": {
       "operational": false,
-      "code": "owned_inference_upstream_error",
-      "error": "Unit369 owned inference request failed.",
-      "upstream_status": 500,
-      "upstream_reason": "provider_unavailable",
-      "latency_ms": 3279,
-      "checked_at": "2026-08-29T07:58:21.975Z"
+      "code": "owned_inference_not_probed",
+      "error": "Unit369 owned inference has not passed the release probe."
     },
     "file_storage": "durable_object",
     "required_checks": [
@@ -41,7 +37,6 @@
       "encryption_key",
       "authentication",
       "native_intelligence",
-      "owned_inference",
       "sandbox_binding"
     ],
     "checks": {
@@ -63,5 +58,5 @@
     }
   },
   "error": null,
-  "recorded_at": "2026-08-29T07:58:28.421Z"
+  "recorded_at": "2026-08-30T08:55:08.799Z"
 }
