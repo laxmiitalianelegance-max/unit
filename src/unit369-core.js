@@ -33,7 +33,7 @@ import {
   validateTranslation,
 } from "./ui-translations.js";
 
-export const APP_VERSION = "2026.08.29.4";
+export const APP_VERSION = "2026.08.30.1";
 const HEALTH_CACHE_KEY = `native-intelligence-health-${APP_VERSION}`;
 const OWNED_HEALTH_CACHE_KEY = `owned-intelligence-health-${APP_VERSION}`;
 const TRANSLATION_CACHE_VERSION = "ui-v14";
@@ -134,7 +134,9 @@ async function freeAi(request, env) {
   const result = await runPreferredAi(env, messages, {
     purpose: "chat",
     maxTokens: 900,
-    externalFallback: false,
+    ownedInference: false,
+    externalFallback: true,
+    commercialFallback: false,
   });
   return json(result);
 }
@@ -340,11 +342,9 @@ function integrationStatus(env) {
     core: {
       native: true,
       ai_configured: true,
-      intelligence_mode: integrations.unit369Owned
-        ? "owned-model"
-        : externalAiConfigured
-          ? "hybrid-migration"
-          : "native-foundation",
+      intelligence_mode: integrations.workersAi
+        ? "workers-ai-native-fallback"
+        : "native-foundation",
       generative_model_configured:
         integrations.unit369Owned || externalAiConfigured,
       authentication_required: true,
@@ -514,7 +514,6 @@ async function releaseHealth(env, options = {}) {
     "encryption_key",
     "authentication",
     "native_intelligence",
-    "owned_inference",
     "sandbox_binding",
   ];
   const operational = requiredChecks.every((name) => checks[name] === true);
@@ -525,11 +524,9 @@ async function releaseHealth(env, options = {}) {
     auth_ready: checks.authentication,
     ai_operational: ai?.operational === true,
     owned_ai_operational: ownedAi?.operational === true,
-    intelligence_mode: providers.unit369Owned
-      ? "owned-model"
-      : externalAiConfigured
-        ? "hybrid-migration"
-        : "native-foundation",
+    intelligence_mode: providers.workersAi
+      ? "workers-ai-native-fallback"
+      : "native-foundation",
     generative_model_configured: providers.unit369Owned || externalAiConfigured,
     ai: ai || {
       operational: false,

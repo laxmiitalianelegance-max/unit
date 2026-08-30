@@ -849,12 +849,84 @@ test("owned chat failure falls directly back to Unit369 Native when external fal
 
   assert.equal(workersAiCalled, false);
   assert.equal(result.provider, "unit369-native");
-  assert.match(result.content, /Nisam uspeo da pripremim potpun odgovor/);
+  assert.match(result.content, /Razumeo sam zahtev/);
+  assert.match(result.content, /bez glavnog modela/);
   assert.doesNotMatch(
     result.content,
-    /Cloudflare|Claude|OpenAI|Grok|owned-inference|intelligence\.plan|Nativni plan|model se trenutno pokreće/i,
+    /Nisam uspeo|Cloudflare|Claude|OpenAI|Grok|owned-inference|intelligence\.plan|Nativni plan|model se trenutno pokreće/i,
   );
   assert.deepEqual(result.fallback_from, ["unit369-owned"]);
+});
+
+test("default chat can bypass RunPod and use Workers AI", async (t) => {
+  let ownedCalled = false;
+  let workersAiCalled = false;
+  t.mock.method(globalThis, "fetch", async () => {
+    ownedCalled = true;
+    throw new Error("RunPod must not be called");
+  });
+
+  const result = await runPreferredAi(
+    {
+      UNIT369_INFERENCE_URL:
+        "https://api.runpod.ai/v2/test/openai/v1/chat/completions",
+      UNIT369_INFERENCE_MODEL: "unit369-qwen36",
+      UNIT369_INFERENCE_TOKEN: "test-owned-token",
+      AI: {
+        async run() {
+          workersAiCalled = true;
+          return { response: "Workers AI response" };
+        },
+      },
+    },
+    [{ role: "user", content: "Napravi plan prodaje." }],
+    {
+      purpose: "chat",
+      ownedInference: false,
+      externalFallback: true,
+      commercialFallback: false,
+    },
+  );
+
+  assert.equal(ownedCalled, false);
+  assert.equal(workersAiCalled, true);
+  assert.equal(result.provider, "workers");
+  assert.equal(result.content, "Workers AI response");
+});
+
+test("RunPod bypass falls back to native without paid provider calls", async (t) => {
+  let upstreamCalled = false;
+  t.mock.method(globalThis, "fetch", async () => {
+    upstreamCalled = true;
+    throw new Error("No remote provider should be called");
+  });
+
+  const result = await runPreferredAi(
+    {
+      UNIT369_INFERENCE_URL:
+        "https://api.runpod.ai/v2/test/openai/v1/chat/completions",
+      UNIT369_INFERENCE_MODEL: "unit369-qwen36",
+      UNIT369_INFERENCE_TOKEN: "test-owned-token",
+      OPENAI_API_KEY: "test-openai-token",
+      AI: {
+        async run() {
+          throw new Error("Workers AI unavailable");
+        },
+      },
+    },
+    [{ role: "user", content: "Napravi detaljan plan prodaje." }],
+    {
+      purpose: "chat",
+      ownedInference: false,
+      externalFallback: true,
+      commercialFallback: false,
+    },
+  );
+
+  assert.equal(upstreamCalled, false);
+  assert.equal(result.provider, "unit369-native");
+  assert.deepEqual(result.fallback_from, ["workers"]);
+  assert.match(result.content, /Razumeo sam zahtev/);
 });
 
 test("owner-controlled inference rejects an unfinished private reasoning block", async (t) => {

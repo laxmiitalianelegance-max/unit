@@ -24,8 +24,8 @@ There is one active runtime graph. Historical wrappers and branch-specific valid
 - Google OAuth is optional. When configured, it uses signed state, browser-bound flow state and PKCE; malformed non-Google client IDs are rejected before redirect.
 - AI and product routes require an authenticated Unit369 account.
 - Unsafe same-origin requests require a matching `Origin` header.
-- The Unit369 route is primary in the UI. It uses the owner-controlled Unit369 model when configured, optional server-side AI accelerators during migration, and the native deterministic foundation as the final no-provider path.
-- Production core readiness is verified against Unit369 Native and does not depend on Cloudflare AI, Claude, OpenAI or Grok availability.
+- The Unit369 route is primary in the UI. Default chat bypasses the optional Runpod endpoint: it uses the existing Workers AI binding when available and falls back immediately to the native deterministic foundation. Claude, OpenAI and Grok remain explicit team-mode integrations rather than silent fallbacks.
+- Production core readiness is verified against Unit369 Native and does not depend on Runpod, Cloudflare AI, Claude, OpenAI or Grok availability.
 - The default **Auto fallback** chat mode makes one logical AI request. Parallel provider and synthesis calls occur only in explicitly selected team modes.
 - AI routes have per-account Durable Object quotas.
 - Native and external mutations use short-lived, immutable, one-time approval tokens.

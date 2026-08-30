@@ -256,8 +256,8 @@ function nativeChat(messages, context) {
   }
   const plan = planNativeIntent(request);
   const content = serbian
-    ? "Nisam uspeo da pripremim potpun odgovor. Pokušaj ponovo za nekoliko sekundi ili napiši zahtev malo konkretnije."
-    : "I could not prepare a complete answer. Try again in a few seconds or make the request a little more specific.";
+    ? "Razumeo sam zahtev. Mogu da nastavim bez glavnog modela kroz ugrađene Unit369 alate. Napiši „nastavi“ da pripremim sledeći konkretan korak ili dodaj ograničenja koja treba da poštujem."
+    : "I understood the request. I can continue without the main model through Unit369's built-in tools. Say “continue” for the next concrete step, or add any constraints I should follow.";
   return { content, plan };
 }
 

@@ -234,6 +234,10 @@ const ownedInferenceSource = readFileSync(
   "utf8",
 );
 const coreSource = readFileSync(join(sourceRoot, "unit369-core.js"), "utf8");
+const aiProvidersSource = readFileSync(
+  join(sourceRoot, "ai-providers.js"),
+  "utf8",
+);
 const deployWorkflow = readFileSync(
   join(root, ".github/workflows/deploy-production.yml"),
   "utf8",
@@ -252,11 +256,14 @@ assert.ok(
   "Owned inference cold-start, model discovery, retry or release probe is missing",
 );
 assert.ok(
-  coreSource.includes('"owned_inference"') &&
+  coreSource.includes("checks.owned_inference =") &&
     coreSource.includes("owned_ai_operational") &&
-    deployWorkflow.includes("probe_owned=1") &&
-    deployWorkflow.includes("h.owned_ai_operational===true"),
-  "Production does not require a successful owned-model release probe",
+    coreSource.includes("ownedInference: false") &&
+    coreSource.includes("commercialFallback: false") &&
+    aiProvidersSource.includes("options.ownedInference !== false") &&
+    !deployWorkflow.includes("probe_owned=1") &&
+    !deployWorkflow.includes("h.owned_ai_operational===true"),
+  "RunPod is not optional on the default chat and production release paths",
 );
 
 console.log(

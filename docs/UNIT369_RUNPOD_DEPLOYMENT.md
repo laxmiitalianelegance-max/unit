@@ -2,6 +2,8 @@
 
 This profile attaches an open-weight model to Unit369 without using an OpenAI, Anthropic, xAI or Google model API. Runpod supplies raw GPU execution and the owner controls the endpoint, model and API key.
 
+Runpod is an optional accelerator, not a production dependency. Default Unit369 chat does not call this endpoint while it is bypassed; it uses Workers AI when available and then the built-in native path. A missing Runpod balance, stopped worker or HTTP 5xx response therefore cannot block normal chat or a production deployment.
+
 ## First evaluation profile
 
 - Runtime: Runpod Serverless vLLM worker.
@@ -58,9 +60,9 @@ served model, retries once and caches the resolved identifier in the Worker
 isolate. It never sends the token to another host and never exposes raw provider
 errors through release health.
 Runpod 5xx responses are retried with bounded exponential backoff inside the
-same 180-second request window. A failed release probe is cached for only four
-seconds, so the deployment gate can retry a worker that is still starting;
-successful probes remain cached for the application version.
+same 180-second request window when an owned-model feature explicitly uses the
+endpoint. A failed diagnostic probe is cached for only four seconds; successful
+probes remain cached for the application version.
 The production and browser request windows default to 180 and 190 seconds so a
 zero-minimum-worker endpoint can complete a cold start. Runpod recommends a
 longer client timeout for large models; the UI must show the warm-up state
@@ -68,13 +70,13 @@ instead of silently replacing the answer after ten seconds.
 
 Never commit the endpoint ID/API key pair together with a live token. The API key is sent only from the Worker to Runpod and never enters the browser bundle.
 
-## Required gates before production use
+## Required gates before re-enabling owned-model use
 
 1. Direct endpoint verification passes in Serbian without exposing reasoning tags.
 2. Unit369 sends `model: unit369-qwen36`, and authenticated chat returns
    `provider: unit369-owned`.
-3. The release health gate performs one cached owned-model probe per application
-   version and cannot report `ready` unless it receives `provider: unit369-owned`.
+3. The optional owned-model diagnostic receives `provider: unit369-owned`; core
+   release health remains independent of that diagnostic.
 4. Invalid token, timeout, rate-limit and stopped-worker behavior fall back safely.
 5. Prompt contents do not appear in public logs.
 6. Billing shows a hard evaluation ceiling and no automatic payment.
