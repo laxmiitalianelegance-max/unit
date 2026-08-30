@@ -12,8 +12,8 @@ Implemented through version `2026.08.25.1`:
 
 - `unit369-native` is always available and has no provider credential.
 - The default UI route is Unit369, not a named external model.
-- The preferred inference chain is owner-controlled Unit369 model, configured optional accelerators, then Unit369 Native.
-- Native chat fallback returns a transparent capability plan instead of fabricating a generative answer.
+- Default chat bypasses unavailable owner-operated GPU infrastructure: it tries the existing Workers AI binding, then Unit369 Native. The owner-controlled model remains an optional path that can be re-enabled after its budget and worker health are verified.
+- Native chat fallback acknowledges the request and returns a transparent capability plan instead of fabricating a generative answer.
 - Native product preparation preserves supplied facts and does not invent tags, sizes or claims.
 - Release health probes Unit369 Native and reports external model configuration separately.
 - Unit and Wrangler smoke tests prove a healthy chat response with no AI binding or provider key.
@@ -31,6 +31,8 @@ Unit369 accepts an owner-controlled, OpenAI-compatible chat-completions endpoint
 - `UNIT369_INFERENCE_THINKING`: optional boolean chat-template switch for compatible vLLM/Qwen deployments.
 
 Requests and responses are bounded, requests time out, URL credentials are rejected, and the endpoint must use HTTPS. This contract allows the model server and GPU host to change without changing the Unit369 product APIs or browser client.
+
+The owned endpoint is optional for default chat and production readiness. A missing balance, stopped worker or failed model load cannot block Unit369 Native or a deployment.
 
 Leading `<think>...</think>` reasoning blocks are removed before a response reaches the browser. Unit369 exposes the final answer, not private model scratch work.
 

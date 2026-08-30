@@ -299,10 +299,13 @@ export async function runPreferredAi(env, messages, options = {}) {
   const normalized = normalizeMessages(messages);
   const configured = configuredProviders(env);
   const externalFallback = options.externalFallback !== false;
+  const commercialFallback =
+    externalFallback && options.commercialFallback !== false;
+  const ownedInference = options.ownedInference !== false;
   const ownedCandidate = [
     "unit369-owned",
     () => runOwnedModel(env, normalized, options),
-    configured.unit369Owned,
+    ownedInference && configured.unit369Owned,
   ];
   const nativeCandidate = [
     "unit369-native",
@@ -323,18 +326,18 @@ export async function runPreferredAi(env, messages, options = {}) {
       "claude",
       () =>
         runClaude(env, normalized, { ...options, model: options.claudeModel }),
-      externalFallback && configured.claude,
+      commercialFallback && configured.claude,
     ],
     [
       "openai",
       () =>
         runOpenAi(env, normalized, { ...options, model: options.openaiModel }),
-      externalFallback && configured.openai,
+      commercialFallback && configured.openai,
     ],
     [
       "grok",
       () => runGrok(env, normalized, { ...options, model: options.grokModel }),
-      externalFallback && configured.grok,
+      commercialFallback && configured.grok,
     ],
   ];
   const nativeFastPath =
